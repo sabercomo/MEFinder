@@ -1,21 +1,56 @@
 """Execute reader functions with controlled network completion and scroll state."""
 
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import unittest
 
+from tests.reader_source import alignment_jobs_source, reader_js_source
 
-READER = (Path(__file__).resolve().parents[1] / "src/me_finder/static/reader.js").read_text(encoding="utf-8")
+READER = reader_js_source()
 
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
 class ReaderComparisonStateTests(unittest.TestCase):
+    def test_deselecting_link_keeps_comparison_search_highlight(self):
+        self.run_js([("  function clearComparisonLinkHighlights(", "  function highlightComparisonLink(")], """
+const state={comparison:{highlights:new Map([['search',[{start:1,end:3}]]]),
+ indexHighlights:new Map([[2,[{start:4,end:5}]]])}};
+let renders=0;const renderComparisonWindow=()=>{renders++;};
+clearComparisonLinkHighlights();
+assert.equal(state.comparison.highlights.size,1);
+assert.equal(state.comparison.indexHighlights.size,0);
+assert.equal(renders,1);
+""")
+
+    def test_replaced_book_invalidates_pending_work_context(self):
+        self.run_js([
+            ("  function resetWorkContext(", "  function invalidateOutlineJump("),
+            ("  async function loadWorkContext(", "  /* ── 自绘下拉"),
+        ], """
+const state={sourceId:'A',workRequestSerial:0,alignmentRequestSerial:0,
+  work:{groupId:'old'},comparison:{open:false}};
+const config={groupsEndpoint:'/groups',overviewEndpoint:'/overview',currentJobEndpoint:'/job'};
+const reads=[];
+const readJSON=url=>new Promise(resolve=>reads.push({url,resolve}));
+const loadAvailability=async()=> 'ready',renderToolbar=()=>{};
+(async()=>{
+ const pending=loadWorkContext('A');
+ state.sourceId='B';
+ resetWorkContext('');
+ reads.forEach(({url,resolve})=>resolve(url==='/groups'
+   ? {document_groups:[{document_group_id:'GA',members:[{source_file_id:'A'}]}]}
+   : {works:[],running:false}));
+ await pending;
+ assert.equal(state.work.groupId,'');
+ assert.equal(state.availability,'unknown');
+})();
+""")
+
     def test_body_is_loaded_before_work_metadata_and_overview_is_scoped(self):
         body = READER[READER.index("  async function openReader("):READER.index("  async function goTo(")]
-        self.assertLess(body.index("await loadWindow("), body.index("loadWorkContext(sourceId)"))
-        self.assertLess(body.index("await loadWindow("), body.index("loadAlignmentTargets(sourceId)"))
+        self.assertLess(body.index("await r.loadWindow("), body.index("r.loadWorkContext(sourceId)"))
+        self.assertLess(body.index("await r.loadWindow("), body.index("r.loadAlignmentTargets(sourceId)"))
         self.run_js([("  async function loadWorkContext(", "  /* ── 自绘下拉")], """
 const state={sourceId:'A',workRequestSerial:0,comparison:{open:false}};
 const config={groupsEndpoint:'/groups',overviewEndpoint:'/overview',currentJobEndpoint:'/job'};
@@ -28,12 +63,21 @@ const loadAvailability=async()=>{},renderToolbar=()=>{};
 })();
 """)
 
-    def run_js(self, functions, script):
+    def run_js(self, functions, script, prelude=""):
         bodies = []
         for start, end in functions:
             offset = READER.index(start)
-            bodies.append(READER[offset:READER.index(end, offset)])
-        program = "const assert = require('assert/strict');\n" + "\n".join(bodies) + "\n" + script
+            if start == ReaderComparisonStateTests.JOB_WATCH[0]:
+                offset = READER.index("  alignmentJobs.subscribe(")
+                bodies.append(READER[offset:READER.index("  document.addEventListener('keydown'", offset)])
+            else:
+                bodies.append(READER[offset:READER.index("\n  }\n", offset) + len("\n  }\n")])
+        program = (
+            "const assert = require('assert/strict');\n"
+            "const r = new Proxy({}, {get: (_, name) => eval(String(name))});\n"
+            + prelude + "\n"
+            + "\n".join(bodies) + "\n" + script
+        )
         result = subprocess.run(
             [shutil.which("node"), "-e", program],
             capture_output=True, text=True, timeout=15,
@@ -60,7 +104,13 @@ finish(false);
 setImmediate(() => assert.deepEqual(shown, []));
 """.replace("REPLACEMENT", json.dumps(replacement)))
 
-    JOB_WATCH = ("  /* ── 对齐任务：后端只跑一个", "  /* ── 新窗口")
+    JOB_WATCH = ("  alignmentJobs.subscribe(", "  document.addEventListener('keydown'")
+    # 阅读器片段读 global.MEFinderAlignmentJobs：先把真实任务服务装进受控的 global。
+    JOB_SERVICE_PRELUDE = (
+        "const global={setTimeout:resolve=>resolve()};\n"
+        "new Function('window', " + json.dumps(alignment_jobs_source()) + ")(global);"
+        "const alignmentJobs=global.MEFinderAlignmentJobs;"
+    )
 
     def test_finished_job_does_not_invalidate_the_next_books_context(self):
         self.run_js([
@@ -94,7 +144,9 @@ const reads=[];const readJSON=url=>new Promise(resolve=>reads.push({url,resolve}
     def test_completed_alignment_invalidates_links_and_relocates_open_pair(self):
         self.run_js([
             self.JOB_WATCH,
+            ("  async function applyAlignmentJobEnd(", "  function currentReadingSession("),
             ("  function refreshComparisonAfterStatusChange(", "  /* ── 对齐任务"),
+            ("  function refreshComparisonLinksAfterJob(", "  // 开关右栏"),
             ("  function loadLinkWindow(", "  // 低置信"),
         ], """
 const old = {key:'A:B:0:0',items:[{target_segment_ids:['old-target']}]};
@@ -102,18 +154,18 @@ const state = {open:true, sourceId:'A', work:{groupId:'G'},
   items:new Map([[0,{}]]),
   elements:{pending:{hidden:true}},comparison:{open:true,targetSourceId:'B',lastSourceRange:'old'},
   links:old,linkRequestSerial:0};
-const config={alignmentStatusEndpoint:'/status',linksEndpoint:'/links'};
-const global={setTimeout:resolve=>resolve()};
-const fetchFunction=()=>async()=>({status:200,ok:true,json:async()=>({ok:true})});
+const config={linksEndpoint:'/links'};
+global.MEFinderAlignmentJobs.configure({fetch:async()=>({status:200,ok:true,json:async()=>({ok:true})})});
 const pairKey=(a,b)=>[a,b].sort().join('|');
 let notices=0;
 const notify=()=>{notices++;}, setAlert=()=>{}, loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
 const renderToolbar=()=>{},updateComparisonNotice=()=>{},renderFlags=()=>{},clearLinkedSelection=()=>{};
+const invalidateLinks=()=>{state.links=null;state.linkRequestSerial++;};
 let reads=0, relocated=0;
 const readJSON=async()=>{reads++;return {links:[]};};
 const openComparisonWith=()=>{relocated++;loadLinkWindow();};
 (async()=>{
- watchAlignmentJob('J',{origin:'reader',groupId:'G',key:'A|B'});
+ global.MEFinderAlignmentJobs.watch('J',{origin:'reader',groupId:'G',key:'A|B'});
  await new Promise(resolve=>setImmediate(resolve));
  await new Promise(resolve=>setImmediate(resolve));
  loadLinkWindow();
@@ -122,40 +174,9 @@ const openComparisonWith=()=>{relocated++;loadLinkWindow();};
  assert.equal(relocated,1);
  // 发起方是阅读器，结局提示由阅读器给出，且只给一次。
  assert.equal(notices,1);
- assert.equal(runningAlignmentJob(),null);
+ assert.equal(global.MEFinderAlignmentJobs.running(),null);
 })();
-""")
-
-    def test_one_job_keeps_one_watcher_and_its_first_owner(self):
-        """两处认领同一个任务时只轮询一次、只广播一次，提示归第一个认领者。"""
-
-        self.run_js([self.JOB_WATCH], """
-const state={open:false, sourceId:'A', work:{groupId:'G'}, comparison:{open:false}};
-const config={alignmentStatusEndpoint:'/status'};
-const global={setTimeout:resolve=>resolve()};
-let polls=0;
-const fetchFunction=()=>async()=>{polls++;return {status:200,ok:true,json:async()=>({ok:true})};};
-let notices=0;
-const notify=()=>{notices++;}, setAlert=()=>{};
-const loadAlignmentTargets=async()=>{}, loadWorkContext=async()=>{};
-const renderToolbar=()=>{},updateComparisonNotice=()=>{},clearLinkedSelection=()=>{};
-const refreshComparisonAfterStatusChange=()=>{}, openComparisonWith=()=>{};
-const events=[];
-subscribeAlignmentJob(event=>{events.push(event);});
-(async()=>{
- watchAlignmentJob('J',{origin:'works',groupId:'G',key:'A|B'});
- watchAlignmentJob('J',{origin:'reader',groupId:'G',key:'A|B'});
- assert.equal(runningAlignmentJob().origin,'works');
- await new Promise(resolve=>setImmediate(resolve));
- await new Promise(resolve=>setImmediate(resolve));
- assert.equal(polls,1);
- assert.equal(events.length,1);
- assert.equal(events[0].meta.origin,'works');
- assert.equal(events[0].outcome,'ok');
- // 作品页发起的任务不由阅读器报告结果。
- assert.equal(notices,0);
-})();
-""")
+""", prelude=self.JOB_SERVICE_PRELUDE)
 
     def test_deep_link_carries_the_comparison_pane(self) -> None:
         """会话记录包含右栏：刷新或重开独立窗口后对照不会丢。"""
@@ -178,7 +199,7 @@ assert.equal(read('?source=A&page=A-P1&c=%20'),null);
         """位置只写一次，宿主直接采用；不再清空缓存后靠定时器重新查询。"""
 
         self.run_js([
-            ("  /* ── 阅读会话", "  function openInNewWindow("),
+            ("  function currentReadingSession(", "  function openInNewWindow("),
             ("  function saveReadingPositionNow(", "  function scheduleReadingPositionSave("),
         ], """
 const state={open:true,positionTimer:null,sourceId:'A',title:'T',currentIndex:7,

@@ -62,6 +62,9 @@ class PreferenceConcurrencyTests(unittest.TestCase):
             "alignment_embedding_model_id": DEFAULT_EMBEDDING_MODEL_ID,
             "alignment_thresholds": default_alignment_threshold_settings(),
             "last_backup_export": None,
+            "zotero_sync_enabled": False,
+            "zotero_sync_collections": [],
+            "zotero_sync_frequency": "launch",
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:

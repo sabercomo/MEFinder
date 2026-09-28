@@ -14,11 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
-from contextlib import AbstractContextManager, ExitStack, closing, contextmanager, nullcontext
+from contextlib import AbstractContextManager, ExitStack, contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Mapping, Optional, Protocol
+from typing import Callable, Dict, List, Mapping, Optional, Protocol, Tuple
 
 from ..database import _sanitize_surrogates_in_place
 from ..document_heading import (
@@ -39,10 +38,41 @@ class EnrichmentIndexPort(Protocol):
         ...
 
 
-def _connect(path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(str(Path(path)), timeout=30)
-    connection.row_factory = sqlite3.Row
-    return connection
+class DocumentHeadingStorePort(Protocol):
+    """SQL side of the enrichment (``persistence.SQLiteDocumentHeadingStore``)."""
+
+    def is_available(self) -> bool:
+        ...
+
+    def read_snapshot(
+        self, source_file_id: str, *, needs_pages: Callable[[dict], bool]
+    ) -> Optional[Tuple[dict, Optional[List[dict]]]]:
+        ...
+
+    def write_if_unchanged(
+        self,
+        source_file_id: str,
+        *,
+        source: dict,
+        pages: List[dict],
+        source_digest: str,
+        page_digests: List[str],
+        digest: Callable[[object], str],
+    ) -> str:
+        ...
+
+
+def _needs_enrichment(source: dict) -> bool:
+    """Whether a source payload still needs its pages read for enrichment."""
+
+    if str(source.get("source_type") or "") != "pdf":
+        return False
+    profile = source.get("document_heading_profile")
+    return not (
+        isinstance(profile, Mapping)
+        and profile.get("version") == DOCUMENT_HEADING_VERSION
+        and profile.get("status") == "complete"
+    )
 
 
 def _payload_digest(payload: object) -> str:
@@ -55,12 +85,12 @@ class DocumentHeadingEnrichment:
     def __init__(
         self,
         *,
-        database_path: Path,
+        store: DocumentHeadingStorePort,
         runtime_root: Path,
         durable_operations: Optional[EnrichmentDurableOperationsPort] = None,
         index_runtime: Optional[EnrichmentIndexPort] = None,
     ) -> None:
-        self._database_path = Path(database_path)
+        self._store = store
         self._runtime_root = Path(runtime_root)
         self._durable_operations = durable_operations
         self._index_runtime = index_runtime
@@ -68,7 +98,7 @@ class DocumentHeadingEnrichment:
     def enrich(self, source_file_id: str) -> Dict[str, object]:
         """Compute outside the mutation gate; coordinate only fresh-state publication."""
         return ensure_document_headings(
-            database_path=self._database_path,
+            store=self._store,
             runtime_root=self._runtime_root,
             source_file_id=str(source_file_id),
             write_window=self._write_window,
@@ -86,7 +116,7 @@ class DocumentHeadingEnrichment:
 
 def ensure_document_headings(
     *,
-    database_path: Path,
+    store: DocumentHeadingStorePort,
     runtime_root: Path,
     source_file_id: str,
     write_window: Callable[[], AbstractContextManager] = nullcontext,
@@ -104,35 +134,18 @@ def ensure_document_headings(
     returned profile reports ``deferred``/``unavailable`` so a later run retries.
     """
 
-    database = Path(database_path)
     root = Path(runtime_root)
-    if not database.is_file():
+    if not store.is_available():
         return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
 
-    with closing(_connect(database)) as connection:
-        row = connection.execute(
-            "SELECT payload_json FROM source_files WHERE source_file_id = ?",
-            (source_file_id,),
-        ).fetchone()
-        if row is None:
-            return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
-        source = json.loads(row[0])
-        if str(source.get("source_type") or "") != "pdf":
-            return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
-        profile = source.get("document_heading_profile")
-        if (
-            isinstance(profile, Mapping)
-            and profile.get("version") == DOCUMENT_HEADING_VERSION
-            and profile.get("status") == "complete"
-        ):
-            return dict(profile)  # already enriched at this version
-
-        page_rows = connection.execute(
-            "SELECT pdf_page_index, payload_json FROM pdf_pages "
-            "WHERE source_file_id = ? ORDER BY pdf_page_index",
-            (source_file_id,),
-        ).fetchall()
-        pages = [json.loads(r[1]) for r in page_rows]
+    snapshot = store.read_snapshot(source_file_id, needs_pages=_needs_enrichment)
+    if snapshot is None:
+        return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
+    source, pages = snapshot
+    if str(source.get("source_type") or "") != "pdf":
+        return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
+    if pages is None:
+        return dict(source["document_heading_profile"])  # already enriched at this version
 
     # The single write transaction must be able to prove the document is
     # untouched since this snapshot; remember exactly what was read.
@@ -200,56 +213,27 @@ def ensure_document_headings(
     for page in pages:
         _sanitize_surrogates_in_place(page)
 
-    with write_window(), closing(_connect(database)) as connection:
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            current_row = connection.execute(
-                "SELECT payload_json FROM source_files WHERE source_file_id = ?",
-                (source_file_id,),
-            ).fetchone()
-            if current_row is None:
-                # The document was deleted while the enrichment computed.
-                connection.rollback()
-                return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
-            current_page_rows = connection.execute(
-                "SELECT pdf_page_index, payload_json FROM pdf_pages "
-                "WHERE source_file_id = ? ORDER BY pdf_page_index",
-                (source_file_id,),
-            ).fetchall()
-            current_pages = [json.loads(r[1]) for r in current_page_rows]
-            untouched = (
-                _payload_digest(json.loads(current_row[0])) == source_digest
-                and [_payload_digest(page) for page in current_pages] == pages_digest
-                and len(current_pages) == len(pages)
-            )
-            if not untouched:
-                # A bibliographic save, re-import or other writer changed the
-                # document while this enrichment was computing. Never overwrite
-                # that newer data; the next run re-enriches from the fresh state.
-                connection.rollback()
-                logging.info(
-                    "document %s changed during heading enrichment; write deferred",
-                    source_file_id,
-                )
-                return {"version": DOCUMENT_HEADING_VERSION, "status": "deferred"}
-            connection.execute(
-                "UPDATE source_files SET payload_json = ? WHERE source_file_id = ?",
-                (json.dumps(source, ensure_ascii=False), source_file_id),
-            )
-            for page in pages:
-                connection.execute(
-                    "UPDATE pdf_pages SET payload_json = ? "
-                    "WHERE source_file_id = ? AND pdf_page_index = ?",
-                    (
-                        json.dumps(page, ensure_ascii=False),
-                        source_file_id,
-                        int(page.get("pdf_page_index")),
-                    ),
-                )
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
+    with write_window():
+        outcome = store.write_if_unchanged(
+            source_file_id,
+            source=source,
+            pages=pages,
+            source_digest=source_digest,
+            page_digests=pages_digest,
+            digest=_payload_digest,
+        )
+    if outcome == "missing":
+        # The document was deleted while the enrichment computed.
+        return {"version": DOCUMENT_HEADING_VERSION, "status": "unavailable"}
+    if outcome == "changed":
+        # A bibliographic save, re-import or other writer changed the
+        # document while this enrichment was computing. Never overwrite
+        # that newer data; the next run re-enriches from the fresh state.
+        logging.info(
+            "document %s changed during heading enrichment; write deferred",
+            source_file_id,
+        )
+        return {"version": DOCUMENT_HEADING_VERSION, "status": "deferred"}
     return new_profile
 
 

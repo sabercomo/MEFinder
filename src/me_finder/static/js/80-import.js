@@ -2,6 +2,20 @@
    node 白盒测试走 module.exports；IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 80-import.js
   /* ═══ Import ═══ */
+  function importNode(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
+
+  function importAction(label, action, id, primary) {
+    var button = importNode('button', 'action-btn' + (primary ? ' primary' : ''), label);
+    button.type = 'button';
+    button.dataset.action = action;
+    if (id != null) button.dataset.id = String(id);
+    return button;
+  }
   function visionRetryProviderFor(q) {
     if (!q || q.status !== 'error') return null;
     // 索引阶段失败不给切换（重解析救不了重建索引错误）。中断态不再一律屏蔽：
@@ -56,7 +70,7 @@
   async function runBatchMetadataDetection() {
     var button = document.getElementById('batch-metadata-btn');
     try {
-      var resp = await fetch('/api/bibliographic-metadata/batch-detect', {
+      var resp = await MEFinderApi.fetch('/api/bibliographic-metadata/batch-detect', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: '{}'
@@ -79,7 +93,7 @@
   }
 
   function pollBatchMetadata(jobId, button) {
-    fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
+    MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
       .then(function(resp) { return resp.json(); })
       .then(function(data) {
         if (data.status === 'completed') {
@@ -101,267 +115,6 @@
       });
   }
 
-  /* ═══ 联网知网批量补全（茉莉花式候选选择）═══
-   * 复用单篇详情里的 lookup-cnki / cnki-candidate / save 端点：顺序处理每一篇
-   * 缺信息的期刊论文，天然满足知网单并发与“只补空字段”约束。高匹配唯一候选
-   * 自动补，其余弹出候选选择框由用户决定，全程可随时停止。 */
-  let cnkiBatchActive = false;
-  let cnkiBatchChoiceResolve = null;
-  let cnkiBatchCandidates = [];
-  let cnkiBatchOpenUrl = '';
-
-  // isForeignTitle / batchLookupSourceFor 已抽到 06-pure.js（纯逻辑，可单测）。
-
-  function cnkiBatchLookupTargets() {
-    return (libraryStore.sources || []).filter(function(src) {
-      if (!src || String(src.source_type || '') !== 'pdf') return false;
-      var meta = sourceBibliographicMetadata(src);
-      // 人工维护的文献也纳入：applyBatchCandidateToSource 只补当前为空的字段，
-      // 绝不覆盖已手动填写的值，因此不会破坏人工维护的内容。
-      if (!batchLookupSourceFor(meta)) return false;
-      var hasQueryKey = String(meta.title || '').trim() || String(meta.doi || '').trim() || String(meta.isbn || '').trim();
-      if (!hasQueryKey) return false;
-      return bibliographicMissingFields(meta).length > 0;
-    });
-  }
-
-  async function runCnkiBatchButton() {
-    await startCnkiBatchCompletion(document.getElementById('batch-cnki-btn'));
-  }
-
-  // 由「联网补全期刊信息」按钮触发：点击按钮本身即为联网授权，不再逐次弹确认框。
-  async function startCnkiBatchCompletion(button) {
-    if (cnkiBatchActive) return;
-    var buttonLabel = button ? button.textContent : '';
-    var targets = cnkiBatchLookupTargets();
-    if (!targets.length) {
-      showToast('没有需要联网补全的文献');
-      return;
-    }
-    cnkiBatchActive = true;
-    var stats = {auto:0, manual:0, notfound:0, skipped:0, failed:0};
-    var stopped = false;
-    var abortReason = '';
-    for (var i = 0; i < targets.length; i++) {
-      var src = targets[i];
-      if (button) { button.disabled = true; button.textContent = '联网补全 ' + (i + 1) + '/' + targets.length + '…'; }
-      var outcome;
-      try {
-        outcome = await processCnkiBatchItem(src, sourceBibliographicMetadata(src), i + 1, targets.length);
-      } catch (e) {
-        stats.failed++;
-        continue;
-      }
-      if (outcome.action === 'stop') { stopped = true; break; }
-      if (outcome.action === 'abort') { stopped = true; abortReason = outcome.reason || ''; break; }
-      stats[outcome.result] = (stats[outcome.result] || 0) + 1;
-    }
-    closeCnkiBatchModal();
-    cnkiBatchActive = false;
-    if (button) { button.disabled = false; button.textContent = buttonLabel || '联网补全'; }
-    await global.MEFinder.library.load(true);
-    var parts = [];
-    if (stats.auto) parts.push('自动补全 ' + stats.auto + ' 篇');
-    if (stats.manual) parts.push('手动选择 ' + stats.manual + ' 篇');
-    if (stats.notfound) parts.push('未找到 ' + stats.notfound + ' 篇');
-    if (stats.skipped) parts.push('跳过 ' + stats.skipped + ' 篇');
-    if (stats.failed) parts.push('失败 ' + stats.failed + ' 篇');
-    var summary = parts.join('、') || '无变化';
-    if (abortReason) {
-      showToast('联网源暂时不可用（' + abortReason + '），已停止。已处理：' + summary, 'warning');
-    } else {
-      showToast((stopped ? '已停止联网补全：' : '联网补全完成：') + summary, stats.failed ? 'warning' : 'success');
-    }
-  }
-
-  var _BATCH_SOURCE_META = {
-    cnki: {endpoint:'/api/bibliographic-metadata/lookup-cnki', label:'知网', evSource:'cnki_lookup'},
-    crossref: {endpoint:'/api/bibliographic-metadata/lookup-crossref', label:'Crossref', evSource:'crossref'},
-    google_books: {endpoint:'/api/bibliographic-metadata/lookup-google-books', label:'图书目录', evSource:'k10plus'}
-  };
-
-  function setOnlineAutoMatchThreshold(pct) {
-    var value = Math.round(Number(pct));
-    if (!Number.isFinite(value)) return;
-    value = Math.min(100, Math.max(ONLINE_METADATA_AUTO_MATCH_MIN_PERCENT, value));
-    // 值没变只补 UI：偏好写盘有启动期被 syncOnlineAutoMatchControl 程序性回填触发的路径。
-    if (Math.round(onlineMetadataAutoMatchThreshold * 100) === value) {
-      syncOnlineAutoMatchControl();
-      return;
-    }
-    onlineMetadataAutoMatchThreshold = value / 100;
-    try { localStorage.setItem('meFinderOnlineAutoMatchThreshold', String(value)); } catch (_) {}
-    persistDisplayPreference('online_auto_match_threshold', onlineMetadataAutoMatchThreshold);  // 随数据备份/迁移（C-01）
-    syncOnlineAutoMatchControl();
-  }
-
-  function syncOnlineAutoMatchControl() {
-    var pct = Math.round(onlineMetadataAutoMatchThreshold * 100);
-    var slider = document.getElementById('online-auto-match-range');
-    var label = document.getElementById('online-auto-match-value');
-    if (slider && String(slider.value) !== String(pct)) slider.value = String(pct);
-    // 程序性赋值不触发 input 事件（且这里绝不能 dispatch 合成 input：
-    // inline oninput 会再进 setOnlineAutoMatchThreshold，形成写偏好的递归风暴），
-    // 填充比例与算法对齐 60-settings.js 的 syncRangeFill，就地补一次。
-    if (slider) {
-      var span = Number(slider.max || 0) - Number(slider.min || 0);
-      var ratio = span > 0 ? (pct - Number(slider.min || 0)) / span : 0;
-      slider.style.setProperty(
-        '--range-fill',
-        (Math.min(Math.max(ratio, 0), 1) * 100).toFixed(2) + '%'
-      );
-    }
-    if (label) label.textContent = pct + '%';
-  }
-
-  function automaticBatchCandidateIndex(candidates) {
-    var bestIndex = -1;
-    var bestScore = -1;
-    (candidates || []).forEach(function(candidate, index) {
-      var score = Number(candidate && candidate.match && candidate.match.score);
-      if (Number.isFinite(score) && score >= onlineMetadataAutoMatchThreshold && score > bestScore) {
-        bestIndex = index;
-        bestScore = score;
-      }
-    });
-    return bestIndex;
-  }
-
-  async function processCnkiBatchItem(src, meta, index, total) {
-    var sourceId = src.source_file_id;
-    var source = batchLookupSourceFor(meta);
-    var info = _BATCH_SOURCE_META[source];
-    var resp = await fetch(info.endpoint, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({metadata:batchQueryFor(source, meta)})
-    });
-    var data = await resp.json();
-    if (!resp.ok || !data.ok) {
-      // 验证码或限流表示站点在拦截：立即停止整批，不要继续冲击。
-      if (data.code === 'verification_required' || data.code === 'rate_limited') {
-        return {action:'abort', reason: info.label + (data.code === 'rate_limited' ? '限流' : '需要验证')};
-      }
-      throw new Error(data.error || (info.label + '查询失败'));
-    }
-    var candidates = data.candidates || [];
-    if (!candidates.length) return {action:'next', result:'notfound'};
-    var automaticIndex = automaticBatchCandidateIndex(candidates);
-    if (automaticIndex >= 0) {
-      var ok = await applyBatchCandidateToSource(sourceId, meta, candidates[automaticIndex], source);
-      return {action:'next', result: ok ? 'auto' : 'failed'};
-    }
-    var choice = await promptCnkiBatchChoice(src, meta, candidates, data.open_url, index, total, info.label);
-    if (choice.action === 'stop') return {action:'stop'};
-    if (choice.action !== 'select') return {action:'next', result:'skipped'};
-    var applied = await applyBatchCandidateToSource(sourceId, meta, candidates[choice.index], source);
-    return {action:'next', result: applied ? 'manual' : 'failed'};
-  }
-
-  // 仅把当前为空的字段补进去，其余保持原样后整份保存。知网需再取详情页完整题录；
-  // Crossref / Google Books 的候选一次即完整。图书补图书字段，期刊补期刊字段。
-  async function applyBatchCandidateToSource(sourceId, currentMeta, candidate, source) {
-    var fullMeta = candidate.metadata || {};
-    var evidence = candidate.evidence || {};
-    if (source === 'cnki' && candidate.record_url) {
-      try {
-        var resp = await fetch('/api/bibliographic-metadata/cnki-candidate', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({candidate:{record_url:candidate.record_url}})
-        });
-        var data = await resp.json();
-        if (resp.ok && data.ok && data.metadata) {
-          fullMeta = data.metadata;
-          evidence = data.evidence || evidence;
-        }
-      } catch (e) { /* 详情读取失败时退回列表级字段 */ }
-    }
-    var payload = {};
-    ['author','country','title','translator','publish_place','publisher','publish_year','isbn','journal_name','volume','issue','page_range','doi','issn'].forEach(function(k) {
-      payload[k] = String(currentMeta[k] || '').trim();
-    });
-    payload.document_type = bibliographicDocType(currentMeta);
-    var fillKeys = source === 'google_books'
-      ? ['author','title','publisher','publish_place','publish_year','isbn']
-      : Object.keys(global.MEFinder.bibliography.lookupFields);
-    var defaultEvSource = _BATCH_SOURCE_META[source].evSource;
-    var evidenceOut = {};
-    var filledAny = false;
-    fillKeys.forEach(function(k) {
-      var incoming = String(fullMeta[k] || '').trim();
-      if (!incoming || payload[k]) return;  // 只补当前为空的字段
-      payload[k] = incoming;
-      filledAny = true;
-      var ev = evidence[k] || {source:defaultEvSource, evidence_text: incoming};
-      evidenceOut[k] = Object.assign({}, ev, {value: incoming});
-    });
-    if (!filledAny) return false;
-    payload.metadata_evidence = evidenceOut;
-    var saveResp = await fetch('/api/bibliographic-metadata/save', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({source_id:sourceId, metadata:payload})
-    });
-    var saveData = await saveResp.json();
-    return saveResp.ok && !!saveData.ok;
-  }
-
-  function promptCnkiBatchChoice(src, meta, candidates, openUrl, index, total, sourceLabel) {
-    var backdrop = document.getElementById('cnki-batch-modal');
-    var docEl = document.getElementById('cnki-batch-doc');
-    var progressEl = document.getElementById('cnki-batch-progress');
-    var listEl = document.getElementById('cnki-batch-list');
-    if (!backdrop || !docEl || !listEl) return Promise.resolve({action:'skip'});
-    cnkiBatchCandidates = candidates;
-    cnkiBatchOpenUrl = openUrl || '';
-    if (progressEl) progressEl.textContent = '第 ' + index + '/' + total + ' 条 · 请从' + (sourceLabel || '联网结果') + '选择正确记录';
-    var docTitle = meta.title || (src.file_name || src.source_file_id);
-    var docMeta = [meta.author, meta.publish_year, meta.journal_name || meta.publisher].filter(Boolean).join(' · ');
-    docEl.innerHTML = '<div class="cnki-batch-doc-title">' + esc(docTitle) + '</div>'
-      + (docMeta ? '<div class="cnki-batch-doc-meta">本地信息：' + esc(docMeta) + '</div>' : '');
-    listEl.innerHTML = candidates.map(function(candidate, i) {
-      var m = candidate.metadata || {};
-      var match = candidate.match || {};
-      var levelLabel = match.level === 'high' ? '高匹配' : (match.level === 'medium' ? '需核对' : '低匹配');
-      var detail = [m.author, m.journal_name || m.publisher, candidate.publish_date || m.publish_year].filter(Boolean).join(' · ');
-      var reasons = (match.reasons || []).join('、');
-      var conflicts = (match.conflicts || []).join('、');
-      return '<div class="cnki-candidate ' + esc(match.level || 'low') + '">'
-        + '<div class="cnki-candidate-main"><div class="cnki-candidate-title">' + esc(m.title || '未识别篇名') + '</div>'
-        + '<div class="cnki-candidate-detail">' + esc(detail || '联网记录') + '</div>'
-        + '<div class="cnki-candidate-match"><span>' + esc(levelLabel) + (match.score != null ? ' · ' + Math.round(Number(match.score) * 100) + '%' : '') + '</span>'
-        + (reasons ? '<span>' + esc(reasons) + '</span>' : '')
-        + (conflicts ? '<span class="has-warning">冲突：' + esc(conflicts) + '</span>' : '') + '</div></div>'
-        + '<div class="cnki-candidate-actions">'
-        + '<button class="action-btn" type="button" onclick="openCnkiBatchRecord(' + i + ')">打开记录</button>'
-        + '<button class="action-btn primary" type="button" onclick="resolveCnkiBatchChoice({action:\'select\',index:' + i + '})">选择这条</button>'
-        + '</div></div>';
-    }).join('');
-    backdrop.classList.add('open');
-    backdrop.setAttribute('aria-hidden', 'false');
-    return new Promise(function(resolve) { cnkiBatchChoiceResolve = resolve; });
-  }
-
-  function openCnkiBatchRecord(i) {
-    var candidate = (cnkiBatchCandidates || [])[i];
-    openCnkiExternal((candidate && candidate.record_url) || cnkiBatchOpenUrl);
-  }
-
-  function resolveCnkiBatchChoice(choice) {
-    var resolve = cnkiBatchChoiceResolve;
-    cnkiBatchChoiceResolve = null;
-    closeCnkiBatchModal();
-    if (resolve) resolve(choice || {action:'skip'});
-  }
-
-  function closeCnkiBatchModal() {
-    var backdrop = document.getElementById('cnki-batch-modal');
-    if (!backdrop) return;
-    backdrop.classList.remove('open');
-    backdrop.setAttribute('aria-hidden', 'true');
-  }
-
-  function cnkiBatchBackdropClick(event) {
-    if (event.target && event.target.id === 'cnki-batch-modal') resolveCnkiBatchChoice({action:'skip'});
-  }
-
   const SCAN_IMPORT_BATCH_LIMIT = 50;
   let scanEntries = [];
   let scanDragSelection = null;
@@ -379,14 +132,14 @@
     button.disabled = true;
     statusEl.textContent = '正在扫描 ' + settingsStore.scanDirectories.length + ' 个目录…';
     try {
-      var resp = await fetch('/api/scan-directories');
+      var resp = await MEFinderApi.fetch('/api/scan-directories');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '扫描失败');
       scanEntries = data.entries || [];
       renderScanResults(data);
     } catch (e) {
       document.getElementById('scan-results-head').style.display = 'none';
-      document.getElementById('scan-results').innerHTML = '';
+      document.getElementById('scan-results').replaceChildren();
       statusEl.textContent = '扫描失败：' + e.message;
     } finally {
       button.disabled = false;
@@ -407,15 +160,39 @@
       else if (entry.file_type === 'pdf' && entry.needs_ocr === null) groups.unknown.push(index);
       else groups.ready.push(index);
     });
-    var pieces = [];
+    resultsEl.replaceChildren();
     var autoSelectable = groups.ready.concat(groups.ocr);
     var autoSelected = new Set(autoSelectable.slice(0, SCAN_IMPORT_BATCH_LIMIT));
     function section(title, indexes, checkable, checkedIndexes) {
       if (!indexes.length) return;
-      pieces.push('<div class="scan-group-title">' + title + '（' + indexes.length + '）</div>');
-      pieces.push(indexes.map(function(i) {
-        return scanEntryRow(scanEntries[i], i, checkable, !!checkedIndexes && checkedIndexes.has(i));
-      }).join(''));
+      resultsEl.appendChild(importNode('div', 'scan-group-title', title + '（' + indexes.length + '）'));
+      indexes.forEach(function(i) {
+        var entry = scanEntries[i];
+        var row = importNode('div', 'scan-row' + (entry.status === 'imported' ? ' is-imported' : ''));
+        if (checkable) {
+          var checkbox = importNode('input', 'scan-check');
+          checkbox.type = 'checkbox';
+          checkbox.id = 'scan-check-' + i;
+          checkbox.dataset.index = String(i);
+          checkbox.checked = !!checkedIndexes && checkedIndexes.has(i);
+          checkbox.dataset.actionChange = 'handleScanCheckChange';
+          row.appendChild(checkbox);
+        } else row.appendChild(importNode('span', 'scan-check-placeholder'));
+        row.appendChild(importNode('span', 'type-badge ' + (entry.file_type === 'pdf' ? 'pdf' : 'word'),
+          entry.file_type === 'pdf' ? 'PDF' : entry.file_type === 'epub' ? 'EPUB' : 'DOCX'));
+        var name = importNode('label', 'scan-row-name', entry.name);
+        if (checkable) name.htmlFor = 'scan-check-' + i;
+        name.title = entry.path;
+        row.appendChild(name);
+        row.appendChild(importNode('span', 'scan-row-size', formatFileSize(entry.size_bytes)));
+        var note = entry.status === 'processing' ? '已提交，正在导入…'
+          : entry.status === 'name_conflict' ? '与已导入文献同名但大小不同，请重命名后再导入'
+            : entry.needs_ocr === true ? '需 OCR'
+              : entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new'
+                ? '未预检测，导入时自动判断；非原生文本将提交 MinerU' : '';
+        if (note) row.appendChild(importNode('span', 'scan-row-note', note));
+        resultsEl.appendChild(row);
+      });
     }
     section('可直接导入的新文件', groups.ready, true, autoSelected);
     section('需 OCR 的新文件', groups.ocr, true, autoSelected);
@@ -423,7 +200,6 @@
     section('正在导入', groups.processing, false, null);
     section('同名冲突', groups.conflict, false, null);
     section('已导入', groups.imported, false, null);
-    resultsEl.innerHTML = pieces.join('');
     var newCount = groups.ready.length + groups.ocr.length + groups.unknown.length;
     var parts = ['新文件 ' + newCount];
     if (groups.processing.length) parts.push('正在导入 ' + groups.processing.length);
@@ -522,10 +298,6 @@
     try { container.setPointerCapture(event.pointerId); } catch (e) {}
     var selection = deps.window.getSelection && deps.window.getSelection();
     if (selection) selection.removeAllRanges();
-  }
-
-  function openCnkiBatchCurrentRecord() {
-    openCnkiExternal(cnkiBatchOpenUrl);
   }
 
   // 收尾：退出拖选态、清掉命中高亮、移除 marquee、释放指针。
@@ -757,7 +529,7 @@
     var button = document.getElementById('scan-import-btn');
     button.disabled = true;
     try {
-      var resp = await fetch('/api/import-local', {
+      var resp = await MEFinderApi.fetch('/api/import-local', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -826,8 +598,12 @@
   }
 
   function renderPdfParseMode() {
+    var zoteroLabel = document.getElementById('zotero-parse-mode');
     document.querySelectorAll('input[name="pdf-parse-mode"]').forEach(function(input) {
       input.checked = input.value === settingsStore.currentPdfParseMode;
+      if (input.checked && zoteroLabel) {
+        zoteroLabel.textContent = input.parentElement.querySelector('.pdf-parse-card-head strong').textContent;
+      }
     });
   }
 
@@ -842,7 +618,7 @@
     settingsStore.pdfParseModeSaving = true;
     renderPdfParseMode();
     try {
-      var resp = await fetch('/api/preferences', {
+      var resp = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({pdf_parse_mode: mode})
@@ -923,65 +699,70 @@
     }
     queueEl.style.display = 'block';
     syncImportRecoveryPanel();
-    itemsEl.innerHTML = importStore.queue.map(function(q) {
+    itemsEl.replaceChildren();
+    importStore.queue.forEach(function(q) {
       var typeCls = q.type === 'pdf' ? 'pdf' : q.type === 'document_package' ? 'package' : 'word';
       var typeLabel = q.type === 'pdf' ? 'PDF' : q.type === 'epub' ? 'EPUB' : q.type === 'document_package' ? '文档包' : 'DOCX';
       var retryProvider = visionRetryProviderFor(q);
       var steps = importStepsFor(q);
-      var stepsHTML = steps.map(function(label, i) {
+      var item = importNode('div', 'import-item');
+      item.dataset.id = q.id;
+      var header = importNode('div', 'import-item-header');
+      header.appendChild(importNode('span', 'type-badge ' + typeCls, typeLabel));
+      header.appendChild(importNode('span', 'import-item-name', q.name));
+      if (q.type === 'pdf' && q.detectedType) {
+        var routeClass = q.route === 'mineru' ? 'mineru' : q.route === 'vision' ? 'vision' : q.route === 'local_ocr' ? 'local-ocr' : 'native';
+        var routeText = q.route === 'mineru' ? (q.providerId === 'mineru-local' ? '本地 MinerU' : '提交 MinerU')
+          : q.route === 'vision' ? (q.providerName || '其他视觉 API')
+            : q.route === 'local_ocr' ? (q.providerName || '本地 OCR') : '本地解析';
+        header.appendChild(importNode('span', 'import-route-badge ' + routeClass, pdfTypeLabel(q.detectedType) + ' · ' + routeText));
+      }
+      header.appendChild(importNode('span', 'import-item-size', formatFileSize(q.size)));
+      var remove = importNode('button', 'import-item-remove', '×');
+      remove.dataset.action = 'removeImport';
+      remove.dataset.id = q.id;
+      remove.title = '移除';
+      header.appendChild(remove);
+      item.appendChild(header);
+      var stepList = importNode('div', 'import-steps');
+      steps.forEach(function(label, i) {
         var cls = '';
         if (q.status === 'error' && i === q.step) cls = 'error';
         else if (i < q.step) cls = 'done';
         else if (i === q.step && q.status === 'processing') cls = 'active';
-        return '<div class="import-step ' + cls + '">'
-          + '<div class="import-step-bar ' + cls + '"></div>'
-          + '<span class="import-step-label">' + label + '</span>'
-          + '</div>';
-      }).join('');
+        var step = importNode('div', 'import-step ' + cls);
+        step.appendChild(importNode('div', 'import-step-bar ' + cls));
+        step.appendChild(importNode('span', 'import-step-label', label));
+        stepList.appendChild(step);
+      });
+      item.appendChild(stepList);
       var statusCls = q.status === 'error' ? ' error' : q.status === 'done' ? ' done' : q.status === 'paused' ? ' paused' : '';
-      var retryHTML = '';
-      var localMineruButton = q.status === 'error' && q.canRetryLocalMineru
-        ? '<button class="action-btn" type="button" onclick="retryImportWithLocalMinerU(\'' + q.id + '\')">切换到本地部署</button>'
-        : '';
+      item.appendChild(importNode('div', 'import-item-status' + statusCls, q.message));
+      var retry = importNode('div', 'import-item-retry');
+      var localMineruButton = q.status === 'error' && q.canRetryLocalMineru;
       if ((q.status === 'paused' || q.status === 'error') && q.canResume) {
-        retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="resumeImport(\''
-          + q.id + '\')">' + (q.failureStage === 'index' ? '重新建立索引' : '继续导入') + '</button>';
+        retry.appendChild(importAction(q.failureStage === 'index' ? '重新建立索引' : '继续导入', 'resumeImport', q.id, true));
         if (q.type === 'pdf' && q.route === 'vision' && q.failureStage !== 'index') {
-          retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
-            + q.id + '\')">改用 MinerU（免费）</button>';
+          retry.appendChild(importAction('改用 MinerU（免费）', 'retryImportWithMinerU', q.id));
         }
         if (q.status === 'error' && retryProvider) {
-          retryHTML += '<button class="action-btn" type="button" onclick="retryImportWithVision(\''
-            + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>';
+          retry.appendChild(importAction('改用 ' + (retryProvider.name || '其他解析 API'), 'retryImportWithVision', q.id));
         }
-        retryHTML += localMineruButton;
-        retryHTML += '<button class="action-btn" type="button" onclick="openVisionSettings()">解析设置</button></div>';
+        if (localMineruButton) retry.appendChild(importAction('切换到本地部署', 'retryImportWithLocalMinerU', q.id));
+        retry.appendChild(importAction('解析设置', 'openVisionSettings'));
       } else if (q.status === 'error' && retryProvider) {
-        retryHTML = '<div class="import-item-retry"><button class="action-btn primary" type="button" onclick="retryImportWithVision(\''
-          + q.id + '\')">改用 ' + esc(retryProvider.name || '其他解析 API') + '</button>'
-          + (q.type === 'pdf' && q.route === 'vision'
-            ? '<button class="action-btn" type="button" onclick="retryImportWithMinerU(\''
-              + q.id + '\')">改用 MinerU（免费）</button>' : '')
-          + localMineruButton
-          + '<button class="action-btn" type="button" onclick="openVisionSettings()">切换设置</button></div>';
+        retry.appendChild(importAction('改用 ' + (retryProvider.name || '其他解析 API'), 'retryImportWithVision', q.id, true));
+        if (q.type === 'pdf' && q.route === 'vision') retry.appendChild(importAction('改用 MinerU（免费）', 'retryImportWithMinerU', q.id));
+        if (localMineruButton) retry.appendChild(importAction('切换到本地部署', 'retryImportWithLocalMinerU', q.id));
+        retry.appendChild(importAction('切换设置', 'openVisionSettings'));
       } else if (q.status === 'error'
           && (q.canRetryLocalMineru || q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed)) {
-        retryHTML = '<div class="import-item-retry">' + localMineruButton
-          + '<button class="action-btn" type="button" onclick="openVisionSettings()">配置其他解析 API</button></div>';
+        if (localMineruButton) retry.appendChild(importAction('切换到本地部署', 'retryImportWithLocalMinerU', q.id));
+        retry.appendChild(importAction('配置其他解析 API', 'openVisionSettings'));
       }
-      return '<div class="import-item" data-id="' + q.id + '">'
-        + '<div class="import-item-header">'
-        + '<span class="type-badge ' + typeCls + '">' + typeLabel + '</span>'
-        + '<span class="import-item-name">' + esc(q.name) + '</span>'
-        + importRouteBadge(q)
-        + '<span class="import-item-size">' + formatFileSize(q.size) + '</span>'
-        + '<button class="import-item-remove" onclick="removeImport(\'' + q.id + '\')" title="移除">&times;</button>'
-        + '</div>'
-        + '<div class="import-steps">' + stepsHTML + '</div>'
-        + '<div class="import-item-status' + statusCls + '">' + esc(q.message) + '</div>'
-        + retryHTML
-        + '</div>';
-    }).join('');
+      if (retry.childElementCount) item.appendChild(retry);
+      itemsEl.appendChild(item);
+    });
     syncResumeAllButton();
   }
 
@@ -1081,7 +862,7 @@
       q.uploadId = null;
       for (var uploadIndex = 0; uploadIndex < activeUploadIds.length; uploadIndex += 1) {
         try {
-          await fetch('/api/import-upload/cancel', {
+          await MEFinderApi.fetch('/api/import-upload/cancel', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({upload_id: activeUploadIds[uploadIndex]})
@@ -1093,7 +874,7 @@
     }
     if (q && q.jobId && ['processing', 'paused', 'error'].indexOf(q.status) >= 0) {
       try {
-        var resp = await fetch('/api/import-resume-dismiss', {
+        var resp = await MEFinderApi.fetch('/api/import-resume-dismiss', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({job_id: q.jobId})
@@ -1116,7 +897,7 @@
   var IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES = 4 * 1024 * 1024;
 
   async function uploadImportFile(q, importKind, progressLabel) {
-    var startResp = await fetch('/api/import-upload/start', {
+    var startResp = await MEFinderApi.fetch('/api/import-upload/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -1141,7 +922,7 @@
       while (offset < totalSize) {
         var end = Math.min(offset + chunkSize, totalSize);
         var uploadChunk = q.file.slice(offset, end);
-        var chunkResp = await fetch('/api/import-upload/chunk', {
+        var chunkResp = await MEFinderApi.fetch('/api/import-upload/chunk', {
           method: 'POST',
           headers: {
             'Content-Type': q.file.type || 'application/octet-stream',
@@ -1160,7 +941,7 @@
       }
     } catch (error) {
       try {
-        await fetch('/api/import-upload/cancel', {
+        await MEFinderApi.fetch('/api/import-upload/cancel', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({upload_id: uploadId})
@@ -1185,7 +966,7 @@
     try {
       uploadId = await uploadImportFile(q, q.importKind || 'document', '正在读取文件…');
       q.uploadId = uploadId;
-      var resp = await fetch('/api/import-upload/finish', {
+      var resp = await MEFinderApi.fetch('/api/import-upload/finish', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({upload_id: uploadId})
@@ -1215,7 +996,7 @@
       var pendingUploadIds = [uploadId].filter(Boolean);
       for (var pendingIndex = 0; pendingIndex < pendingUploadIds.length; pendingIndex += 1) {
         try {
-          await fetch('/api/import-upload/cancel', {
+          await MEFinderApi.fetch('/api/import-upload/cancel', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({upload_id: pendingUploadIds[pendingIndex]})
@@ -1234,7 +1015,7 @@
   function pollImportJob(id) {
     var q = importStore.queue.find(function(item) { return item.id === id; });
     if (!q || !q.jobId) return;
-    fetch('/api/import-status?job_id=' + encodeURIComponent(q.jobId))
+    MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(q.jobId))
       .then(function(resp) { return resp.json(); })
       .then(function(data) {
         if (data.error) throw new Error(data.error);
@@ -1296,7 +1077,7 @@
 
   async function loadResumableImports() {
     try {
-      var resp = await fetch('/api/import-resumable');
+      var resp = await MEFinderApi.fetch('/api/import-resumable');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取恢复任务失败');
       (data.jobs || []).forEach(function(job) {
@@ -1347,7 +1128,7 @@
           {title:'继续联网解析？', confirmText:'继续任务', tone:'warning'}
         )) return;
     try {
-      var resp = await fetch('/api/import-resume', {
+      var resp = await MEFinderApi.fetch('/api/import-resume', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId})
@@ -1362,7 +1143,7 @@
       renderImportQueue();
       pollImportJob(q.id);
     } catch (e) {
-      showToast((options.silent ? esc(q.name) + '：' : '') + '继续导入失败：' + e.message);
+      showToast((options.silent ? q.name + '：' : '') + '继续导入失败：' + e.message);
     }
   }
 
@@ -1382,7 +1163,7 @@
       {title:'切换解析接口？', confirmText:'切换并重试', tone:'warning'}
     )) return;
     try {
-      var resp = await fetch('/api/import-retry', {
+      var resp = await MEFinderApi.fetch('/api/import-retry', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId, provider_id: providerId})
@@ -1414,7 +1195,7 @@
       {title:'改用 MinerU？', confirmText:'改用 MinerU'}
     )) return;
     try {
-      var resp = await fetch('/api/import-retry-mineru', {
+      var resp = await MEFinderApi.fetch('/api/import-retry-mineru', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId})
@@ -1446,7 +1227,7 @@
       {title:'切换到本地部署？', confirmText:'切换到本地部署'}
     )) return;
     try {
-      var response = await fetch('/api/import-retry-mineru-local', {
+      var response = await MEFinderApi.fetch('/api/import-retry-mineru-local', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({job_id: q.jobId})
@@ -1481,7 +1262,7 @@
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.imports = {
     initDropZone: initDropZone,
-    syncOnlineAutoMatchControl: syncOnlineAutoMatchControl,
+    syncOnlineAutoMatchControl: function() { return global.MEFinder.importBatch.syncOnlineAutoMatchControl(); },
     setupLibraryDragSelection: setupLibraryDragSelection,
     setupScanResultDragSelection: setupScanResultDragSelection,
     normalizePdfParseMode: normalizePdfParseMode,
@@ -1491,24 +1272,38 @@
     loadResumableImports: loadResumableImports
   };
 
+  MEFinderActions.register('handleScanCheckChange', function(event, target) {
+    handleScanCheckChange(target);
+  });
+  MEFinderActions.register('openCnkiBatchRecord', function(event, target) {
+    global.MEFinder.importBatch.openCnkiBatchRecord(Number(target.dataset.index));
+  });
+  MEFinderActions.register('selectCnkiBatchChoice', function(event, target) {
+    global.resolveCnkiBatchChoice({action: 'select', index: Number(target.dataset.index)});
+  });
+  MEFinderActions.register('retryImportWithLocalMinerU', function(event, target) {
+    retryImportWithLocalMinerU(target.dataset.id);
+  });
+  MEFinderActions.register('resumeImport', function(event, target) {
+    resumeImport(target.dataset.id);
+  });
+  MEFinderActions.register('retryImportWithMinerU', function(event, target) {
+    retryImportWithMinerU(target.dataset.id);
+  });
+  MEFinderActions.register('retryImportWithVision', function(event, target) {
+    retryImportWithVision(target.dataset.id);
+  });
+  MEFinderActions.register('openVisionSettings', function() { openVisionSettings(); });
+  MEFinderActions.register('removeImport', function(event, target) {
+    removeImport(target.dataset.id);
+  });
+
   // 浏览器公共面：动态内联处理器调用的命令入口。
   global.runBatchMetadataDetection = runBatchMetadataDetection;
-  global.runCnkiBatchButton = runCnkiBatchButton;
-  global.setOnlineAutoMatchThreshold = setOnlineAutoMatchThreshold;
-  global.openCnkiBatchRecord = openCnkiBatchRecord;
-  global.openCnkiBatchCurrentRecord = openCnkiBatchCurrentRecord;
-  global.resolveCnkiBatchChoice = resolveCnkiBatchChoice;
-  global.cnkiBatchBackdropClick = cnkiBatchBackdropClick;
   global.runDirectoryScan = runDirectoryScan;
-  global.handleScanCheckChange = handleScanCheckChange;
   global.importSelectedScanned = importSelectedScanned;
   global.setPdfParseMode = setPdfParseMode;
   global.handleFileSelect = handleFileSelect;
   global.resumeAllImports = resumeAllImports;
   global.cancelAllImports = cancelAllImports;
-  global.removeImport = removeImport;
-  global.resumeImport = resumeImport;
-  global.retryImportWithVision = retryImportWithVision;
-  global.retryImportWithMinerU = retryImportWithMinerU;
-  global.retryImportWithLocalMinerU = retryImportWithLocalMinerU;
 }(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this)));

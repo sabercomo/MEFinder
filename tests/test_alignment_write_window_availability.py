@@ -37,7 +37,8 @@ from src.me_finder.application.text_alignment_coordinator import (
 from src.me_finder.database import replace_source_in_database
 from src.me_finder.embedding_runtime import SemanticAlignmentCancelled
 from src.me_finder.search import SearchEngine
-from src.me_finder import text_alignment as text_alignment_module
+from src.me_finder import alignment_generation as alignment_generation_module
+from src.me_finder.persistence import alignment_store
 from scripts.performance_fixture import create_fixture
 
 SEARCH_QUERY = {"query": "青铜", "mode": "exact", "limit": 5}
@@ -88,7 +89,7 @@ class _AlignmentWriteWindowHarness:
             # spills to disk during the segment INSERTs — the same escalation
             # from RESERVED to a held EXCLUSIVE lock that a real large first
             # alignment triggers, without megabytes of fixture text.
-            real_open = text_alignment_module.open_writable_index
+            real_open = alignment_store.open_writable_index
             pages = self.WRITER_CACHE_PAGES
 
             def open_with_small_cache(db_path):
@@ -97,7 +98,7 @@ class _AlignmentWriteWindowHarness:
                 return connection
 
             patcher = mock.patch.object(
-                text_alignment_module,
+                alignment_store,
                 "open_writable_index",
                 side_effect=open_with_small_cache,
             )
@@ -151,7 +152,7 @@ class _AlignmentWriteWindowHarness:
     def _generate_with(self, *, provider=_fake_embeddings):
         """Run the real generate_alignment through the real coordinator."""
 
-        real_generate = text_alignment_module.generate_alignment
+        real_generate = alignment_generation_module.generate_alignment
 
         def forwarded(db_path, group, pivot, target, **kwargs):
             # Force in-process compute with the fake provider: drop the
@@ -217,8 +218,8 @@ class AlignmentWriteWindowAvailabilityTests(
                 raise RuntimeError("no search completed during compute")
             return _fake_embeddings(texts, cache_dir)
 
-        real_folio = text_alignment_module.detect_folio_boundary_candidates
-        real_publish = text_alignment_module._generate_alignment_on_connection
+        real_folio = alignment_generation_module.detect_folio_boundary_candidates
+        real_publish = alignment_generation_module._generate_alignment_on_connection
 
         def gated_folio(*args, **kwargs):
             window1_entered.set()
@@ -233,11 +234,11 @@ class AlignmentWriteWindowAvailabilityTests(
             return real_publish(*args, **kwargs)
 
         with mock.patch.object(
-            text_alignment_module,
+            alignment_generation_module,
             "detect_folio_boundary_candidates",
             side_effect=gated_folio,
         ), mock.patch.object(
-            text_alignment_module,
+            alignment_generation_module,
             "_generate_alignment_on_connection",
             side_effect=gated_publish,
         ):
@@ -309,7 +310,7 @@ class AlignmentWriteWindowAvailabilityTests(
 
     def test_failed_publish_rolls_back_and_search_stays_available(self) -> None:
         warmup = self._warmup_search()
-        real_publish = text_alignment_module._generate_alignment_on_connection
+        real_publish = alignment_generation_module._generate_alignment_on_connection
 
         def exploding_publish(*args, **kwargs):
             # Run the real publish writes, then fail before the commit so the
@@ -318,7 +319,7 @@ class AlignmentWriteWindowAvailabilityTests(
             raise RuntimeError("publish exploded")
 
         with mock.patch.object(
-            text_alignment_module,
+            alignment_generation_module,
             "_generate_alignment_on_connection",
             side_effect=exploding_publish,
         ):
@@ -403,7 +404,7 @@ class AlignmentWriteWindowAvailabilityTests(
             with lock:
                 timeline["change-done"] = time.perf_counter()
 
-        real_publish = text_alignment_module._generate_alignment_on_connection
+        real_publish = alignment_generation_module._generate_alignment_on_connection
 
         def gated_publish(*args, **kwargs):
             result = real_publish(*args, **kwargs)
@@ -412,7 +413,7 @@ class AlignmentWriteWindowAvailabilityTests(
             return result
 
         with mock.patch.object(
-            text_alignment_module,
+            alignment_generation_module,
             "_generate_alignment_on_connection",
             side_effect=gated_publish,
         ):
@@ -515,7 +516,7 @@ class AlignmentSpillingWriteAvailabilityTests(
         window_entered = threading.Event()
         release_prepare = threading.Event()
 
-        real_folio = text_alignment_module.detect_folio_boundary_candidates
+        real_folio = alignment_generation_module.detect_folio_boundary_candidates
 
         def gated_folio(*args, **kwargs):
             # By now the segment INSERTs have overflowed the tiny cache, so the
@@ -528,7 +529,7 @@ class AlignmentSpillingWriteAvailabilityTests(
             return real_folio(*args, **kwargs)
 
         with mock.patch.object(
-            text_alignment_module,
+            alignment_generation_module,
             "detect_folio_boundary_candidates",
             side_effect=gated_folio,
         ):

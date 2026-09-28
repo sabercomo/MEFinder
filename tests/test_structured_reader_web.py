@@ -16,6 +16,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 import src.me_finder.web as web
 from src.me_finder.database import build_database
 from src.me_finder.structured_reader_controller import StructuredReaderController
+from tests.reader_source import reader_js_source
 
 
 def _reader_index() -> dict[str, object]:
@@ -437,19 +438,19 @@ class StructuredReaderWebTests(unittest.TestCase):
             handler.index_runtime.reopen()
 
             with patch(
-                "src.me_finder.web_runtime.get_document_window",
+                "src.me_finder.alignment_assembly.get_document_window",
                 side_effect=sqlite3.DatabaseError("database is locked"),
-            ), patch("src.me_finder.web_runtime.logging.exception") as logged:
+            ), patch("src.me_finder.alignment_assembly.logging.exception") as logged:
                 failed_status, failed = self._get_json(
                     base_url,
                     "/api/document/pages?source_id=pdf-http",
                 )
             with patch(
-                "src.me_finder.web_runtime.get_document_citation",
+                "src.me_finder.alignment_assembly.get_document_citation",
                 side_effect=sqlite3.DatabaseError(
                     "/private/library/index.sqlite3 is locked"
                 ),
-            ), patch("src.me_finder.web_runtime.logging.exception") as citation_logged:
+            ), patch("src.me_finder.alignment_assembly.logging.exception") as citation_logged:
                 citation_failed_status, citation_failed = self._post_json(
                     base_url,
                     "/api/document/citation",
@@ -484,9 +485,7 @@ class StructuredReaderWebTests(unittest.TestCase):
         reader_css = (package_dir / "static" / "reader.css").read_text(
             encoding="utf-8"
         )
-        reader_js = (package_dir / "static" / "reader.js").read_text(
-            encoding="utf-8"
-        )
+        reader_js = reader_js_source()
         self.assertIn(reader_css, web.HTML)
         self.assertIn(reader_js, web.HTML)
         self.assertNotIn("/*__READER_CSS__*/", web.HTML)

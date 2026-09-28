@@ -25,6 +25,7 @@ from contextlib import closing
 from unittest import mock
 import zipfile
 
+from src.me_finder.persistence import SQLiteDocumentHeadingStore
 from src.me_finder.application.document_heading_enrichment import (
     DocumentHeadingEnrichment,
     ensure_document_headings,
@@ -194,7 +195,7 @@ class EnrichmentNeverOverwritesNewDataTests(unittest.TestCase):
 
                 def run_enrichment() -> None:
                     outcome["profile"] = ensure_document_headings(
-                        database_path=database,
+                        store=SQLiteDocumentHeadingStore(database),
                         runtime_root=root,
                         source_file_id=source_id,
                     )
@@ -397,7 +398,7 @@ class CoordinatedEnrichmentOperationTests(unittest.TestCase):
                 db.commit()
             port = mock.Mock()
             port.mutation.side_effect = AssertionError('unnecessary wait on alignment mutation')
-            operation = DocumentHeadingEnrichment(database_path=database, runtime_root=root, index_runtime=port)
+            operation = DocumentHeadingEnrichment(store=SQLiteDocumentHeadingStore(database), runtime_root=root, index_runtime=port)
             self.assertEqual(operation.enrich(source_id)['status'], 'complete')
             port.mutation.assert_not_called()
 
@@ -410,7 +411,7 @@ class CoordinatedEnrichmentOperationTests(unittest.TestCase):
             database = root / 'data/index.sqlite3'
             port = mock.Mock()
             port.mutation.side_effect = AssertionError('EPUB export must not wait for alignment')
-            enrichment = DocumentHeadingEnrichment(database_path=database, runtime_root=root, index_runtime=port)
+            enrichment = DocumentHeadingEnrichment(store=SQLiteDocumentHeadingStore(database), runtime_root=root, index_runtime=port)
             controller = ArchiveTransferController(
                 mock.Mock(), database_path=database, runtime_root=root,
                 document_output_dir=root / 'exports', prepare_document_export=enrichment.enrich)
@@ -431,7 +432,7 @@ class CoordinatedEnrichmentOperationTests(unittest.TestCase):
                 observed.append(port.entered)
                 return original(*args, **kwargs)
             with mock.patch.object(module, 'enrich_pdf_headings', side_effect=compute):
-                DocumentHeadingEnrichment(database_path=database, runtime_root=root, index_runtime=port).enrich(source_id)
+                DocumentHeadingEnrichment(store=SQLiteDocumentHeadingStore(database), runtime_root=root, index_runtime=port).enrich(source_id)
             self.assertEqual(port.entered, 1)
             self.assertEqual(observed, [0])
 
@@ -442,7 +443,7 @@ class CoordinatedEnrichmentOperationTests(unittest.TestCase):
             durable = _RecordingCoordinationPort()
             index_runtime = _RecordingCoordinationPort()
             operation = DocumentHeadingEnrichment(
-                database_path=database,
+                store=SQLiteDocumentHeadingStore(database),
                 runtime_root=root,
                 durable_operations=durable,
                 index_runtime=index_runtime,

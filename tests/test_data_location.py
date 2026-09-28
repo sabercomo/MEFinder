@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 from src.me_finder.app_context import AppContext
 from src.me_finder.bibliographic_metadata import update_metadata_in_database
+from src.me_finder.component_catalog import ComponentCatalog
 from src.me_finder.database import build_database
 from src.me_finder.data_location import (
     DATA_ROOT_MARKER,
@@ -134,12 +135,13 @@ def _make_web_runtime(
         app_data_root=app_data,
         default_app_data_root=app_data,
     )
-    handler = make_handler(
-        index_path,
-        app_context=context,
-        native_directory_chooser=native_directory_chooser,
-        native_export_directory_chooser=native_export_directory_chooser,
-    )
+    with patch.object(ComponentCatalog, "start_background_check", return_value=False):
+        handler = make_handler(
+            index_path,
+            app_context=context,
+            native_directory_chooser=native_directory_chooser,
+            native_export_directory_chooser=native_export_directory_chooser,
+        )
     handler.log_message = lambda *_args: None
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -354,10 +356,10 @@ class DataLocationTests(unittest.TestCase):
             metadata_thread = threading.Thread(target=metadata_request)
             try:
                 with patch(
-                    "src.me_finder.web_runtime.migrate_data_root",
+                    "src.me_finder.settings_assembly.migrate_data_root",
                     side_effect=blocked_migration,
                 ), patch(
-                    "src.me_finder.web_runtime.update_metadata_in_database",
+                    "src.me_finder.import_assembly.update_metadata_in_database",
                     side_effect=observed_metadata_write,
                 ):
                     server_thread.start()
@@ -531,7 +533,7 @@ class DataLocationTests(unittest.TestCase):
                     {"path": str(backup_path)},
                 )
                 self.assertEqual(status, 200)
-                with patch("src.me_finder.web_runtime.migrate_data_root") as migrate:
+                with patch("src.me_finder.settings_assembly.migrate_data_root") as migrate:
                     status, response = _request_json(
                         server,
                         "POST",
@@ -589,7 +591,7 @@ class DataLocationTests(unittest.TestCase):
                 )
                 self.assertEqual(status, 200)
 
-                with patch("src.me_finder.web_runtime.migrate_data_root") as migrate:
+                with patch("src.me_finder.settings_assembly.migrate_data_root") as migrate:
                     status, response = _request_json(
                         server,
                         "POST",
@@ -615,7 +617,7 @@ class DataLocationTests(unittest.TestCase):
                     "restart_required": True,
                 }
                 with patch(
-                    "src.me_finder.web_runtime.migrate_data_root",
+                    "src.me_finder.settings_assembly.migrate_data_root",
                     return_value=migration_result,
                 ) as migrate:
                     status, response = _request_json(

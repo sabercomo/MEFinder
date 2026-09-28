@@ -8,8 +8,123 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "src" / "me_finder"
 
+# 棘轮基线(2026-09-25,v0.5.7 重构 A0):persistence 之外的 SQLite 散落点。
+# 只许删不许增——迁走一处就把这里对应的计数减掉(减到 0 删掉条目),
+# 新增调用点或新文件都会让门禁失败。目标见 docs/refactor-v0.5.7-plan.md 阶段 A。
+# 2026-09-25 A2 完成:connect 已清零,连接一律走 persistence/connection.py。
+SQLITE_CONNECT_OUTSIDE_PERSISTENCE: dict[str, int] = {}
+
+SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
+    "application/import_orchestrator.py",
+    "application/literature_verification_service.py",
+    "application/parallel_passage_service.py",
+    "application/script_search.py",
+    "data_location.py",
+    "document_deletion.py",
+    "document_export_service.py",
+    "document_outline.py",
+    "edition_folio_anchors.py",
+    "index_publisher.py",
+    "indexer.py",
+    "large_document/job_ledger.py",
+    "parser_statistics.py",
+    "search.py",
+    "search_assembly.py",
+    "search_recall.py",
+    "structured_reader.py",
+    "translation_works.py",
+}
+
+# C3: direct thread creation must have an explicit lifecycle owner. Startup
+# warm-up and Zotero sync moved to tasks/background_tasks.py.
+THREAD_CREATION_OWNERS = {
+    "component_catalog.py",
+    "desktop_backend.py",
+    "import_queue.py",
+    "local_ocr_installer.py",
+    "managed_alignment_runtime.py",
+    "managed_embedding_models.py",
+    "managed_mineru.py",
+    "onefile_cleanup.py",
+    "tasks/background_tasks.py",
+    "text_alignment_controller.py",
+}
+
+
+def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], set[str]]:
+    """Return ``sqlite3.connect`` counts and ``.execute*`` files per module."""
+
+    connects: dict[str, int] = {}
+    executes: set[str] = set()
+    for path in sorted(PACKAGE.rglob("*.py")):
+        relative = path.relative_to(PACKAGE)
+        if "__pycache__" in relative.parts or relative.parts[0] == "persistence":
+            continue
+        name = relative.as_posix()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call) or not isinstance(
+                node.func, ast.Attribute
+            ):
+                continue
+            func = node.func
+            if (
+                func.attr == "connect"
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "sqlite3"
+            ):
+                connects[name] = connects.get(name, 0) + 1
+            if func.attr in {"execute", "executemany", "executescript"}:
+                executes.add(name)
+    return connects, executes
+
 
 class ArchitectureBoundaryTests(unittest.TestCase):
+    def test_thread_creation_has_an_explicit_owner(self) -> None:
+        owners = set()
+        for path in PACKAGE.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "Thread"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "threading"
+                ):
+                    owners.add(path.relative_to(PACKAGE).as_posix())
+        self.assertEqual(owners, THREAD_CREATION_OWNERS)
+
+    def test_sqlite_connect_outside_persistence_only_shrinks(self) -> None:
+        connects, _executes = _sqlite_usage_outside_persistence()
+        self.assertEqual(
+            connects,
+            SQLITE_CONNECT_OUTSIDE_PERSISTENCE,
+            "persistence 之外不得新增 sqlite3.connect;连接请走 "
+            "persistence/connection.py。迁走调用点后请同步下调本文件的基线。",
+        )
+
+    def test_table_exists_helper_has_single_definition(self) -> None:
+        definitions = []
+        for path in sorted(PACKAGE.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.FunctionDef) and node.name in {
+                    "table_exists",
+                    "_table_exists",
+                }:
+                    definitions.append(path.relative_to(PACKAGE).as_posix())
+        self.assertEqual(definitions, ["persistence/connection.py"])
+
+    def test_sql_execute_files_outside_persistence_only_shrink(self) -> None:
+        _connects, executes = _sqlite_usage_outside_persistence()
+        self.assertEqual(
+            executes,
+            SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE,
+            "persistence 之外不得新增执行 SQL 的模块;SQL 请收进 persistence 仓储。"
+            "某文件清零后请从本文件基线删掉它。",
+        )
+
     def test_web_boundary_stays_split_by_responsibility(self) -> None:
         # web.py is now only the HTTP composition root + platform PDF openers;
         # service wiring lives in web_runtime.py and domain route assembly in
@@ -17,13 +132,26 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         # down — when a file hits its cap, move a real responsibility out.
         limits = {
             "web.py": 700,
-            "web_runtime.py": 725,
+            "web_runtime.py": 280,
+            "import_assembly.py": 290,
+            "alignment_assembly.py": 85,
+            "library_assembly.py": 85,
+            "settings_assembly.py": 195,
             "http_routes.py": 260,
-            "web_http.py": 800,
+            # v0.5.7 B2：导入/上传/搜索/校准移出，分发只查 RouteTable（原 763 行）。
+            "web_http.py": 405,
+            "http_route_table.py": 200,
+            "upload_import_controller.py": 220,
+            "search_controller.py": 100,
+            "calibration_config_controller.py": 60,
             "web_assets.py": 120,
             # 备份轮转与身份核对/去重已迁出，上限随之下调（只降不升）。
             # 段落行/payload 形状转换已下沉到 persistence，上限随之下调。
-            "database.py": 1325,
+            "database.py": 470,
+            "persistence/fts_index.py": 195,
+            "persistence/index_build.py": 265,
+            "persistence/storage_optimization.py": 170,
+            "persistence/source_replace.py": 380,
             "persistence/paragraph_payload.py": 100,
             "database_backup.py": 220,
             "index_identity.py": 240,
@@ -38,7 +166,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
             # → bibliographic_metadata 写库路径 → search 上帝类。
             # 人工覆盖与配方快照已拆出，上限随之下调（只降不升）。
-            "text_alignment.py": 2400,
+            "text_alignment.py": 960,
+            "alignment_generation.py": 820,
+            "alignment_segmentation.py": 350,
             "alignment_snapshots.py": 150,
             "alignment_overrides.py": 425,
             # 锚点抽取与结构识别已拆出，上限随之下调（只降不升）。
@@ -75,6 +205,30 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 f"{relative} 已超过 {limit} 行，请先拆出新的明确边界。",
             )
 
+    def test_runtime_root_has_at_most_twenty_internal_dependencies(self) -> None:
+        tree = ast.parse((PACKAGE / "web_runtime.py").read_text(encoding="utf-8"))
+        modules = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level
+        }
+        # C2 is staged by domain; each extraction tightens this cap toward 20.
+        self.assertLessEqual(len(modules), 12)
+
+    def test_application_runtime_fields_have_concrete_types(self) -> None:
+        tree = ast.parse((PACKAGE / "web_runtime.py").read_text(encoding="utf-8"))
+        runtime = next(
+            node for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "ApplicationRuntime"
+        )
+        untyped = [
+            node.target.id for node in runtime.body
+            if isinstance(node, ast.AnnAssign)
+            and isinstance(node.annotation, ast.Name)
+            and node.annotation.id == "object"
+        ]
+        self.assertEqual(untyped, [])
+
     def test_http_routes_are_assembled_by_product_domain_without_container(self) -> None:
         source = (PACKAGE / "http_routes.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
@@ -92,6 +246,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 "assemble_preference_routes",
                 "assemble_reader_routes",
                 "assemble_shell_routes",
+                "assemble_source_routes",
             },
         )
         self.assertFalse(
@@ -110,7 +265,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             for node in ast.walk(tree)
             if isinstance(node, ast.ImportFrom) and node.level
         }
-        self.assertEqual(internal_modules, {"application", "http_range"})
+        # 传输层只认路由表与 Range 解析;搜索等用例已移入 controller(v0.5.7 B2c)。
+        self.assertEqual(internal_modules, {"http_range", "http_route_table"})
 
     def test_document_query_application_service_contains_no_sql(self) -> None:
         source = (
@@ -150,9 +306,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         for path in sorted((PACKAGE / "application").glob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.ImportFrom)
-                    and (node.module or "").endswith("persistence")
+                # 连 persistence 子模块(如 persistence.connection)也不许直接
+                # import:SQL 适配器一律由组合根(web_runtime)注入。
+                if isinstance(node, ast.ImportFrom) and (
+                    (node.module or "").endswith("persistence")
+                    or (node.module or "").split(".")[0] == "persistence"
                 ):
                     violations.append(path.name)
         self.assertEqual(violations, [])

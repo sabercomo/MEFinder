@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -198,6 +199,20 @@ else:
         )
         self.addCleanup(manager.close)
         return manager
+
+    def test_close_cancels_and_joins_active_worker(self) -> None:
+        manager = self._manager()
+        release = threading.Event()
+        state = manager._states["pipeline"]
+        state.operation = "install"
+        state.thread = threading.Thread(target=release.wait, daemon=True)
+        state.thread.start()
+        thread = state.thread
+        self.assertFalse(manager.close(timeout=0))
+        self.assertTrue(state.cancel_event.is_set())
+        release.set()
+        self.assertTrue(manager.close(timeout=1))
+        self.assertFalse(thread.is_alive())
 
     def _wait(self, manager: ManagedMinerU, profile: str, timeout: float = 20) -> dict:
         deadline = time.monotonic() + timeout
@@ -777,3 +792,12 @@ else:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HardwareDetectionWindowTests(unittest.TestCase):
+    def test_windows_nvidia_smi_probe_hides_console_window(self):
+        from src.me_finder.managed_mineru import detect_mineru_hardware
+
+        runner = mock.Mock(side_effect=OSError("no nvidia-smi"))
+        detect_mineru_hardware(platform_key="win32-x86_64", command_runner=runner)
+        self.assertTrue(runner.call_args.kwargs.get("creationflags", 0) & 0x08000000)

@@ -137,7 +137,14 @@ if command -v node >/dev/null 2>&1; then
   for script in "${frontend_scripts[@]}"; do
     node --check "$script"
   done
-  node --check src/me_finder/static/reader.js
+  reader_scripts=(src/me_finder/static/reader/*.js)
+  if [ ! -e "${reader_scripts[0]}" ]; then
+    echo "static/reader contains no JavaScript files." >&2
+    exit 1
+  fi
+  for script in "${reader_scripts[@]}"; do
+    node --check "$script"
+  done
 fi
 
 MEFINDER_APP_VERSION="$MEFINDER_VERSION" \

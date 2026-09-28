@@ -98,7 +98,7 @@
   --page-gutter: clamp(1.25rem, 5vw, 4.5rem);
   --content-max: 80rem;
   --plate-inset: 58rem;
-  --measure: 62ch;
+  --measure: 52em;              /* em, not ch: 1ch is a Latin digit, half a CJK glyph */
 
   /* Marquee display — capped by typography.md (≤ 6rem); the 8-char headline line
    * sets the fluid rate so it never overflows at 320 px. CJK display needs more

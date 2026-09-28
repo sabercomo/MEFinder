@@ -2,7 +2,29 @@
    —— #7 前端全局作用域收敛（模式同 reader.js / 05-theme-engine.js）。
    IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 70-vision.js
+  // 本地 OCR 与托管 MinerU 各一份请求代次：轮询与安装/卸载等操作谁最后发起就采信谁，
+  // 晚到的旧轮询不得覆盖操作后的状态、也不得停掉轮询（14-task-state.js）。
+  var localOCRRequests = global.MEFinderTaskState.createLatest();
+  var managedMineruRequests = global.MEFinderTaskState.createLatest();
+  var managedMineruView = global.MEFinderManagedMineruView;
+
+  function stopLocalOCRPoll() {
+    if (parserStore.localOCRPollTimer) clearTimeout(parserStore.localOCRPollTimer);
+    parserStore.localOCRPollTimer = null;
+  }
+
+  function stopManagedMineruPoll() {
+    if (parserStore.managedMineruPollTimer) clearTimeout(parserStore.managedMineruPollTimer);
+    parserStore.managedMineruPollTimer = null;
+  }
+
   /* ═══ MinerU API settings ═══ */
+  function visionNode(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
   function localOCREngineFields(providerId) {
     var prefix = providerId === 'ndlocr-lite' ? 'local-ocr-modern' : 'local-ocr-ancient';
     return {
@@ -19,23 +41,6 @@
       uninstall: document.getElementById(prefix + '-uninstall'),
       cancel: document.getElementById(prefix + '-cancel')
     };
-  }
-
-  function localOCRByteSize(value) {
-    var bytes = Number(value) || 0;
-    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
-    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  function localOCREstimatedWait(value) {
-    var seconds = Math.max(0, Number(value) || 0);
-    if (!seconds) return '即将完成';
-    if (seconds < 60) return '预计剩余约 ' + Math.max(10, Math.ceil(seconds / 10) * 10) + ' 秒';
-    if (seconds < 3600) return '预计剩余约 ' + Math.ceil(seconds / 60) + ' 分钟';
-    var hours = Math.floor(seconds / 3600);
-    var minutes = Math.ceil((seconds % 3600) / 60);
-    return '预计剩余约 ' + hours + ' 小时' + (minutes ? ' ' + minutes + ' 分钟' : '');
   }
 
   function localOCRTransferSummary(managed) {
@@ -127,10 +132,7 @@
 
   function renderLocalOCRUnknown(reason) {
     parserStore.localOCRConfig = null;
-    if (parserStore.localOCRPollTimer) {
-      clearTimeout(parserStore.localOCRPollTimer);
-      parserStore.localOCRPollTimer = null;
-    }
+    stopLocalOCRPoll();
     var status = document.getElementById('local-ocr-status');
     if (status) { status.className = 'settings-status warning'; status.textContent = '状态未知'; }
     var reload = document.getElementById('local-ocr-reload');
@@ -179,12 +181,15 @@
   async function loadLocalOCRConfig() {
     var status = document.getElementById('local-ocr-status');
     if (status && !parserStore.localOCRConfig) { status.className = 'settings-status'; status.textContent = '读取中…'; }
+    var token = localOCRRequests.begin();
     try {
-      var response = await fetch('/api/local-ocr');
+      var response = await MEFinderApi.fetch('/api/local-ocr');
       var data = await response.json();
+      if (!localOCRRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderLocalOCRConfig(data);
     } catch (error) {
+      if (!localOCRRequests.isCurrent(token)) return;
       // DESIGN.md §2/§6：读取失败意味着状态未知，不是未安装；此时不得据错误状态
       // 触发安装或启用，只给「重新读取」。
       renderLocalOCRUnknown(error.message);
@@ -230,13 +235,15 @@
     button.textContent = '保存中…';
     if (hint) hint.textContent = '';
     try {
-      var response = await fetch('/api/local-ocr', {
+      var response = await MEFinderApi.fetch('/api/local-ocr', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(localOCRPayload())
       });
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '保存失败');
+      // 保存成功才作废在途轮询（它会把表单改回保存前的值）；失败时轮询照常继续。
+      localOCRRequests.invalidate();
       renderLocalOCRConfig(data);
       if (hint) hint.textContent = data.available ? '已保存；扫描类 PDF 将优先使用本地 OCR' : '已保存；当前不会改变导入路由';
     } catch (error) {
@@ -252,9 +259,12 @@
       '将删除该组件的模型、独立 Python 环境和自动填入的路径',
       {title:'卸载本地 OCR？', tone:'warning', confirmText:'卸载'}
     )) return;
+    // 操作一开始就作废在途轮询：它带回的是操作前的快照。
+    localOCRRequests.invalidate();
+    stopLocalOCRPoll();
     if (button) button.disabled = true;
     try {
-      var response = await fetch('/api/local-ocr/component', {
+      var response = await MEFinderApi.fetch('/api/local-ocr/component', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({provider_id:providerId, action:action})
@@ -264,6 +274,7 @@
       await loadLocalOCRConfig();
     } catch (error) {
       showToast('本地 OCR 组件操作失败：' + error.message, 'danger');
+      loadLocalOCRConfig();
     } finally {
       if (button) button.disabled = false;
     }
@@ -276,7 +287,7 @@
     button.textContent = '测试中…';
     if (fields.hint) fields.hint.textContent = '正在启动 CLI…';
     try {
-      var response = await fetch('/api/local-ocr/test', {
+      var response = await MEFinderApi.fetch('/api/local-ocr/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({provider_id: providerId, python_path: payload.python_path, script_path: payload.script_path})
@@ -297,8 +308,10 @@
     if (!status) return;
     status.className = 'settings-status';
     status.textContent = '读取中…';
+    // 这份配置也带托管运行时快照，与托管轮询、操作共用同一份代次。
+    var token = managedMineruRequests.begin();
     try {
-      var resp = await fetch('/api/mineru-accounts');
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
       parserStore.mineruAccounts = Array.isArray(data.accounts) ? data.accounts : [];
@@ -313,7 +326,7 @@
       document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
       var serviceAddress = document.getElementById('mineru-service-address');
       if (serviceAddress) serviceAddress.textContent = data.api_base || 'https://mineru.net';
-      renderMineruLocalSettings(data.local_deployment || {});
+      renderMineruLocalSettings(data.local_deployment || {}, managedMineruRequests.isCurrent(token));
       renderMineruAccountList();
       var addButton = document.getElementById('mineru-add-account');
       if (addButton) addButton.hidden = !parserStore.mineruAccounts.length;
@@ -331,10 +344,12 @@
       status.className = 'settings-status warning';
       status.textContent = '读取失败';
       showToast('读取 MinerU 配置失败：' + e.message);
+      // 本次读取已作废了在途的托管轮询；运行时仍在忙时要把轮询接上，否则卡片停在旧进度。
+      if (managedMineruRequests.isCurrent(token) && parserStore.managedMineruWasBusy) loadManagedMineruStatus();
     }
   }
 
-  function renderMineruLocalSettings(config) {
+  function renderMineruLocalSettings(config, runtimeIsCurrent) {
     parserStore.mineruLocalConfig = config;
     var endpoint = document.getElementById('mineru-local-endpoint');
     var backend = document.getElementById('mineru-local-backend');
@@ -342,7 +357,8 @@
     if (endpoint) endpoint.value = config.endpoint || 'http://127.0.0.1:8000';
     if (backend) backend.value = config.backend || 'pipeline';
     if (enabled) enabled.checked = !!config.enabled;
-    renderManagedMineru(config.managed_runtime || {});
+    // 旧快照只更新表单，不改托管运行时卡片；更新的请求会渲染它。
+    if (runtimeIsCurrent !== false) renderManagedMineru(config.managed_runtime || {});
     syncMineruLocalImportOption(!!config.enabled);
     var label = managedMineruSummaryLabel(config, config.managed_runtime || {});
     updateMineruLocalStatus(!!config.enabled, label);
@@ -356,180 +372,60 @@
     return (profile === 'vlm' ? 'VLM' : 'Pipeline') + ' 运行中';
   }
 
-  function managedMineruFields(profileId) {
-    var prefix = 'managed-mineru-' + profileId;
-    return {
-      state: document.getElementById(prefix + '-state'),
-      install: document.getElementById(prefix + '-install'),
-      start: document.getElementById(prefix + '-start'),
-      stop: document.getElementById(prefix + '-stop'),
-      uninstall: document.getElementById(prefix + '-uninstall'),
-      cancel: document.getElementById(prefix + '-cancel'),
-      progressHint: document.getElementById(prefix + '-progress'),
-      progress: document.getElementById(prefix + '-progress-bar')
-    };
-  }
-
-  function managedMineruTransferSummary(profile) {
-    if (!profile.total_bytes) return '';
-    var total = (profile.total_is_estimate ? '约 ' : '') + localOCRByteSize(profile.total_bytes);
-    var summary = '已下载 ' + localOCRByteSize(profile.downloaded_bytes) + ' / ' + total;
-    if (profile.downloaded_bytes >= profile.total_bytes) return summary + ' · 即将完成';
-    if (!profile.download_speed_bps || profile.eta_seconds == null) {
-      return summary + (profile.downloaded_bytes ? ' · 网络波动或正在处理分片…' : ' · 正在检测网速…');
-    }
-    return summary + ' · ' + localOCRByteSize(profile.download_speed_bps) + '/s · ' + localOCREstimatedWait(profile.eta_seconds);
-  }
-
-  function managedMineruErrorText(value) {
-    var message = String(value || '').replace(/\s+/g, ' ').trim();
-    if (/pypi\.org\/simple\/mineru/i.test(message) && /(failed to fetch|tunnel error|connect)/i.test(message)) {
-      return '无法连接 PyPI，请检查网络或代理后重试';
-    }
-    if (/(huggingface_hub|hf_hub_download|xet_get|aws\.cdn\.hf\.co)/i.test(message) && /(connectionerror|network error|request middleware error|timeout|connect|readerror|i\/o error|decoding response body)/i.test(message)) {
-      return '模型下载网络中断，请检查网络或代理后重试';
-    }
-    return message.length > 180 ? message.slice(0, 177) + '…' : message;
-  }
-
+  // 托管运行时卡片由 70-managed-mineru-view.js（Vue）渲染；这里只写它的 store，
+  // 并负责依赖运行时状态的轮询与「本地部署」总状态。
   function renderManagedMineru(runtime) {
-    var externalConfigured = !!parserStore.mineruLocalConfig.enabled && !parserStore.mineruLocalConfig.managed;
-    var hardware = runtime.hardware || {};
-    var hardwareText = document.getElementById('managed-mineru-hardware');
-    if (hardwareText) {
-      var memory = hardware.vram_mb ? ' · ' + (hardware.vram_mb / 1024).toFixed(0) + 'GB 显存' : '';
-      hardwareText.textContent = hardware.detection_error
-        ? hardware.detection_error + ' · 默认推荐 Pipeline'
-        : hardware.name
-        ? '当前设备：' + hardware.name + memory + ' · 推荐 ' + (hardware.recommended_profile === 'vlm' ? 'VLM' : 'Pipeline')
-        : '未检测到可用的本地推理硬件';
-    }
-    var service = runtime.service || {};
-    var vlmProfile = (runtime.profiles || []).find(function(item) { return item.profile === 'vlm'; });
-    var vlmSection = document.querySelector('[data-mineru-profile="vlm"]');
-    if (vlmSection) vlmSection.hidden = !hardware.vlm_supported && !(vlmProfile && vlmProfile.installed);
-    var active = false;
-    var errors = [];
-    (runtime.profiles || []).forEach(function(profile) {
-      var fields = managedMineruFields(profile.profile);
-      var busy = ['provisioning','downloading_models','validating','starting','cleaning'].indexOf(profile.state) >= 0;
-      var running = !!service.running && service.profile === profile.profile;
-      active = active || busy;
-      if (profile.error) errors.push(profile.display_name);
-      var labels = {
-        provisioning:'安装依赖中', downloading_models:'下载模型中', validating:'验证中',
-        starting:'启动中', cleaning:'清理中'
-      };
-      if (fields.state) {
-        fields.state.className = 'settings-status ' + (profile.installed ? 'ready' : 'warning');
-        fields.state.textContent = labels[profile.state]
-          || (running ? '运行中' : profile.error ? '安装失败' : profile.update_available ? '可更新' : profile.installed ? '已安装' : profile.supported ? (externalConfigured ? '未由 MEFinder 安装' : '未安装') : '平台不支持');
-      }
-      if (fields.install) {
-        fields.install.hidden = (profile.installed && !profile.update_available) || busy;
-        fields.install.disabled = !profile.supported || (profile.profile === 'vlm' && !hardware.vlm_supported);
-        fields.install.textContent = profile.update_available ? '更新组件' : externalConfigured ? '改用托管安装' : '下载安装';
-        fields.install.onclick = function() {
-          manageMineruComponent(profile.profile, profile.update_available ? 'update' : 'install', fields.install);
-        };
-      }
-      if (fields.start) fields.start.hidden = !profile.installed || busy || running;
-      if (fields.stop) fields.stop.hidden = !running || busy;
-      if (fields.uninstall) fields.uninstall.hidden = !profile.installed || busy || running;
-      if (fields.cancel) fields.cancel.hidden = !busy;
-      if (fields.progressHint) {
-        var detail = running && service.endpoint
-          ? '运行于 ' + service.endpoint
-          : profile.error ? '安装失败：' + managedMineruErrorText(profile.error) : (profile.message || '');
-        var transfer = busy ? managedMineruTransferSummary(profile) : '';
-        if (transfer) detail += (detail ? ' · ' : '') + transfer;
-        fields.progressHint.hidden = !detail;
-        fields.progressHint.textContent = detail;
-      }
-      if (fields.progress) {
-        fields.progress.hidden = !busy;
-        var bar = fields.progress.firstElementChild;
-        if (bar) bar.style.width = profile.progress == null ? '18%' : Math.round(profile.progress * 100) + '%';
-        fields.progress.classList.toggle('indeterminate', busy && profile.progress == null);
-      }
-    });
-    var autoButton = document.getElementById('managed-mineru-auto-install');
-    if (autoButton) {
-      var recommended = hardware.recommended_profile || 'pipeline';
-      var recommendedProfile = (runtime.profiles || []).find(function(item) { return item.profile === recommended; });
-      autoButton.disabled = active || !runtime.supported || !!(recommendedProfile && recommendedProfile.installed);
-      autoButton.textContent = recommendedProfile && recommendedProfile.installed
-        ? '已安装'
-        : externalConfigured ? '改用推荐托管配置' : '安装推荐配置';
-    }
-    var checkButton = document.getElementById('managed-mineru-check-updates');
-    if (checkButton) {
-      checkButton.disabled = active || !runtime.supported;
-      checkButton.textContent = '检查新版本';
-    }
-    var hint = document.getElementById('managed-mineru-hint');
-    if (hint) hint.textContent = errors.length ? '安装失败，未改动现有本地部署设置。' : (service.running
-      ? ''
-      : active ? '安装需要约 20GB 可用空间，请保持应用开启'
-      : externalConfigured ? '已配置自部署服务 ' + parserStore.mineruLocalConfig.endpoint + '；无需重复下载。下方托管运行时为可选方案'
-      : '组件按需下载，不会随主程序更新自动安装');
-    if (hint && !errors.length) {
-      var versionLine = managedMineruVersionText(runtime);
-      if (versionLine) hint.textContent = (hint.textContent ? hint.textContent + ' · ' : '') + versionLine;
-    }
+    managedMineruView.setRuntime(runtime, parserStore.mineruLocalConfig);
+    var active = managedMineruView.cardView().active;
     if (parserStore.mineruLocalConfig.managed) {
       updateMineruLocalStatus(
         !!parserStore.mineruLocalConfig.enabled,
         managedMineruSummaryLabel(parserStore.mineruLocalConfig, runtime)
       );
     }
-    if (parserStore.managedMineruPollTimer) clearTimeout(parserStore.managedMineruPollTimer);
-    parserStore.managedMineruPollTimer = active ? setTimeout(loadManagedMineruStatus, 900) : null;
+    stopManagedMineruPoll();
+    if (active) parserStore.managedMineruPollTimer = setTimeout(loadManagedMineruStatus, 900);
     if (parserStore.managedMineruWasBusy && !active) loadMineruConfig();
     parserStore.managedMineruWasBusy = active;
   }
 
-  function managedMineruVersionText(runtime) {
-    // 如实说明安装目标是从 PyPI 取到的还是清单固定版本，别让用户以为一定是最新
-    var target = String(runtime.version || '').trim();
-    if (!target) return '';
-    var detail = String(runtime.version_detail || '').trim();
-    var source = String(runtime.version_source || '') === 'pypi' ? '兼容区间内最新' : '清单固定版本';
-    return '安装目标 MinerU ' + target + '（' + source + '）' + (detail ? ' · ' + detail : '');
-  }
-
-  async function checkManagedMineruUpdates(button) {
-    var hint = document.getElementById('managed-mineru-hint');
-    if (button) { button.disabled = true; button.textContent = '检查中…'; }
-    if (hint) hint.textContent = '正在查询可用版本…';
+  async function checkManagedMineruUpdates() {
+    managedMineruView.setChecking(true);
+    managedMineruView.setNotice('正在查询可用版本…');
+    var token = managedMineruRequests.begin();
+    stopManagedMineruPoll();
     try {
-      var response = await fetch('/api/mineru-local/component', {
+      var response = await MEFinderApi.fetch('/api/mineru-local/component', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'check-updates'})
       });
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '查询失败');
       renderManagedMineru(data.managed_runtime || data);
     } catch (error) {
-      if (hint) hint.textContent = '查询版本失败：' + error.message;
-      if (button) { button.disabled = false; button.textContent = '检查新版本'; }
+      if (!managedMineruRequests.isCurrent(token)) return;
+      managedMineruView.setChecking(false);
+      managedMineruView.setNotice('查询版本失败：' + error.message);
     }
   }
 
   async function loadManagedMineruStatus() {
+    var token = managedMineruRequests.begin();
     try {
-      var response = await fetch('/api/mineru-local/component');
+      var response = await MEFinderApi.fetch('/api/mineru-local/component');
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderManagedMineru(data);
     } catch (error) {
-      var hint = document.getElementById('managed-mineru-hint');
-      if (hint) hint.textContent = '读取托管运行时失败：' + error.message;
+      if (!managedMineruRequests.isCurrent(token)) return;
+      managedMineruView.setNotice('读取托管运行时失败：' + error.message);
     }
   }
 
-  async function manageMineruComponent(profile, action, button) {
+  async function manageMineruComponent(profile, action) {
     if ((action === 'install' || action === 'update') && !await showAppConfirm(
       '将创建独立 Python 环境并下载 MinerU 模型，最多可能占用约 20GB 磁盘',
       {title:'下载安装本地 MinerU？', confirmText:'开始安装'}
@@ -538,20 +434,25 @@
       '将删除该配置的 MinerU 运行时、依赖和本地模型',
       {title:'卸载本地 MinerU？', tone:'warning', confirmText:'卸载'}
     )) return;
-    if (button) button.disabled = true;
+    var token = managedMineruRequests.begin();
+    stopManagedMineruPoll();
+    managedMineruView.setPending(profile, action, true);
     try {
-      var response = await fetch('/api/mineru-local/component', {
+      var response = await MEFinderApi.fetch('/api/mineru-local/component', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({profile:profile, action:action})
       });
       var data = await response.json();
+      if (!managedMineruRequests.isCurrent(token)) return;
       if (!response.ok || data.error) throw new Error(data.error || '操作失败');
       renderManagedMineru(data.managed_runtime || {});
     } catch (error) {
+      if (!managedMineruRequests.isCurrent(token)) return;
       showToast('本地 MinerU 组件操作失败：' + error.message, 'danger');
+      loadManagedMineruStatus();
     } finally {
-      if (button) button.disabled = false;
+      managedMineruView.setPending(profile, action, false);
     }
   }
 
@@ -590,7 +491,7 @@
     button.textContent = '保存中…';
     if (hint) hint.textContent = '';
     try {
-      var response = await fetch('/api/mineru-local', {
+      var response = await MEFinderApi.fetch('/api/mineru-local', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(mineruLocalPayload())
@@ -625,7 +526,7 @@
     button.textContent = '检测中…';
     if (hint) hint.textContent = '正在连接本地服务…';
     try {
-      var response = await fetch('/api/mineru-local/test', {
+      var response = await MEFinderApi.fetch('/api/mineru-local/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(mineruLocalPayload())
@@ -660,8 +561,8 @@
     if (!list) return;
     var count = document.getElementById('mineru-account-count');
     if (count) count.textContent = parserStore.mineruAccounts.length.toLocaleString() + ' 个账号';
-    if (!parserStore.mineruAccounts.length) { list.innerHTML = ''; return; }
-    list.innerHTML = parserStore.mineruAccounts.map(function(item) {
+    list.replaceChildren();
+    parserStore.mineruAccounts.forEach(function(item) {
       var healthy = item.health_status === 'healthy' || !item.health_status;
       var probe = parserStore.mineruProbeResults[item.account_id];
       var state = !item.configured ? '缺少 Token'
@@ -672,25 +573,43 @@
         : '尚未检测';
       var stateClass = probe === 'ok' ? 'ready'
         : (probe === 'failed' || !item.configured || !healthy) ? 'warning' : '';
-      var facts = (item.configured ? '密钥已保存' : '未填写 Token')
-        + ' · <span class="mineru-account-state ' + stateClass + '">' + esc(state) + '</span>'
-        + ' · ' + (item.expires_at ? '到期 ' + esc(item.expires_at.replace(/-/g, '/')) : '到期日未设置');
       var aside = item.enabled ? '解析记录可在「解析统计」中查看' : '停用期间不分配新的解析任务';
-      return '<div class="mineru-account-row">'
-        + '<div class="mineru-account-main">'
-        + '<div class="mineru-account-copy"><strong>' + esc(item.display_name) + '</strong><small>' + facts + '</small></div>'
-        + '<label class="ui-switch mineru-row-switch" title="' + (item.enabled ? '停用账号' : '启用账号') + '">'
-        + '<input type="checkbox" data-account-id="' + esc(item.account_id) + '" ' + (item.enabled ? 'checked ' : '')
-        + 'onchange="toggleMineruAccountEnabled(this)"><span class="ui-switch-track" aria-hidden="true"></span>'
-        + '<span class="visually-hidden">' + (item.enabled ? '停用' : '启用') + ' ' + esc(item.display_name) + '</span></label>'
-        + '<span class="mineru-account-switch-text">' + (item.enabled ? '开启' : '关闭') + '</span>'
-        + '</div>'
-        + '<div class="mineru-account-actions">'
-        + '<span class="mineru-account-aside">' + aside + '</span>'
-        + '<button class="action-btn quiet" type="button" data-account-id="' + esc(item.account_id) + '" onclick="testMineruConnection(this.dataset.accountId, this)">检测连接</button>'
-        + '<button class="action-btn" type="button" data-account-id="' + esc(item.account_id) + '" onclick="selectMineruAccount(this.dataset.accountId)">编辑</button>'
-        + '</div></div>';
-    }).join('');
+      var row = visionNode('div', 'mineru-account-row');
+      var main = visionNode('div', 'mineru-account-main');
+      var copy = visionNode('div', 'mineru-account-copy');
+      copy.appendChild(visionNode('strong', null, item.display_name));
+      var facts = visionNode('small', null, (item.configured ? '密钥已保存' : '未填写 Token') + ' · ');
+      facts.appendChild(visionNode('span', 'mineru-account-state ' + stateClass, state));
+      facts.appendChild(document.createTextNode(' · ' + (item.expires_at ? '到期 ' + item.expires_at.replace(/-/g, '/') : '到期日未设置')));
+      copy.appendChild(facts);
+      main.appendChild(copy);
+      var switchLabel = visionNode('label', 'ui-switch mineru-row-switch');
+      switchLabel.title = item.enabled ? '停用账号' : '启用账号';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.accountId = item.account_id;
+      input.checked = !!item.enabled;
+      input.dataset.actionChange = 'toggleMineruAccountEnabled';
+      switchLabel.appendChild(input);
+      var track = visionNode('span', 'ui-switch-track');
+      track.setAttribute('aria-hidden', 'true');
+      switchLabel.appendChild(track);
+      switchLabel.appendChild(visionNode('span', 'visually-hidden', (item.enabled ? '停用' : '启用') + ' ' + item.display_name));
+      main.appendChild(switchLabel);
+      main.appendChild(visionNode('span', 'mineru-account-switch-text', item.enabled ? '开启' : '关闭'));
+      row.appendChild(main);
+      var actions = visionNode('div', 'mineru-account-actions');
+      actions.appendChild(visionNode('span', 'mineru-account-aside', aside));
+      [['检测连接', 'testMineruConnection', 'action-btn quiet'], ['编辑', 'selectMineruAccount', 'action-btn']].forEach(function(action) {
+        var button = visionNode('button', action[2], action[0]);
+        button.type = 'button';
+        button.dataset.accountId = item.account_id;
+        button.dataset.action = action[1];
+        actions.appendChild(button);
+      });
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
   }
 
   function startEditMineruService() {
@@ -746,7 +665,7 @@
 
   async function openMineruTokenPage() {
     try {
-      var resp = await fetch('/api/open-mineru-token', {
+      var resp = await MEFinderApi.fetch('/api/open-mineru-token', {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'
       });
       var data = await resp.json();
@@ -801,248 +720,6 @@
     error.hidden = false;
   }
 
-  function mineruPageRangesLabel(ranges) {
-    if (!Array.isArray(ranges) || !ranges.length) return '—';
-    return ranges.map(function(range) {
-      if (!Array.isArray(range) || range.length < 2) return '';
-      return Number(range[0]).toLocaleString() + '–' + Number(range[1]).toLocaleString();
-    }).filter(Boolean).join('、');
-  }
-
-  function parserDateLabel(value) {
-    if (!value) return '—';
-    var date = new Date(value);
-    if (Number.isNaN(date.getTime())) return esc(String(value));
-    return date.toLocaleDateString('zh-CN', {year:'numeric', month:'2-digit', day:'2-digit'});
-  }
-
-  function renderParserProviderBooks(provider) {
-    var rows = (Array.isArray(provider.books) ? provider.books : []).map(function(book) {
-      var model = book.model ? esc(book.model) : '—';
-      return '<tr><td data-label="文献"><span class="parser-book-title"><strong>' + esc(book.title || book.file_name || '未命名文献') + '</strong><small>' + esc(book.file_name || book.source_file_id || '') + '</small></span></td><td data-label="模型">' + model + '</td><td data-label="完成日期">' + parserDateLabel(book.completed_at) + '</td><td data-label="页数"><b>' + Number(book.parsed_page_count || 0).toLocaleString() + '</b> 页</td></tr>';
-    }).join('');
-    return '<div class="parser-detail-label">解析文献</div><div class="parser-book-table-scroll"><table class="parser-book-table"><thead><tr><th>文献</th><th>模型</th><th>完成日期</th><th>页数</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-  }
-
-  function renderMineruCredentialAttribution(credentials) {
-    if (!Array.isArray(credentials) || !credentials.length) return '<div class="parser-credential-empty">这些 MinerU 文献没有可匹配的本地账号归属记录</div>';
-    return '<div class="parser-detail-label mineru-attribution-label">MinerU 账号归属 <small>本地记录，不是官网用量或计费数据</small></div><div class="parser-credential-list">' + credentials.map(function(item) {
-      var bookRows = (Array.isArray(item.books) ? item.books : []).map(function(book) {
-        return '<div class="parser-credential-book"><span><strong>' + esc(book.source_file_name || book.document_id || '未命名文献') + '</strong><small>原书页 ' + esc(mineruPageRangesLabel(book.page_ranges)) + '</small></span><b>' + Number(book.parsed_page_count || 0).toLocaleString() + ' 页</b></div>';
-      }).join('');
-      return '<details class="parser-credential-account"><summary><span><strong>' + esc(item.display_name || item.account_id) + '</strong><small>' + Number(item.parsed_book_count || 0).toLocaleString() + ' 本文献</small></span><b>' + Number(item.parsed_page_count || 0).toLocaleString() + ' 页</b><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-credential-books">' + bookRows + '</div></details>';
-    }).join('') + '</div>';
-  }
-
-  // 解析服务在构成条上的档位：按数据外流程度排，色跟服务走而不是跟 local/api
-  // 二分走——新增一个本地服务不会把已有颜色重排。未知解析器不占档位，走中性色。
-  var PARSER_CHART_STEPS = {
-    'pymupdf': 1,
-    'simple-pdf-text': 1,
-    'mineru-local': 2,
-    'ndlocr-lite': 3,
-    'ndlkotenocr-lite': 3,
-    'mineru-cloud': 4,
-    'openai-compatible': 5,
-    'qwen-ocr': 5
-  };
-
-  function parserChartStep(provider) {
-    var mapped = PARSER_CHART_STEPS[provider.provider_id];
-    if (mapped) return mapped;
-    if (!provider.provider_id || provider.provider_id === 'unknown-parser') return 6;
-    // 没登记过的解析器按本地/在线落到同类的末档，不新造颜色。
-    return provider.provider_kind === 'local' ? 3 : 5;
-  }
-
-  function parserChartStepClass(provider) {
-    var step = parserChartStep(provider);
-    return step > 5 ? 'step-other' : 'step-' + step;
-  }
-
-  function renderParserStatistics() {
-    var total = parserStore.parserStatistics.total || {};
-    document.getElementById('parser-stat-books').textContent = Number(total.parsed_book_count || 0).toLocaleString();
-    document.getElementById('parser-stat-pages').textContent = Number(total.parsed_page_count || 0).toLocaleString();
-    document.getElementById('parser-stat-providers').textContent = Number(total.provider_count || 0).toLocaleString();
-    var list = document.getElementById('parser-provider-list');
-    var overview = document.getElementById('parser-share-overview');
-    var providers = Array.isArray(parserStore.parserStatistics.providers) ? parserStore.parserStatistics.providers : [];
-    if (!providers.length) {
-      overview.innerHTML = '';
-      list.innerHTML = '<div class="parser-statistics-empty"><strong>还没有解析统计</strong><small>导入并完成一本 PDF 的页级解析后，这里会按解析服务显示文献和页数</small></div>';
-      return;
-    }
-    var totalPages = providers.reduce(function(sum, item) {
-      return sum + Number(item.parsed_page_count || 0);
-    }, 0);
-    // 段序必须等于色阶序，相邻色对才是校验过的那几对；同档位的服务按页数降序。
-    var orderedProviders = providers.slice().sort(function(a, b) {
-      var stepDelta = parserChartStep(a) - parserChartStep(b);
-      if (stepDelta) return stepDelta;
-      return Number(b.parsed_page_count || 0) - Number(a.parsed_page_count || 0);
-    });
-    // 占比按页数算，与总览的「解析页」同口径；总页数为 0 时不编造比例。
-    var shareOf = function(provider) {
-      var pageCount = Number(provider.parsed_page_count || 0);
-      var share = totalPages > 0 ? pageCount / totalPages : 0;
-      var percent = totalPages > 0 ? Math.round(share * 100) : null;
-      return {
-        pageCount: pageCount,
-        share: share,
-        label: percent === null ? '—' : (percent === 0 && pageCount > 0 ? '<1%' : percent + '%')
-      };
-    };
-    // 占比是部分-整体关系：顶部一根 100% 构成条 + 图例说明各段，
-    // 行内不再重复画条，避免被误读成加载进度。
-    if (totalPages > 0) {
-      var segments = orderedProviders.map(function(provider) {
-        return '<span class="parser-share-seg ' + parserChartStepClass(provider) + '" style="width:' + (shareOf(provider).share * 100).toFixed(1) + '%"></span>';
-      }).join('');
-      var legendRows = orderedProviders.map(function(provider) {
-        var kind = provider.provider_kind === 'local' ? '本地' : 'API';
-        return '<div><i class="parser-share-dot ' + parserChartStepClass(provider) + '" aria-hidden="true"></i><span class="parser-share-name">' + esc(provider.provider_name || provider.provider_id) + '</span><small>' + kind + '</small><b>' + shareOf(provider).label + '</b><small class="parser-share-pages">' + shareOf(provider).pageCount.toLocaleString() + ' 页</small></div>';
-      }).join('');
-      var breakdownLabel = orderedProviders.map(function(provider) {
-        return (provider.provider_name || provider.provider_id) + '占' + shareOf(provider).label;
-      }).join('，');
-      overview.innerHTML = '<div class="parser-share-stack"><div class="parser-share-bar" role="img" aria-label="按解析服务构成：' + esc(breakdownLabel) + '">' + segments + '</div><div class="parser-share-cap">全库已解析 ' + totalPages.toLocaleString() + ' 页，按解析服务构成</div></div><div class="parser-share-legend">' + legendRows + '</div>';
-    } else {
-      overview.innerHTML = '';
-    }
-    list.innerHTML = orderedProviders.map(function(provider) {
-      var isMineru = provider.provider_id === 'mineru-cloud' || provider.provider_id === 'mineru-local';
-      var isCloudMineru = provider.provider_id === 'mineru-cloud';
-      var kind = provider.provider_kind === 'local' ? '本地' : 'API';
-      var details = renderParserProviderBooks(provider);
-      if (isCloudMineru) details += renderMineruCredentialAttribution(provider.credentials || []);
-      var providerMark = isMineru ? '<span class="mineru-brand-glyph"></span>' : esc(String(provider.provider_name || '?').charAt(0).toUpperCase());
-      return '<details class="parser-provider-group" open><summary><span class="parser-provider-identity"><span class="parser-provider-mark ' + (isMineru ? 'mineru' : '') + '" aria-hidden="true">' + providerMark + '</span><span><strong>' + esc(provider.provider_name || provider.provider_id) + '</strong><small>' + kind + '</small></span></span><span class="parser-provider-number"><b>' + Number(provider.parsed_book_count || 0).toLocaleString() + '</b> 本</span><span class="parser-provider-number"><b>' + Number(provider.parsed_page_count || 0).toLocaleString() + '</b> 页</span><svg class="parser-provider-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary><div class="parser-provider-detail">' + details + '</div></details>';
-    }).join('');
-  }
-
-  async function loadParserStatistics() {
-    var status = document.getElementById('parser-statistics-status');
-    if (status) {
-      status.className = 'settings-status';
-      status.textContent = '刷新中…';
-    }
-    try {
-      var response = await fetch('/api/parser-statistics');
-      var data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || '读取失败');
-      parserStore.parserStatistics = data || {total:{parsed_book_count:0, parsed_page_count:0, provider_count:0}, providers:[]};
-      renderParserStatistics();
-      global.MEFinder.visionProviders.render();
-      if (status) {
-        status.className = 'settings-status ready';
-        status.textContent = '已刷新';
-      }
-    } catch (error) {
-      if (status) {
-        status.className = 'settings-status warning';
-        status.textContent = '读取失败';
-      }
-      showToast('读取本地解析统计失败：' + (error && error.message ? error.message : '未知错误'), 'danger');
-    }
-  }
-
-  function loadMineruStatistics() {
-    return loadParserStatistics();
-  }
-
-  function renderLastBackupExport(record) {
-    var node = document.getElementById('backup-last-export');
-    if (!node) return;
-    if (!record || !record.exported_at) {
-      node.textContent = '还没有导出过备份';
-      return;
-    }
-    var when = new Date(Number(record.exported_at) * 1000);
-    var stamp = when.getFullYear() + '-' + String(when.getMonth() + 1).padStart(2, '0')
-      + '-' + String(when.getDate()).padStart(2, '0') + ' '
-      + String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
-    var name = record.file_name || record.path || '';
-    node.textContent = '上次导出：' + stamp + (name ? ' · ' + name : '');
-    node.title = record.path || '';
-  }
-
-  async function exportBackup() {
-    var hint = document.getElementById('backup-export-hint');
-    try {
-      var outputDirectory = await chooseDesktopExportDirectory();
-      if (outputDirectory === null) return;
-      if (hint) hint.textContent = '正在导出…';
-      var payload = {};
-      if (outputDirectory) payload.output_dir = outputDirectory;
-      var resp = await fetch('/api/backup/export', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '导出失败');
-      if (hint) hint.textContent = '已导出到：' + data.path;
-      renderLastBackupExport({
-        path: data.path,
-        file_name: String(data.path || '').split(/[\\/]/).pop(),
-        exported_at: data.exported_at,
-        size_bytes: data.size_bytes
-      });
-      showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
-    } catch (e) {
-      if (hint) hint.textContent = '仅备份页码、书目和偏好，不含 PDF';
-      showToast('导出备份失败：' + e.message);
-    }
-  }
-
-  async function importBackup() {
-    var button = document.getElementById('backup-import-choose');
-    if (button && button.disabled) return;
-    if (button) { button.disabled = true; button.textContent = '正在选择…'; }
-    try {
-      var chooseResp = await fetch('/api/backup/import/choose', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
-      var chosen = await chooseResp.json();
-      if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
-      if (chosen.cancelled) return;
-      if (!await showAppConfirm(
-        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息',
-        {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
-      )) return;
-      if (button) button.textContent = '正在导入…';
-      var resp = await fetch('/api/backup/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: chosen.path})});
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
-      showToast('已恢复备份，正在重建索引…');
-      pollBackupRestore(data.job_id);
-    } catch (e) {
-      showToast('导入备份失败：' + e.message);
-    } finally {
-      if (button) { button.disabled = false; button.textContent = '选择备份并恢复'; }
-    }
-  }
-
-  function pollBackupRestore(jobId) {
-    fetch('/api/import-status?job_id=' + encodeURIComponent(jobId))
-      .then(function(resp) { return resp.json(); })
-      .then(function(data) {
-        if (data.status === 'completed') {
-          showToast(data.message || '备份已恢复');
-          invalidateLibraryCatalog();
-          // 备份恢复整体替换索引库，作品与对齐数据一并失效。
-          if (global.MEFinder && global.MEFinder.works) global.MEFinder.works.invalidate();
-          loadMeta();
-          return;
-        }
-        if (data.status === 'failed' || data.error) {
-          showToast('恢复失败：' + (data.message || data.error || '未知错误'));
-          return;
-        }
-        setTimeout(function() { pollBackupRestore(jobId); }, 2000);
-      })
-      .catch(function() { setTimeout(function() { pollBackupRestore(jobId); }, 4000); });
-  }
-
   function toggleMineruSecret(inputId, buttonId) {
     var input = document.getElementById(inputId);
     var button = document.getElementById(buttonId);
@@ -1075,7 +752,7 @@
     saveButton.disabled = true;
     saveButton.textContent = '保存中…';
     try {
-      var resp = await fetch('/api/mineru-accounts', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
@@ -1104,7 +781,7 @@
     button.disabled = true;
     button.textContent = '保存中…';
     try {
-      var resp = await fetch('/api/mineru-accounts/service', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts/service', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({api_base: apiBase})
@@ -1132,7 +809,7 @@
     item.enabled = !!input.checked;
     renderMineruAccountList();
     try {
-      var resp = await fetch('/api/mineru-accounts', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
@@ -1163,7 +840,7 @@
       {title:'删除 MinerU 账号？', confirmText:'删除', tone:'danger'}
     )) return;
     try {
-      var resp = await fetch('/api/mineru-accounts', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({action: 'delete_account', account_id: accountId})
@@ -1182,12 +859,10 @@
   async function testMineruConnection(accountId, button) {
     if (!accountId) return;
     var status = document.getElementById('mineru-config-status');
-    // Button may be an icon or a text button — preserve its content.
-    var buttonHTML = button ? button.innerHTML : null;
     if (button) { button.disabled = true; }
     if (status) { status.className = 'settings-status'; status.textContent = '测试连接中…'; }
     try {
-      var resp = await fetch('/api/mineru-accounts/test', {
+      var resp = await MEFinderApi.fetch('/api/mineru-accounts/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({account_id: accountId})
@@ -1203,7 +878,7 @@
       renderMineruAccountList();
       showToast('MinerU 连接失败：' + e.message, 'danger');
     } finally {
-      if (button) { button.disabled = false; if (buttonHTML !== null) button.innerHTML = buttonHTML; }
+      if (button) button.disabled = false;
     }
   }
 
@@ -1264,7 +939,7 @@
 
   async function loadGeneralModelConfig() {
     try {
-      var response = await fetch('/api/general-model');
+      var response = await MEFinderApi.fetch('/api/general-model');
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '读取失败');
       renderGeneralModel(data);
@@ -1279,7 +954,7 @@
     if (button) button.disabled = true;
     if (hint) { hint.className = 'settings-hint'; hint.textContent = '保存中…'; }
     try {
-      var response = await fetch('/api/general-model', {
+      var response = await MEFinderApi.fetch('/api/general-model', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(generalModelFieldValues())
@@ -1303,7 +978,7 @@
     if (button) button.disabled = true;
     if (hint) { hint.className = 'settings-hint'; hint.textContent = '连接中…'; }
     try {
-      var response = await fetch('/api/general-model/test', {
+      var response = await MEFinderApi.fetch('/api/general-model/test', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(generalModelFieldValues())
@@ -1324,7 +999,7 @@
     if (button) button.disabled = true;
     if (hint) { hint.className = 'vision-model-hint'; hint.textContent = '读取模型列表…'; }
     try {
-      var response = await fetch('/api/general-model/models', {
+      var response = await MEFinderApi.fetch('/api/general-model/models', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(generalModelFieldValues())
@@ -1334,7 +1009,7 @@
       var models = (data.models || []).map(function(m) { return typeof m === 'string' ? m : (m && m.id) || ''; }).filter(Boolean);
       var list = document.getElementById('general-model-model-list');
       if (list) {
-        list.innerHTML = '';
+        list.replaceChildren();
         models.forEach(function(id) { var opt = document.createElement('option'); opt.value = id; list.appendChild(opt); });
       }
       if (hint) { hint.className = 'vision-model-hint'; hint.textContent = models.length ? ('读到 ' + models.length + ' 个模型，点击输入框选择') : '未读到模型，请手动输入型号'; }
@@ -1347,7 +1022,7 @@
 
   var parserRuntimeAPI = {
     // 走命名空间而不是再加全局：70-vision.js 的全局命令面有预算上限。
-    renderLastBackupExport: renderLastBackupExport,
+    renderLastBackupExport: function(record) { global.MEFinder.parserStats.renderLastBackupExport(record); },
     startEditMineruService: startEditMineruService,
     cancelEditMineruService: cancelEditMineruService,
     loadGeneralModelConfig: loadGeneralModelConfig,
@@ -1356,6 +1031,16 @@
   };
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.parserRuntime = parserRuntimeAPI;
+
+  MEFinderActions.register('toggleMineruAccountEnabled', function(event, target) {
+    toggleMineruAccountEnabled(target);
+  });
+  MEFinderActions.register('testMineruConnection', function(event, target) {
+    testMineruConnection(target.dataset.accountId, target);
+  });
+  MEFinderActions.register('selectMineruAccount', function(event, target) {
+    selectMineruAccount(target.dataset.accountId);
+  });
 
   // 内联处理器仍需浏览器全局可见；模块间调用统一走 MEFinder.parserRuntime。
   global.saveGeneralModel = saveGeneralModel;
@@ -1371,13 +1056,8 @@
   global.testMineruLocalConnection = testMineruLocalConnection;
   global.openMineruTokenPage = openMineruTokenPage;
   global.startAddMineruAccount = startAddMineruAccount;
-  global.selectMineruAccount = selectMineruAccount;
-  global.toggleMineruAccountEnabled = toggleMineruAccountEnabled;
   global.deleteMineruAccount = deleteMineruAccount;
   global.closeMineruAccountDialog = closeMineruAccountDialog;
-  global.loadParserStatistics = loadParserStatistics;
-  global.exportBackup = exportBackup;
-  global.importBackup = importBackup;
   global.toggleMineruSecret = toggleMineruSecret;
   global.saveMineruConfig = saveMineruConfig;
   global.saveMineruServiceAddress = saveMineruServiceAddress;
@@ -1385,9 +1065,7 @@
 
   if (typeof module !== "undefined" && module.exports) {
     Object.assign(module.exports, {
-      managedMineruErrorText: managedMineruErrorText,
       managedMineruSummaryLabel: managedMineruSummaryLabel,
-      managedMineruTransferSummary: managedMineruTransferSummary,
       renderManagedMineru: renderManagedMineru
     });
   }

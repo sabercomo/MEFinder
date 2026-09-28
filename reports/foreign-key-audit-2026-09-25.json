@@ -1,0 +1,406 @@
+{
+  "generated": "2026-09-25",
+  "source_head": "8582be3",
+  "script": "scripts/foreign_key_audit.py",
+  "method": "read-only mode=ro online backup; checks on copy",
+  "databases": {
+    "real/index.sqlite3": {
+      "user_version": 7,
+      "quick_check": "ok",
+      "table_count": 28,
+      "declared_foreign_keys": [
+        {
+          "table": "alignment_link_members",
+          "id": 0,
+          "parent": "text_segments",
+          "from": "segment_id",
+          "to": "segment_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_link_members",
+          "id": 1,
+          "parent": "alignment_links",
+          "from": "alignment_link_id",
+          "to": "alignment_link_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_links",
+          "id": 0,
+          "parent": "alignment_runs",
+          "from": "alignment_run_id",
+          "to": "alignment_run_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 0,
+          "parent": "segment_sets",
+          "from": "target_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 1,
+          "parent": "segment_sets",
+          "from": "source_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 2,
+          "parent": "source_files",
+          "from": "target_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 3,
+          "parent": "source_files",
+          "from": "source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 4,
+          "parent": "document_groups",
+          "from": "document_group_id",
+          "to": "document_group_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_review_deferrals",
+          "id": 0,
+          "parent": "segment_sets",
+          "from": "source_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_review_deferrals",
+          "id": 1,
+          "parent": "source_files",
+          "from": "target_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_review_deferrals",
+          "id": 2,
+          "parent": "source_files",
+          "from": "source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 0,
+          "parent": "segment_sets",
+          "from": "target_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 1,
+          "parent": "segment_sets",
+          "from": "pivot_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 2,
+          "parent": "source_files",
+          "from": "target_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 3,
+          "parent": "source_files",
+          "from": "pivot_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 4,
+          "parent": "document_groups",
+          "from": "document_group_id",
+          "to": "document_group_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "document_group_members",
+          "id": 0,
+          "parent": "document_groups",
+          "from": "document_group_id",
+          "to": "document_group_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "document_group_reading_positions",
+          "id": 0,
+          "parent": "source_files",
+          "from": "right_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "SET NULL"
+        },
+        {
+          "table": "document_group_reading_positions",
+          "id": 1,
+          "parent": "source_files",
+          "from": "left_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "document_group_reading_positions",
+          "id": 2,
+          "parent": "document_groups",
+          "from": "document_group_id",
+          "to": "document_group_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "segment_sets",
+          "id": 0,
+          "parent": "source_files",
+          "from": "source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "text_segment_paragraph_spans",
+          "id": 0,
+          "parent": "text_segments",
+          "from": "segment_id",
+          "to": "segment_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "text_segment_spans",
+          "id": 0,
+          "parent": "text_segments",
+          "from": "segment_id",
+          "to": "segment_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "text_segments",
+          "id": 0,
+          "parent": "segment_sets",
+          "from": "segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "child_table_rows": {
+        "alignment_link_members": 1608118,
+        "alignment_links": 656325,
+        "alignment_manual_overrides": 0,
+        "alignment_review_deferrals": 0,
+        "alignment_runs": 159,
+        "document_group_members": 20,
+        "document_group_reading_positions": 6,
+        "segment_sets": 88,
+        "text_segment_paragraph_spans": 69828,
+        "text_segment_spans": 321780,
+        "text_segments": 387983
+      },
+      "violations": [],
+      "violation_rows": 0
+    },
+    "real/parser_jobs.sqlite3": {
+      "user_version": 3,
+      "quick_check": "ok",
+      "table_count": 3,
+      "declared_foreign_keys": [
+        {
+          "table": "slice_jobs",
+          "id": 0,
+          "parent": "document_jobs",
+          "from": "document_job_id",
+          "to": "id",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "child_table_rows": {
+        "slice_jobs": 294
+      },
+      "violations": [],
+      "violation_rows": 0
+    },
+    "fixture/index.sqlite3": {
+      "user_version": 8,
+      "quick_check": "ok",
+      "table_count": 25,
+      "declared_foreign_keys": [
+        {
+          "table": "alignment_link_members",
+          "id": 0,
+          "parent": "text_segments",
+          "from": "segment_id",
+          "to": "segment_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_link_members",
+          "id": 1,
+          "parent": "alignment_links",
+          "from": "alignment_link_id",
+          "to": "alignment_link_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_links",
+          "id": 0,
+          "parent": "alignment_runs",
+          "from": "alignment_run_id",
+          "to": "alignment_run_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 0,
+          "parent": "segment_sets",
+          "from": "target_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 1,
+          "parent": "segment_sets",
+          "from": "source_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 2,
+          "parent": "source_files",
+          "from": "target_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 3,
+          "parent": "source_files",
+          "from": "source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_manual_overrides",
+          "id": 4,
+          "parent": "document_groups",
+          "from": "document_group_id",
+          "to": "document_group_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 0,
+          "parent": "segment_sets",
+          "from": "target_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 1,
+          "parent": "segment_sets",
+          "from": "pivot_segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 2,
+          "parent": "source_files",
+          "from": "target_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 3,
+          "parent": "source_files",
+          "from": "pivot_source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "alignment_runs",
+          "id": 4,
+          "parent": "document_groups",
+          "from": "document_group_id",
+          "to": "document_group_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "document_group_members",
+          "id": 0,
+          "parent": "document_groups",
+          "from": "document_group_id",
+          "to": "document_group_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "segment_sets",
+          "id": 0,
+          "parent": "source_files",
+          "from": "source_file_id",
+          "to": "source_file_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "text_segment_paragraph_spans",
+          "id": 0,
+          "parent": "text_segments",
+          "from": "segment_id",
+          "to": "segment_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "text_segment_spans",
+          "id": 0,
+          "parent": "text_segments",
+          "from": "segment_id",
+          "to": "segment_id",
+          "on_delete": "CASCADE"
+        },
+        {
+          "table": "text_segments",
+          "id": 0,
+          "parent": "segment_sets",
+          "from": "segment_set_id",
+          "to": "segment_set_id",
+          "on_delete": "CASCADE"
+        }
+      ],
+      "child_table_rows": {
+        "alignment_link_members": 0,
+        "alignment_links": 0,
+        "alignment_manual_overrides": 0,
+        "alignment_runs": 0,
+        "document_group_members": 2,
+        "segment_sets": 0,
+        "text_segment_paragraph_spans": 0,
+        "text_segment_spans": 0,
+        "text_segments": 0
+      },
+      "violations": [],
+      "violation_rows": 0
+    }
+  }
+}

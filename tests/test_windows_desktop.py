@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ctypes
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -14,6 +16,7 @@ from src.me_finder.windows_desktop import (
     WindowsPDFViewer,
     WindowsWindowController,
     apply_windows_titlebar,
+    begin_windows_resize,
     configure_windows_chromeless,
     frameless_resize_hit,
     pdf_file_url,
@@ -21,7 +24,7 @@ from src.me_finder.windows_desktop import (
 
 
 class FramelessResizeHitTests(unittest.TestCase):
-    # Window rect 100,100 → 500,400; grab 8px. Top edge is client (titlebar).
+    # Window rect 100,100 → 500,400; grab 8px on each edge.
     RECT = dict(left=100, top=100, right=500, bottom=400, grab=8)
 
     def hit(self, x: int, y: int) -> int:
@@ -30,8 +33,10 @@ class FramelessResizeHitTests(unittest.TestCase):
     def test_interior_is_client(self) -> None:
         self.assertEqual(self.hit(300, 250), windows_desktop._HTCLIENT)
 
-    def test_top_edge_stays_client_for_the_titlebar(self) -> None:
-        self.assertEqual(self.hit(300, 101), windows_desktop._HTCLIENT)
+    def test_top_edge_resizes_but_titlebar_below_it_stays_client(self) -> None:
+        self.assertEqual(self.hit(300, 100), 12)  # HTTOP
+        self.assertEqual(self.hit(300, 107), 12)
+        self.assertEqual(self.hit(300, 108), windows_desktop._HTCLIENT)
 
     def test_left_and_right_edges_resize(self) -> None:
         self.assertEqual(self.hit(101, 250), windows_desktop._HTLEFT)
@@ -42,10 +47,9 @@ class FramelessResizeHitTests(unittest.TestCase):
         self.assertEqual(self.hit(101, 399), windows_desktop._HTBOTTOMLEFT)
         self.assertEqual(self.hit(499, 399), windows_desktop._HTBOTTOMRIGHT)
 
-    def test_top_corners_fall_back_to_side_resize_not_top(self) -> None:
-        # Top-edge resize is given up, so a top corner is a plain side grab.
-        self.assertEqual(self.hit(101, 101), windows_desktop._HTLEFT)
-        self.assertEqual(self.hit(499, 101), windows_desktop._HTRIGHT)
+    def test_top_corners_resize_diagonally(self) -> None:
+        self.assertEqual(self.hit(101, 101), 13)  # HTTOPLEFT
+        self.assertEqual(self.hit(499, 101), 14)  # HTTOPRIGHT
 
 
 class _FakeHandle:
@@ -382,6 +386,146 @@ class WindowsWindowControllerTests(unittest.TestCase):
         window.events.closed.callbacks[0]()
         self.assertFalse(controller.is_maximized())
         self.assertIsNone(controller._bound_window())
+
+
+class WindowsEdgeResizeTests(unittest.TestCase):
+    """WebView2 covers the frameless window, so HTML handles start the resize."""
+
+    @unittest.skipUnless(shutil.which("node"), "node is required for frontend behavior tests")
+    def test_html_handles_forward_all_edges_and_ignore_other_mouse_buttons(self) -> None:
+        script = r"""
+const assert = require('assert');
+const fs = require('fs');
+const handlers = {}, handles = [], calls = [];
+global.window = global;
+global.desktopShell = 'win32';
+global.addEventListener = (name, fn) => { handlers[name] = fn; };
+global.pywebview = {api: {
+  start_resize: edge => calls.push(edge), is_maximized: () => Promise.resolve(false)
+}};
+global.document = {
+  documentElement: {classList: {contains: () => false, toggle: () => {}}},
+  querySelector: selector => selector === '.windows-resize-edge' ? handles[0] : null,
+  addEventListener: () => {},
+  createElement: () => ({dataset: {}, setAttribute: () => {},
+    addEventListener(name, fn) { this[name] = fn; }}),
+  body: {appendChild: handle => handles.push(handle)}
+};
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+handlers.pywebviewready();
+const expected = ['bottom','bottom-left','bottom-right','left','right','top','top-left','top-right'];
+assert.deepStrictEqual(handles.map(h => h.dataset.edge).sort(), expected);
+handles.forEach(handle => {
+  let prevented = false;
+  handle.mousedown({button: 0, preventDefault() { prevented = true; }});
+  assert(prevented);
+  assert.strictEqual(calls[calls.length - 1], handle.dataset.edge);
+  handle.mousedown({button: 2, preventDefault() { assert.fail('right-click consumed'); }});
+});
+assert.strictEqual(calls.length, 8);
+handlers.pywebviewready();
+assert.strictEqual(handles.length, 8);
+"""
+        source = Path(__file__).resolve().parents[1] / "src/me_finder/static/js/10-shell.js"
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(source)],
+            capture_output=True, text=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "node is required for frontend behavior tests")
+    def test_titlebar_buttons_drop_focus_unless_reached_by_keyboard(self) -> None:
+        """Showing the window after load lets WebView2 tab focus onto 最小化."""
+        script = r"""
+const assert = require('assert');
+const fs = require('fs');
+const docHandlers = {};
+global.window = global;
+global.desktopShell = 'win32';
+global.addEventListener = () => {};
+global.document = {
+  documentElement: {classList: {contains: () => false, toggle: () => {}}},
+  querySelector: () => null,
+  addEventListener: (name, fn) => { (docHandlers[name] = docHandlers[name] || []).push(fn); },
+};
+eval(fs.readFileSync(process.argv[1], 'utf8'));
+const fire = (name, event) => docHandlers[name].forEach(fn => fn(event));
+function button(inTitlebar) {
+  return {blurred: false, blur() { this.blurred = true; },
+    closest: sel => (inTitlebar && sel === '.windows-titlebar-controls') ? {} : null};
+}
+const minimize = button(true);
+fire('focusin', {target: minimize});
+assert(minimize.blurred, 'focus arriving on window show must not stay on 最小化');
+const search = button(false);
+fire('focusin', {target: search});
+assert(!search.blurred, 'page controls keep focus');
+fire('keydown', {key: 'Tab'});
+const tabbed = button(true);
+fire('focusin', {target: tabbed});
+assert(!tabbed.blurred, 'keyboard users keep titlebar focus');
+fire('pointerdown', {});
+const clicked = button(true);
+fire('focusin', {target: clicked});
+assert(clicked.blurred);
+"""
+        source = Path(__file__).resolve().parents[1] / "src/me_finder/static/js/10-shell.js"
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script, str(source)],
+            capture_output=True, text=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_html_edges_map_to_native_resize_hit_codes(self) -> None:
+        window = _FakeWindow()
+        poster = mock.Mock(return_value=True)
+        expected = {
+            "top": 12,
+            "top-left": 13,
+            "top-right": 14,
+            "left": windows_desktop._HTLEFT,
+            "right": windows_desktop._HTRIGHT,
+            "bottom": windows_desktop._HTBOTTOM,
+            "bottom-left": windows_desktop._HTBOTTOMLEFT,
+            "bottom-right": windows_desktop._HTBOTTOMRIGHT,
+        }
+        with mock.patch.object(windows_desktop.sys, "platform", "win32"):
+            for edge, hit in expected.items():
+                self.assertTrue(begin_windows_resize(window, edge, resize_poster=poster))
+                poster.assert_called_with(windows_desktop._window_handle(window), hit)
+
+    def test_unknown_edge_or_non_windows_does_not_resize(self) -> None:
+        window = _FakeWindow()
+        poster = mock.Mock(return_value=True)
+        with mock.patch.object(windows_desktop.sys, "platform", "win32"):
+            self.assertFalse(begin_windows_resize(window, "unknown", resize_poster=poster))
+        with mock.patch.object(windows_desktop.sys, "platform", "darwin"):
+            self.assertFalse(begin_windows_resize(window, "left", resize_poster=poster))
+        poster.assert_not_called()
+
+    def test_controller_forwards_resize_only_while_restored(self) -> None:
+        window = _FakeWindow()
+        starter = mock.Mock(return_value=True)
+        controller = WindowsWindowController(
+            maximize_bounds_preparer=mock.Mock(return_value=True),
+            resize_starter=starter,
+        )
+        self.assertFalse(controller.start_resize("left"))
+        controller._bind(window)
+
+        self.assertTrue(controller.start_resize("bottom-right"))
+        starter.assert_called_once_with(window, "bottom-right")
+
+        window.events.maximized.callbacks[0]()
+        self.assertFalse(controller.start_resize("left"))
+        starter.assert_called_once()
+
+    def test_controller_swallows_native_resize_failures(self) -> None:
+        controller = WindowsWindowController(
+            resize_starter=mock.Mock(side_effect=RuntimeError("no handle"))
+        )
+        controller._bind(_FakeWindow())
+        self.assertFalse(controller.start_resize("left"))
 
 
 class WindowsPDFViewerTests(unittest.TestCase):

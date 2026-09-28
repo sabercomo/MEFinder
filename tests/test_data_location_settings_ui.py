@@ -14,6 +14,7 @@ const nodes = {}, calls = [], messages = [];
 let finish, confirm = true;
 const node = id => nodes[id] || (nodes[id] = {style: {}, hidden: false, disabled: false});
 const context = {
+  MEFinderActions: {register() {}},
   THEME_BUILTIN_CSS_IDS: [], THEME_PRESET_MAP: {light: {}}, THEME_MODE_DEFAULT: {light: 'light'},
   settingsStore: {appearanceState: {mode: 'light', light: 'light'}},
   initAppearanceSystemWatch() {},
@@ -22,7 +23,8 @@ const context = {
   showAppConfirm: async () => confirm,
   showToast(message) {messages.push(message);}
 };
-vm.createContext(context); vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+vm.createContext(context); // 被测文件经 07-api.js 发请求:先装配统一请求出口。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context); vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 const reply = (body, ok=true) => finish({ok, status: ok ? 200 : 400, json: async () => body});
 (async () => {
   let request = context.chooseDataLocation('existing');
@@ -52,7 +54,7 @@ const reply = (body, ok=true) => finish({ok, status: ok ? 200 : 400, json: async
   assert.equal(node('data-location-status').textContent, '重启后生效');
 })().catch(error => {console.error(error); process.exitCode = 1;});
 '''
-        source = Path(__file__).resolve().parents[1] / 'src/me_finder/static/js/60-settings.js'
+        source = Path(__file__).resolve().parents[1] / 'src/me_finder/static/js/61-settings-data.js'
         result = subprocess.run([shutil.which('node'), '-e', script, str(source)],
                                 capture_output=True, text=True, encoding='utf-8', timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

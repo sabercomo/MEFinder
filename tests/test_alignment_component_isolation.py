@@ -68,7 +68,7 @@ def store_alignment_links(database: Path) -> None:
         "src.me_finder.alignment_kernel.embed_text_sequences",
         side_effect=fake_sequence_embeddings,
     ), mock.patch(
-        "src.me_finder.text_alignment.align_segment_sequences",
+        "src.me_finder.alignment_generation.align_segment_sequences",
         return_value=(links, []),
     ):
         generate_alignment(database, "bench-pair", "bench-002", "bench-003")
@@ -117,7 +117,7 @@ finally:
                 "src.me_finder.alignment_kernel.embed_text_sequences",
                 side_effect=fake_sequence_embeddings,
             ), mock.patch(
-                "src.me_finder.text_alignment.align_segment_sequences",
+                "src.me_finder.alignment_generation.align_segment_sequences",
                 return_value=([], []),
             ):
                 targets = list_alignment_targets(self.db, self.pivot)
@@ -127,7 +127,7 @@ finally:
                 "src.me_finder.alignment_kernel.embed_text_sequences",
                 side_effect=fake_sequence_embeddings,
             ), mock.patch(
-                "src.me_finder.text_alignment.align_segment_sequences",
+                "src.me_finder.alignment_generation.align_segment_sequences",
                 return_value=([], []),
             ):
                 with closing(SearchEngine(self.db)) as engine:
@@ -191,7 +191,7 @@ finally:
             "src.me_finder.alignment_kernel.embed_text_sequences",
             side_effect=fake_sequence_embeddings,
         ), mock.patch(
-            "src.me_finder.text_alignment.align_segment_sequences",
+            "src.me_finder.alignment_generation.align_segment_sequences",
             return_value=([], []),
         ):
             targets = list_alignment_targets(self.db, self.pivot)

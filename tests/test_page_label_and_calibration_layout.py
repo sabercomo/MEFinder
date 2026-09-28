@@ -37,7 +37,7 @@ class CitationPageDisplayMarkupTests(unittest.TestCase):
 
     def test_result_list_and_detail_share_one_formatter(self) -> None:
         self.assertGreaterEqual(HTML.count("formatCitationPageLabel(item)"), 2)
-        self.assertIn("pdRow('引用页码', pageLabel)", HTML)
+        self.assertIn("detailPageRow(pageDetail, '引用页码', pageLabel)", HTML)
         self.assertNotIn("esc(String(item.page || ''))", HTML)
 
     def test_citation_exports_keep_the_current_hit_page(self) -> None:
@@ -97,11 +97,11 @@ class LibraryWorkspaceLayoutMarkupTests(unittest.TestCase):
         self.assertIn("table-layout: fixed;", table.group(1))
         self.assertIn("<th>PDF 起始页</th>", HTML)
         self.assertIn("<th>范围说明</th>", HTML)
-        self.assertIn('class="seg-remove"', HTML)
-        self.assertIn('aria-label="删除分段"><svg', HTML)
+        self.assertIn("calibrationNode('button', 'seg-remove')", HTML)
+        self.assertIn("removeButton.setAttribute('aria-label', '删除分段')", HTML)
 
     def test_auto_detection_has_one_primary_button(self) -> None:
-        self.assertEqual(HTML.count('id="cal-auto-detect-btn"'), 1)
+        self.assertEqual(HTML.count("actions.firstElementChild.id = 'cal-auto-detect-btn'"), 1)
 
     def test_selected_document_has_background_border_and_accent_bar(self) -> None:
         self.assertIn(".library-row.selected", HTML)

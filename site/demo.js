@@ -8,8 +8,9 @@
   const PASSAGES = [
     {
       doc: "法哲学原理：或自然法和国家学纲要",
-      meta: "黑格尔 · 范杨、张企泰译",
+      meta: "黑格尔 · 范扬、张企泰译",
       page: "序言第16页",
+      pdfPage: 69,
       pageResolved: true,
       text: "关于教导世界应该怎样，……无论如何哲学总是来得太迟。哲学作为有关世界的思想，要直到现实结束其形成过程并完成其自身之后，才会出现。……当哲学用灰色的颜料绘成灰色的图画的时候，这一生活形态就变老了。对灰色绘成灰色，不能使生活形态变得年青，而只能作为认识的对象。密纳发的猫头鹰要等黄昏到来，才会起飞。",
     },
@@ -17,6 +18,7 @@
       doc: "法哲学原理：或自然法和国家学纲要",
       meta: "黑格尔 · 第161节",
       page: "第201页",
+      pdfPage: 272,
       pageResolved: true,
       text: "婚姻作为直接伦理关系首先包括自然生活的环节。因为伦理关系是实体性的关系，所以它包括生活的全部，亦即类及其生命过程的现实。但其次，自然性别的统一只是内在的或自在地存在的，正因为如此，它在它的实存中纯粹是外在的统一，这种统一在自我意识中就转变为精神的统一，自我意识的爱。",
     },
@@ -196,7 +198,8 @@
       top.append(el("span", "hit-doc", p.doc));
       top.append(el("span", null, p.meta));
       top.append(el("span", "hit-score", Math.round(hit.score * 100) + "%"));
-      top.append(el("span", "hit-page" + (p.pageResolved ? "" : " is-none"), p.page));
+      top.append(el("span", "hit-page" + (p.pageResolved ? "" : " is-none"), p.pageResolved ? "书内 " + p.page : p.page));
+      if (p.pdfPage) top.append(el("span", "hit-phys", `不是 PDF 第 ${p.pdfPage} 页`));
       card.append(top);
 
       const from = Math.max(0, span.start - 42);

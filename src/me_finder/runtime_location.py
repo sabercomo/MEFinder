@@ -88,6 +88,11 @@ def local_app_data_root(
         return Path(configured_root).expanduser().resolve()
     if sys.platform == "win32":
         installed_root = installed_data_root_override(bundle_root)
+        if installed_root is not None:
+            # The installer pointer names a data root, and that data root may
+            # have been relocated since; a stale pointer must not pin the
+            # process to the library it used to contain.
+            installed_root = read_data_root(installed_root, fallback_root=installed_root)
         local_app_data = os.environ.get("LOCALAPPDATA") or None
         if home is None and local_app_data is None and installed_root is not None:
             return installed_root

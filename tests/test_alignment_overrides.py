@@ -306,3 +306,24 @@ class AlignmentOverrideTests(unittest.TestCase):
         self.assertEqual(
             located["page_match_spans"][0]["match_quote"], "精神是现实的。"
         )
+
+    def test_confirming_stale_proposal_persists_revocation(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        proposal = self._propose_wrong_target()
+        connection = sqlite3.connect(str(self.db))
+        try:
+            connection.execute(
+                "UPDATE alignment_manual_overrides "
+                "SET target_segment_set_id = 'segment-set-stale' WHERE override_id = ?",
+                (proposal["override_id"],),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        with self.assertRaisesRegex(InvalidAlignmentRequest, "提议已过期"):
+            confirm_override(
+                self.db, proposal["override_id"], proposal["confirmation_token"]
+            )
+        rows = list_overrides(self.db, status="revoked")["overrides"]
+        self.assertEqual([row["override_id"] for row in rows], [proposal["override_id"]])

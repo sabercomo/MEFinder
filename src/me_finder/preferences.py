@@ -63,6 +63,12 @@ DEFAULT_EXPORT_PAGE_CLEANUP: dict[str, Any] = {
 DEFAULT_LIBRARY_LANGUAGE = "chinese"
 VALID_LIBRARY_LANGUAGES = frozenset({"chinese", "foreign"})
 DEFAULT_ONLINE_AUTO_MATCH = 0.90
+# Zotero 来源同步（0.5.6）：分类以 Zotero 为准，这里只记用户勾选的分类 key。
+DEFAULT_ZOTERO_SYNC_ENABLED = False
+DEFAULT_ZOTERO_SYNC_FREQUENCY = "launch"
+VALID_ZOTERO_SYNC_FREQUENCIES = frozenset({"manual", "launch", "interval"})
+_ZOTERO_KEY = re.compile(r"^[A-Za-z0-9]{1,16}$")
+_MAX_ZOTERO_COLLECTIONS = 500
 ONLINE_AUTO_MATCH_MIN = 0.80
 ONLINE_AUTO_MATCH_MAX = 1.00
 
@@ -346,6 +352,15 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
     last_backup_export = _normalized_last_backup_export(
         payload.get("last_backup_export") if isinstance(payload, dict) else None
     )
+    zotero_sync_enabled = payload.get("zotero_sync_enabled") if isinstance(payload, dict) else None
+    if not isinstance(zotero_sync_enabled, bool):
+        zotero_sync_enabled = DEFAULT_ZOTERO_SYNC_ENABLED
+    zotero_sync_frequency = payload.get("zotero_sync_frequency") if isinstance(payload, dict) else None
+    if zotero_sync_frequency not in VALID_ZOTERO_SYNC_FREQUENCIES:
+        zotero_sync_frequency = DEFAULT_ZOTERO_SYNC_FREQUENCY
+    zotero_sync_collections = _normalized_zotero_collections(
+        payload.get("zotero_sync_collections") if isinstance(payload, dict) else None
+    )
     return {
         "theme": theme,
         "appearance": appearance,
@@ -367,7 +382,17 @@ def read_preferences(path: Path | None = None) -> dict[str, Any]:
         "alignment_embedding_model_id": alignment_embedding_model_id,
         "alignment_thresholds": alignment_thresholds,
         "last_backup_export": last_backup_export,
+        "zotero_sync_enabled": zotero_sync_enabled,
+        "zotero_sync_collections": zotero_sync_collections,
+        "zotero_sync_frequency": zotero_sync_frequency,
     }
+
+
+def _normalized_zotero_collections(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    keys = [str(item).strip() for item in value if _ZOTERO_KEY.match(str(item or "").strip())]
+    return list(dict.fromkeys(keys))[:_MAX_ZOTERO_COLLECTIONS]
 
 
 def _normalized_last_backup_export(value: Any) -> dict[str, Any] | None:
@@ -613,6 +638,23 @@ def _save_preferences_locked(
                     raise ValueError("语义对齐阈值超出有效范围")
                 merged_thresholds[str(model_id)][str(key)] = number
         current["alignment_thresholds"] = merged_thresholds
+    if "zotero_sync_enabled" in updates:
+        if not isinstance(updates["zotero_sync_enabled"], bool):
+            raise ValueError("Zotero 同步开关必须为布尔值")
+        current["zotero_sync_enabled"] = updates["zotero_sync_enabled"]
+    if "zotero_sync_frequency" in updates:
+        if updates["zotero_sync_frequency"] not in VALID_ZOTERO_SYNC_FREQUENCIES:
+            raise ValueError("不支持的 Zotero 同步频率")
+        current["zotero_sync_frequency"] = str(updates["zotero_sync_frequency"])
+    if "zotero_sync_collections" in updates:
+        collections = updates["zotero_sync_collections"]
+        if not isinstance(collections, list) or any(
+            not _ZOTERO_KEY.match(str(item or "")) for item in collections
+        ):
+            raise ValueError("Zotero 分类必须是分类 key 列表")
+        if len(collections) > _MAX_ZOTERO_COLLECTIONS:
+            raise ValueError("所选 Zotero 分类过多")
+        current["zotero_sync_collections"] = _normalized_zotero_collections(collections)
     if "appearance" in updates:
         appearance = _normalized_appearance(updates["appearance"], current["theme"])
         current["appearance"] = appearance

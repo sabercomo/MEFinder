@@ -8,23 +8,43 @@ the full paragraph corpus is not loaded from one large JSON document.
 from __future__ import annotations
 
 import errno
-import json
 import os
 import re
 import shutil
 import sqlite3
 import threading
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Dict,
     List,
-    Optional,
     Sequence,
 )
 
-from .persistence.connection import open_readonly_index
+from .persistence.connection import (
+    open_build_target,
+    open_readonly_index,
+)
+from .persistence.fts_index import (
+    _install_fts5_search_index,
+    ensure_database_search_index as _ensure_database_search_index,
+    database_has_fts5_search_index as database_has_fts5_search_index,
+)
+from .persistence.storage_optimization import optimize_database_storage as _optimize_database_storage
+from .persistence.index_build import (
+    _float_or_none as _float_or_none,
+    _insert_page_anchors as _insert_page_anchors,
+    _int_or_none as _int_or_none,
+    _json,
+    insert_initial_index_rows,
+    insert_remaining_index_rows,
+    load_database_index as load_database_index,
+)
+from .persistence.source_replace import (
+    _delete_page_anchors_for_source as _delete_page_anchors_for_source,
+    delete_source_rows,
+    replace_source_rows,
+)
 from .persistence.paragraph_payload import (
     PARAGRAPH_PAYLOAD_OMITTED_FIELDS as PARAGRAPH_PAYLOAD_OMITTED_FIELDS,
     PARAGRAPH_SELECT_COLUMNS as PARAGRAPH_SELECT_COLUMNS,
@@ -46,11 +66,10 @@ from .index_identity import (
     _deduplicate_source_files,
 )
 from .persistence.index_schema import (
-    ANCHOR_SPEC_VERSION,
+    ANCHOR_SPEC_VERSION as ANCHOR_SPEC_VERSION,
     DATABASE_SCHEMA_VERSION,
     DEFAULT_DATABASE_PATH,
-    PARAGRAPH_FTS_VERSION,
-    SCHEMA,
+    SCHEMA as SCHEMA,
 )
 
 DATABASE_REPLACE_ATTEMPTS = 15
@@ -59,320 +78,23 @@ DATABASE_REPLACE_MAX_DELAY_SECONDS = 1.0
 
 
 
-_FTS_INSTALL_LOCK = threading.Lock()
-
-
-
-
-
-
-def _fts_objects_present(connection: sqlite3.Connection) -> bool:
-    names = {
-        str(row[0])
-        for row in connection.execute(
-            "SELECT name FROM sqlite_master WHERE name IN "
-            "('paragraphs_fts', 'paragraphs_fts_ai', 'paragraphs_fts_ad', 'paragraphs_fts_au')"
-        )
-    }
-    return names == {
-        "paragraphs_fts",
-        "paragraphs_fts_ai",
-        "paragraphs_fts_ad",
-        "paragraphs_fts_au",
-    }
-
-
-def database_has_fts5_search_index(connection: sqlite3.Connection) -> bool:
-    """Return whether the versioned trigram FTS index is ready for queries."""
-
-    if not _fts_objects_present(connection):
-        return False
-    row = connection.execute(
-        "SELECT value_json FROM metadata WHERE key = 'paragraph_fts_version'"
-    ).fetchone()
-    if row is None:
-        return False
-    try:
-        return int(json.loads(row[0])) == PARAGRAPH_FTS_VERSION
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return False
-
-
-def _database_uses_sparse_paragraph_payload(connection: sqlite3.Connection) -> bool:
-    row = connection.execute(
-        "SELECT value_json FROM metadata WHERE key = 'paragraph_payload_storage'"
-    ).fetchone()
-    if row is None:
-        return False
-    try:
-        return json.loads(row[0]) == "sparse_text_v1"
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return False
-
-
-def _install_fts5_search_index(
-    connection: sqlite3.Connection,
-    *,
-    rebuild: bool,
-) -> bool:
-    """Install the external-content trigram index on an open write connection.
-
-    ``detail=none`` and ``columnsize=0`` keep the index materially smaller than
-    another stored copy of paragraph text.  Search code submits a bounded set
-    of trigram terms and verifies every candidate against the canonical typed
-    columns, so positional detail is unnecessary.
-    """
-
-    connection.execute("SAVEPOINT install_paragraphs_fts")
-    try:
-        statements = (
-            """
-            CREATE VIRTUAL TABLE IF NOT EXISTS paragraphs_fts USING fts5(
-                plain_text,
-                content='paragraphs',
-                content_rowid='rowid',
-                tokenize='trigram',
-                detail='none',
-                columnsize=0
-            )
-            """,
-            """
-            CREATE TRIGGER IF NOT EXISTS paragraphs_fts_ai
-            AFTER INSERT ON paragraphs BEGIN
-                INSERT INTO paragraphs_fts(rowid, plain_text)
-                VALUES (new.rowid, new.plain_text);
-            END
-            """,
-            """
-            CREATE TRIGGER IF NOT EXISTS paragraphs_fts_ad
-            AFTER DELETE ON paragraphs BEGIN
-                INSERT INTO paragraphs_fts(paragraphs_fts, rowid, plain_text)
-                VALUES ('delete', old.rowid, old.plain_text);
-            END
-            """,
-            """
-            CREATE TRIGGER IF NOT EXISTS paragraphs_fts_au
-            AFTER UPDATE OF plain_text ON paragraphs BEGIN
-                INSERT INTO paragraphs_fts(paragraphs_fts, rowid, plain_text)
-                VALUES ('delete', old.rowid, old.plain_text);
-                INSERT INTO paragraphs_fts(rowid, plain_text)
-                VALUES (new.rowid, new.plain_text);
-            END
-            """,
-        )
-        for statement in statements:
-            connection.execute(statement)
-        if rebuild:
-            connection.execute(
-                "INSERT INTO paragraphs_fts(paragraphs_fts) VALUES ('rebuild')"
-            )
-        connection.execute(
-            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            ("paragraph_fts_version", _json(PARAGRAPH_FTS_VERSION)),
-        )
-        connection.execute(
-            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            ("database_schema_version", _json(DATABASE_SCHEMA_VERSION)),
-        )
-        connection.execute(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION}")
-        connection.execute("RELEASE SAVEPOINT install_paragraphs_fts")
-        return True
-    except sqlite3.OperationalError:
-        # Some distributor-provided SQLite builds omit FTS5 or the trigram
-        # tokenizer.  The caller keeps the legacy scan path available.
-        connection.execute("ROLLBACK TO SAVEPOINT install_paragraphs_fts")
-        connection.execute("RELEASE SAVEPOINT install_paragraphs_fts")
-        return False
 
 
 def ensure_database_search_index(db_path: Path) -> bool:
     """Upgrade paragraph storage and create FTS once, with scan fallback."""
 
-    db_path = Path(db_path)
-    with _FTS_INSTALL_LOCK:
-        connection = sqlite3.connect(str(db_path))
-        try:
-            connection.execute("PRAGMA busy_timeout = 30000")
-            fts_ready = database_has_fts5_search_index(connection)
-            sparse_payload = _database_uses_sparse_paragraph_payload(connection)
-            user_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
-            if fts_ready and sparse_payload:
-                return True
-        finally:
-            connection.close()
-
-        if not sparse_payload and user_version <= DATABASE_SCHEMA_VERSION:
-            try:
-                if optimize_database_storage(db_path):
-                    return True
-            except (OSError, sqlite3.Error, ValueError):
-                # The old file is still authoritative until the final rename.
-                # Insufficient space, an active Windows file handle, or an
-                # unavailable tokenizer therefore degrades to the additive
-                # migration below (or ultimately to the legacy scan path).
-                pass
-
-        if fts_ready:
-            return True
-
-        connection = sqlite3.connect(str(db_path))
-        try:
-            connection.execute("PRAGMA busy_timeout = 30000")
-            connection.execute("BEGIN IMMEDIATE")
-            installed = _install_fts5_search_index(connection, rebuild=True)
-            if installed:
-                connection.commit()
-            else:
-                connection.rollback()
-            return installed
-        except sqlite3.Error:
-            connection.rollback()
-            return False
-        finally:
-            connection.close()
+    return _ensure_database_search_index(db_path, optimize_database_storage)
 
 
 def optimize_database_storage(db_path: Path) -> bool:
-    """Stream one legacy database into a sparse, validated replacement.
+    """Stream a legacy index into a sparse, validated replacement."""
 
-    The source file is never updated in place.  A complete temporary database
-    is built on the same volume, checked, fsynced, and only then swapped in;
-    the old file becomes a normal retained backup.  This is what actually
-    reclaims duplicated payload bytes without an UPDATE+VACUUM space spike.
-    """
-
-    db_path = Path(db_path)
-    if not db_path.exists():
-        return False
-    for suffix in ("-wal", "-shm", "-journal"):
-        if db_path.with_name(db_path.name + suffix).exists():
-            return False
-    required_free = db_path.stat().st_size + DATABASE_BACKUP_FREE_SPACE_MARGIN
-    if shutil.disk_usage(db_path.parent).free < required_free:
-        return False
-
-    temp_path = db_path.with_name(
-        f".{db_path.name}.optimize-{os.getpid()}-{threading.get_ident()}.tmp"
+    return _optimize_database_storage(
+        db_path,
+        replace_database_file=_replace_database_file,
+        prune_database_backups=_prune_database_backups,
+        backup_free_space_margin=DATABASE_BACKUP_FREE_SPACE_MARGIN,
     )
-    temp_path.unlink(missing_ok=True)
-    connection = sqlite3.connect(str(temp_path))
-    try:
-        connection.executescript(SCHEMA)
-        connection.execute("ATTACH DATABASE ? AS legacy", (str(db_path),))
-        connection.execute("BEGIN IMMEDIATE")
-        table_names = (
-            "metadata",
-            "source_files",
-            "volumes",
-            "works",
-            "toc_entries",
-            "paragraphs",
-            "page_anchors",
-            "pdf_pages",
-            "pdf_page_mappings",
-            "pdf_import_runs",
-            "audit_issues",
-            "document_groups",
-            "document_group_members",
-            "segment_sets",
-            "text_segments",
-            "text_segment_spans",
-            "text_segment_paragraph_spans",
-            "alignment_runs",
-            "alignment_links",
-            "alignment_link_members",
-        )
-        for table_name in table_names:
-            destination_columns = [
-                str(row[1])
-                for row in connection.execute(
-                    f"PRAGMA main.table_info({table_name})"
-                )
-            ]
-            source_columns = {
-                str(row[1])
-                for row in connection.execute(
-                    f"PRAGMA legacy.table_info({table_name})"
-                )
-            }
-            common_columns = [
-                column for column in destination_columns if column in source_columns
-            ]
-            if not common_columns:
-                continue
-            select_expressions = list(common_columns)
-            if table_name == "paragraphs" and "payload_json" in common_columns:
-                payload_index = common_columns.index("payload_json")
-                json_paths = ", ".join(
-                    repr(f"$.{field}")
-                    for field in sorted(PARAGRAPH_PAYLOAD_OMITTED_FIELDS)
-                )
-                select_expressions[payload_index] = (
-                    "CASE WHEN json_valid(payload_json) "
-                    f"THEN json_remove(payload_json, {json_paths}) "
-                    "ELSE payload_json END"
-                )
-            columns_sql = ", ".join(common_columns)
-            select_sql = ", ".join(select_expressions)
-            connection.execute(
-                f"INSERT INTO main.{table_name}({columns_sql}) "
-                f"SELECT {select_sql} FROM legacy.{table_name}"
-            )
-
-        connection.execute(
-            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            ("paragraph_payload_storage", _json("sparse_text_v1")),
-        )
-        if not _install_fts5_search_index(connection, rebuild=True):
-            raise sqlite3.OperationalError("FTS5 trigram tokenizer is unavailable")
-        source_count = connection.execute(
-            "SELECT COUNT(*) FROM legacy.paragraphs"
-        ).fetchone()[0]
-        target_count = connection.execute(
-            "SELECT COUNT(*) FROM main.paragraphs"
-        ).fetchone()[0]
-        if source_count != target_count:
-            raise ValueError("Paragraph count changed during database optimization.")
-        connection.execute(
-            "INSERT INTO paragraphs_fts(paragraphs_fts, rank) "
-            "VALUES ('integrity-check', 1)"
-        )
-        integrity = connection.execute("PRAGMA main.integrity_check").fetchone()[0]
-        if str(integrity).lower() != "ok":
-            raise ValueError(f"Optimized database integrity check failed: {integrity}")
-        connection.commit()
-        connection.execute("DETACH DATABASE legacy")
-        connection.close()
-        with temp_path.open("rb+") as stream:
-            os.fsync(stream.fileno())
-
-        backup_dir = db_path.parent / "backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-        backup_path = backup_dir / f"{db_path.stem}-{stamp}{db_path.suffix}"
-        _replace_database_file(db_path, backup_path)
-        try:
-            _replace_database_file(temp_path, db_path)
-        except OSError:
-            _replace_database_file(backup_path, db_path)
-            raise
-        _prune_database_backups(backup_dir, db_path)
-        return True
-    except Exception:
-        try:
-            connection.rollback()
-        except sqlite3.Error:
-            pass
-        try:
-            connection.close()
-        except sqlite3.Error:
-            pass
-        temp_path.unlink(missing_ok=True)
-        raise
-
-
-def _json(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 # Isolated UTF-16 surrogate code points (U+D800–U+DFFF).  Broken PDF text
@@ -415,136 +137,6 @@ def _sanitize_surrogates_in_place(value: object) -> None:
                     value[index] = cleaned
             elif isinstance(item, (dict, list)):
                 _sanitize_surrogates_in_place(item)
-
-
-def _insert_page_anchors(
-    connection: sqlite3.Connection,
-    anchors: Sequence[Dict[str, object]],
-) -> None:
-    """Store canonical page anchors in the legacy schema-v2 table.
-
-    The v2 table called its typed lookup column ``paragraph_id``, while the
-    page-anchor model has always called that relationship
-    ``start_paragraph_id`` and also keeps ``end_paragraph_id`` and
-    ``source_file_id`` in its payload.  Treat the legacy column as a typed
-    alias for the start paragraph instead of silently writing NULL.
-    """
-
-    values = []
-    for anchor in anchors:
-        start_paragraph_id = anchor.get("start_paragraph_id")
-        if start_paragraph_id in (None, ""):
-            # Accept an old exported record that used the physical v2 column
-            # name, while current extractors use the canonical field name.
-            start_paragraph_id = anchor.get("paragraph_id")
-        values.append(
-            (
-                str(start_paragraph_id)
-                if start_paragraph_id not in (None, "")
-                else None,
-                _json(anchor),
-            )
-        )
-    if values:
-        connection.executemany(
-            "INSERT INTO page_anchors(paragraph_id, payload_json) VALUES (?, ?)",
-            values,
-        )
-
-
-def _delete_page_anchors_for_source(
-    connection: sqlite3.Connection,
-    source_file_id: str,
-) -> int:
-    """Delete current and legacy-v2 anchors owned by one source.
-
-    Older writers left ``page_anchors.paragraph_id`` NULL because of the
-    field-name mismatch.  Their canonical ownership data is still present in
-    payload_json, so source deletion must consult source/start/end there as
-    well as the repaired typed start-paragraph alias.
-    """
-
-    # Keep current typed rows entirely inside SQLite.  Expanding every
-    # paragraph id into an ``IN (?, ...)`` list crosses SQLite's variable
-    # limit for large books (32,766 on the Windows build).
-    typed_anchor_filter = (
-        "paragraph_id IN ("
-        "SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?"
-        ")"
-    )
-    deleted_count = int(
-        connection.execute(
-            f"SELECT COUNT(*) FROM page_anchors WHERE {typed_anchor_filter}",
-            (source_file_id,),
-        ).fetchone()[0]
-    )
-    connection.execute(
-        f"DELETE FROM page_anchors WHERE {typed_anchor_filter}",
-        (source_file_id,),
-    )
-
-    # Legacy NULL-typed rows still need payload inspection.  Materializing the
-    # ids for Python membership tests is safe here because they are no longer
-    # rebound as one SQL statement's parameters.
-    paragraph_ids = {
-        str(row[0])
-        for row in connection.execute(
-            "SELECT paragraph_id FROM paragraphs WHERE source_file_id = ?",
-            (source_file_id,),
-        )
-    }
-
-    # Only old buggy v2 rows require payload inspection.  Correctly written
-    # anchors are handled by the typed-column delete above, avoiding a
-    # full JSON scan for every source in ordinary batch removals.
-    owned_row_ids: List[int] = []
-    for row_id, raw_payload in connection.execute(
-        "SELECT row_id, payload_json FROM page_anchors WHERE paragraph_id IS NULL"
-    ):
-        belongs_to_source = False
-        try:
-            payload = json.loads(raw_payload) if raw_payload else {}
-        except (TypeError, ValueError, json.JSONDecodeError):
-            payload = {}
-        if isinstance(payload, dict):
-            payload_source_id = str(payload.get("source_file_id") or "")
-            start_paragraph_id = str(payload.get("start_paragraph_id") or "")
-            end_paragraph_id = str(payload.get("end_paragraph_id") or "")
-            belongs_to_source = belongs_to_source or (
-                payload_source_id == source_file_id
-                or start_paragraph_id in paragraph_ids
-                or end_paragraph_id in paragraph_ids
-            )
-        if belongs_to_source:
-            owned_row_ids.append(int(row_id))
-    if owned_row_ids:
-        connection.executemany(
-            "DELETE FROM page_anchors WHERE row_id = ?",
-            [(row_id,) for row_id in owned_row_ids],
-        )
-    return deleted_count + len(owned_row_ids)
-
-
-def _int_or_none(value: object) -> Optional[int]:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _float_or_none(value: object) -> Optional[float]:
-    if value is None or value == "":
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-# 每份快照都是整个索引的完整副本。真实语料下单份就有 3.5GB，不设上限时
-# 一次批量删除就能在数据目录里堆出几百 GB。
 
 
 def _estimate_database_build_size(index: Dict[str, object]) -> int:
@@ -615,8 +207,14 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         restore_alignment_recipe_snapshot,
     )
 
+    from .persistence.zotero_sync_store import (
+        read_zotero_sync_snapshot,
+        restore_zotero_sync_snapshot,
+    )
+
     preserved_document_groups = read_document_group_snapshot(db_path)
     preserved_alignments = read_alignment_recipe_snapshot(db_path)
+    preserved_zotero_links = read_zotero_sync_snapshot(db_path)
     # Do this before size estimation and any write: surrogates crash the
     # UTF-8 encode step too, not just the SQLite insert.
     _sanitize_surrogates_in_place(index)
@@ -702,168 +300,26 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     )
     if temp_path.exists():
         temp_path.unlink()
-    connection = sqlite3.connect(str(temp_path))
+    connection = open_build_target(temp_path)
     fts_installed = False
     try:
-        connection.executescript(SCHEMA)
-        metadata = dict(index.get("metadata") or {})
-        metadata["database_schema_version"] = DATABASE_SCHEMA_VERSION
-        metadata["paragraph_payload_storage"] = "sparse_text_v1"
-        metadata.setdefault("anchor_spec_version", ANCHOR_SPEC_VERSION)
-        metadata["database_built_at"] = datetime.now(timezone.utc).isoformat()
-        metadata["source_count"] = len(source_files)
-        metadata["paragraph_count"] = len(paragraphs)
-        metadata["eligible_paragraph_count"] = sum(
-            1 for item in paragraphs if item.get("eligible_for_search")
-        )
-        if deduplicated_rows:
-            metadata["database_deduplication"] = {
-                "strategy": "first_record_wins_and_fills_missing_fields",
-                "merged_rows": deduplicated_rows,
-            }
-        connection.executemany(
-            "INSERT INTO metadata(key, value_json) VALUES (?, ?)",
-            [(str(key), _json(value)) for key, value in metadata.items()],
-        )
-
-        connection.executemany(
-            """
-            INSERT INTO source_files(
-                source_file_id, source_type, file_name, relative_path, volume_number, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("source_file_id") or ""),
-                    str(item.get("source_type") or "word"),
-                    item.get("file_name"),
-                    item.get("relative_path"),
-                    _int_or_none(item.get("volume_number")),
-                    _json(item),
-                )
-                for item in source_files
-                if item.get("source_file_id")
-            ],
-        )
+        insert_initial_index_rows(connection, index, source_files, paragraphs, deduplicated_rows)
 
         # SourceFiles now exist in the rebuilt DB; re-apply preserved groups,
         # skipping members whose source is gone and clearing a missing base.
         restore_document_group_snapshot(connection, preserved_document_groups)
 
-        connection.executemany(
-            """
-            INSERT INTO volumes(volume_id, source_file_id, source_type, volume_number, display_title, payload_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("volume_id") or ""),
-                    item.get("source_file_id"),
-                    str(item.get("source_type") or "word"),
-                    _int_or_none(item.get("volume_number")),
-                    item.get("display_title"),
-                    _json(item),
-                )
-                for item in volumes
-                if item.get("volume_id")
-            ],
+        insert_remaining_index_rows(
+            connection, index, volumes, works, paragraphs, page_anchors,
+            pdf_pages, pdf_page_mappings,
         )
-
-        connection.executemany(
-            """
-            INSERT OR REPLACE INTO works(work_id, volume_id, source_type, work_order, title, payload_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("work_id") or ""),
-                    item.get("volume_id"),
-                    str(item.get("source_type") or "word"),
-                    _int_or_none(item.get("work_order")),
-                    item.get("title"),
-                    _json(item),
-                )
-                for item in works
-                if item.get("work_id")
-            ],
-        )
-
-        toc_entries = [item for item in index.get("toc_entries", []) if isinstance(item, dict)]
-        connection.executemany(
-            "INSERT INTO toc_entries(volume_id, work_id, title, payload_json) VALUES (?, ?, ?, ?)",
-            [(item.get("volume_id"), item.get("work_id"), item.get("title"), _json(item)) for item in toc_entries],
-        )
-
-        paragraph_rows = []
-        for item in paragraphs:
-            paragraph_id = str(item.get("paragraph_id") or "")
-            if not paragraph_id:
-                continue
-            paragraph_rows.append(
-                (
-                    paragraph_id,
-                    item.get("volume_id"),
-                    item.get("work_id"),
-                    str(item.get("source_file_id") or ""),
-                    str(item.get("source_type") or "word"),
-                    int(item.get("paragraph_index") or 0),
-                    1 if item.get("eligible_for_search") else 0,
-                    str(item.get("text_raw") or ""),
-                    str(item.get("normalized_text") or ""),
-                    str(item.get("compact_text") or ""),
-                    str(item.get("plain_text") or ""),
-                    item.get("page_display"),
-                    item.get("page_source_type"),
-                    _float_or_none(item.get("page_confidence")),
-                    item.get("citation_page_start"),
-                    item.get("citation_page_end"),
-                    _int_or_none(item.get("pdf_page_start_index")),
-                    _int_or_none(item.get("pdf_page_end_index")),
-                    item.get("pdf_page_start_label"),
-                    item.get("pdf_page_end_label"),
-                    _json(paragraph_payload_for_storage(item)),
-                )
-            )
-        connection.executemany(
-            """
-            INSERT INTO paragraphs(
-                paragraph_id, volume_id, work_id, source_file_id, source_type, paragraph_index,
-                eligible_for_search, text_raw, normalized_text, compact_text, plain_text,
-                page_display, page_source_type, page_confidence, citation_page_start, citation_page_end,
-                pdf_page_start_index, pdf_page_end_index, pdf_page_start_label, pdf_page_end_label, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            paragraph_rows,
-        )
-        _insert_page_anchors(connection, page_anchors)
-        for table_name, key_fields in (
-            ("pdf_pages", ("source_file_id", "pdf_page_index")),
-            ("pdf_page_mappings", ("source_file_id", "pdf_page_index")),
-            ("pdf_import_runs", ("source_file_id", "status")),
-            ("audit_issues", ("source_file_id", "issue_type")),
-        ):
-            if table_name == "pdf_pages":
-                rows = pdf_pages
-            elif table_name == "pdf_page_mappings":
-                rows = pdf_page_mappings
-            else:
-                rows = [
-                    item
-                    for item in index.get(table_name, [])
-                    if isinstance(item, dict)
-                ]
-            columns = ", ".join(key_fields) + ", payload_json"
-            placeholders = ", ".join("?" for _ in key_fields) + ", ?"
-            sql = f"INSERT INTO {table_name}({columns}) VALUES ({placeholders})"
-            values = [tuple(item.get(field) for field in key_fields) + (_json(item),) for item in rows]
-            if values:
-                connection.executemany(sql, values)
 
         # Automatic links are derived from PDF text, but they are also a
         # user-requested computation. Recreate the same completed pairs after
         # the replacement index has published its fresh page text.
         connection.row_factory = sqlite3.Row
         restore_alignment_recipe_snapshot(connection, preserved_alignments)
+        restore_zotero_sync_snapshot(connection, preserved_zotero_links)
 
         fts_installed = _install_fts5_search_index(connection, rebuild=True)
         connection.commit()
@@ -939,27 +395,6 @@ def _replace_database_file(
             time.sleep(delay)
 
 
-def _load_payload_rows(connection: sqlite3.Connection, table: str, order_by: str = "rowid") -> List[Dict[str, object]]:
-    return [json.loads(row[0]) for row in connection.execute(f"SELECT payload_json FROM {table} ORDER BY {order_by}")]
-
-
-def load_database_index(db_path: Path) -> Dict[str, object]:
-    """Load the small metadata/catalog portion used by the Web UI."""
-
-    connection = sqlite3.connect(str(db_path))
-    try:
-        metadata = {str(row[0]): json.loads(row[1]) for row in connection.execute("SELECT key, value_json FROM metadata")}
-        result = {
-            "metadata": metadata,
-            "source_files": _load_payload_rows(connection, "source_files", "source_file_id"),
-            "volumes": _load_payload_rows(connection, "volumes", "volume_id"),
-            "works": _load_payload_rows(connection, "works", "rowid"),
-        }
-        return result
-    finally:
-        connection.close()
-
-
 def replace_source_in_database(
     extracted: Dict[str, object],
     db_path: Path = DEFAULT_DATABASE_PATH,
@@ -976,244 +411,7 @@ def replace_source_in_database(
     source_id = str(source["source_file_id"])
     db_path = Path(db_path)
     backup_path = _backup_database(db_path) if backup_existing else None
-    connection = sqlite3.connect(str(db_path))
-    try:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        old_volume_ids = [
-            str(row[0])
-            for row in connection.execute(
-                "SELECT volume_id FROM volumes WHERE source_file_id = ?", (source_id,)
-            ).fetchall()
-        ]
-        old_work_ids: List[str] = []
-        if old_volume_ids:
-            placeholders = ",".join("?" for _ in old_volume_ids)
-            old_work_ids = [
-                str(row[0])
-                for row in connection.execute(
-                    f"SELECT work_id FROM works WHERE volume_id IN ({placeholders})", old_volume_ids
-                ).fetchall()
-            ]
-        _delete_page_anchors_for_source(connection, source_id)
-        if old_volume_ids:
-            placeholders = ",".join("?" for _ in old_volume_ids)
-            connection.execute(f"DELETE FROM toc_entries WHERE volume_id IN ({placeholders})", old_volume_ids)
-        if old_work_ids:
-            placeholders = ",".join("?" for _ in old_work_ids)
-            connection.execute(f"DELETE FROM toc_entries WHERE work_id IN ({placeholders})", old_work_ids)
-            connection.execute(f"DELETE FROM works WHERE work_id IN ({placeholders})", old_work_ids)
-        connection.execute("DELETE FROM paragraphs WHERE source_file_id = ?", (source_id,))
-        for table in ("pdf_pages", "pdf_page_mappings", "pdf_import_runs", "audit_issues"):
-            connection.execute(f"DELETE FROM {table} WHERE source_file_id = ?", (source_id,))
-        connection.execute("DELETE FROM volumes WHERE source_file_id = ?", (source_id,))
-        connection.execute("DELETE FROM source_files WHERE source_file_id = ?", (source_id,))
-
-        connection.execute(
-            """
-            INSERT INTO source_files(
-                source_file_id, source_type, file_name, relative_path, volume_number, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                source_id,
-                str(source.get("source_type") or "word"),
-                source.get("file_name"),
-                source.get("relative_path"),
-                _int_or_none(source.get("volume_number")),
-                _json(source),
-            ),
-        )
-        volumes = [item for item in extracted.get("volumes", []) if isinstance(item, dict)]
-        connection.executemany(
-            """
-            INSERT INTO volumes(volume_id, source_file_id, source_type, volume_number, display_title, payload_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("volume_id") or ""),
-                    item.get("source_file_id"),
-                    str(item.get("source_type") or "word"),
-                    _int_or_none(item.get("volume_number")),
-                    item.get("display_title"),
-                    _json(item),
-                )
-                for item in volumes
-                if item.get("volume_id")
-            ],
-        )
-        works = [item for item in extracted.get("works", []) if isinstance(item, dict)]
-        connection.executemany(
-            """
-            INSERT INTO works(work_id, volume_id, source_type, work_order, title, payload_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("work_id") or ""),
-                    item.get("volume_id"),
-                    str(item.get("source_type") or "word"),
-                    _int_or_none(item.get("work_order")),
-                    item.get("title"),
-                    _json(item),
-                )
-                for item in works
-                if item.get("work_id")
-            ],
-        )
-        toc_entries = [item for item in extracted.get("toc_entries", []) if isinstance(item, dict)]
-        connection.executemany(
-            "INSERT INTO toc_entries(volume_id, work_id, title, payload_json) VALUES (?, ?, ?, ?)",
-            [(item.get("volume_id"), item.get("work_id"), item.get("title"), _json(item)) for item in toc_entries],
-        )
-        paragraphs = [item for item in extracted.get("paragraphs", []) if isinstance(item, dict)]
-        connection.executemany(
-            """
-            INSERT INTO paragraphs(
-                paragraph_id, volume_id, work_id, source_file_id, source_type, paragraph_index,
-                eligible_for_search, text_raw, normalized_text, compact_text, plain_text,
-                page_display, page_source_type, page_confidence, citation_page_start, citation_page_end,
-                pdf_page_start_index, pdf_page_end_index, pdf_page_start_label, pdf_page_end_label, payload_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    str(item.get("paragraph_id") or ""),
-                    item.get("volume_id"),
-                    item.get("work_id"),
-                    source_id,
-                    str(item.get("source_type") or "word"),
-                    int(item.get("paragraph_index") or 0),
-                    1 if item.get("eligible_for_search") else 0,
-                    str(item.get("text_raw") or ""),
-                    str(item.get("normalized_text") or ""),
-                    str(item.get("compact_text") or ""),
-                    str(item.get("plain_text") or ""),
-                    item.get("page_display"),
-                    item.get("page_source_type"),
-                    _float_or_none(item.get("page_confidence")),
-                    item.get("citation_page_start"),
-                    item.get("citation_page_end"),
-                    _int_or_none(item.get("pdf_page_start_index")),
-                    _int_or_none(item.get("pdf_page_end_index")),
-                    item.get("pdf_page_start_label"),
-                    item.get("pdf_page_end_label"),
-                    _json(paragraph_payload_for_storage(item)),
-                )
-                for item in paragraphs
-                if item.get("paragraph_id")
-            ],
-        )
-        _insert_page_anchors(
-            connection,
-            [
-                item
-                for item in extracted.get("page_anchors", [])
-                if isinstance(item, dict)
-            ],
-        )
-        for table_name, key_fields in (
-            ("pdf_pages", ("source_file_id", "pdf_page_index")),
-            ("pdf_page_mappings", ("source_file_id", "pdf_page_index")),
-            ("pdf_import_runs", ("source_file_id", "status")),
-            ("audit_issues", ("source_file_id", "issue_type")),
-        ):
-            rows = [item for item in extracted.get(table_name, []) if isinstance(item, dict)]
-            if not rows:
-                continue
-            columns = ", ".join(key_fields) + ", payload_json"
-            placeholders = ", ".join("?" for _ in key_fields) + ", ?"
-            connection.executemany(
-                f"INSERT INTO {table_name}({columns}) VALUES ({placeholders})",
-                [tuple(item.get(field) for field in key_fields) + (_json(item),) for item in rows],
-            )
-
-        totals = {
-            "source_count": connection.execute("SELECT COUNT(*) FROM source_files").fetchone()[0],
-            "paragraph_count": connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0],
-            "eligible_paragraph_count": connection.execute(
-                "SELECT COUNT(*) FROM paragraphs WHERE eligible_for_search = 1"
-            ).fetchone()[0],
-            "anchor_spec_version": ANCHOR_SPEC_VERSION,
-        }
-        connection.executemany(
-            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            [(key, _json(value)) for key, value in totals.items()],
-        )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {
-        "source_file_id": source_id,
-        "paragraph_count": len(paragraphs),
-        "eligible_paragraph_count": sum(1 for item in paragraphs if item.get("eligible_for_search")),
-        "backup_path": str(backup_path) if backup_path else None,
-        **totals,
-    }
-
-
-def _delete_one_source(connection: sqlite3.Connection, source_file_id: str) -> Dict[str, int]:
-    """Delete one source's rows on an open transaction and report the counts."""
-
-    source = connection.execute(
-        "SELECT source_type FROM source_files WHERE source_file_id = ?", (source_file_id,)
-    ).fetchone()
-    if source is None:
-        raise ValueError("文献不存在。")
-    if str(source[0]) not in {"pdf", "word"}:
-        raise ValueError("当前移除服务仅允许处理 PDF 或 Word 文献。")
-    volume_ids = [
-        str(row[0])
-        for row in connection.execute(
-            "SELECT volume_id FROM volumes WHERE source_file_id = ?", (source_file_id,)
-        ).fetchall()
-    ]
-    work_ids: List[str] = []
-    if volume_ids:
-        placeholders = ",".join("?" for _ in volume_ids)
-        work_ids = [
-            str(row[0])
-            for row in connection.execute(
-                f"SELECT work_id FROM works WHERE volume_id IN ({placeholders})", volume_ids
-            ).fetchall()
-        ]
-    counts: Dict[str, int] = {}
-    counts["paragraphs"] = connection.execute(
-        "SELECT COUNT(*) FROM paragraphs WHERE source_file_id = ?", (source_file_id,)
-    ).fetchone()[0]
-    counts["pdf_pages"] = connection.execute(
-        "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?", (source_file_id,)
-    ).fetchone()[0]
-    counts["page_anchors"] = _delete_page_anchors_for_source(
-        connection, source_file_id
-    )
-    if volume_ids:
-        placeholders = ",".join("?" for _ in volume_ids)
-        connection.execute(f"DELETE FROM toc_entries WHERE volume_id IN ({placeholders})", volume_ids)
-    if work_ids:
-        placeholders = ",".join("?" for _ in work_ids)
-        connection.execute(f"DELETE FROM toc_entries WHERE work_id IN ({placeholders})", work_ids)
-        connection.execute(f"DELETE FROM works WHERE work_id IN ({placeholders})", work_ids)
-    timestamp = datetime.now(timezone.utc).isoformat()
-    connection.execute(
-        "UPDATE document_groups SET base_source_file_id = NULL, updated_at = ? "
-        "WHERE base_source_file_id = ?",
-        (timestamp, source_file_id),
-    )
-    connection.execute(
-        "DELETE FROM document_group_members WHERE source_file_id = ?",
-        (source_file_id,),
-    )
-    connection.execute("DELETE FROM paragraphs WHERE source_file_id = ?", (source_file_id,))
-    for table in ("pdf_pages", "pdf_page_mappings", "pdf_import_runs", "audit_issues"):
-        connection.execute(f"DELETE FROM {table} WHERE source_file_id = ?", (source_file_id,))
-    connection.execute("DELETE FROM volumes WHERE source_file_id = ?", (source_file_id,))
-    connection.execute("DELETE FROM source_files WHERE source_file_id = ?", (source_file_id,))
-    return counts
+    return replace_source_rows(extracted, db_path, source, source_id, backup_path)
 
 
 def delete_sources_from_database(
@@ -1238,36 +436,7 @@ def delete_sources_from_database(
         raise ValueError("source_file_id is required")
     db_path = Path(db_path)
     backup_path = _backup_database(db_path) if backup_existing else None
-    connection = sqlite3.connect(str(db_path))
-    deleted: Dict[str, Dict[str, int]] = {}
-    try:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        for source_file_id in ids:
-            deleted[source_file_id] = _delete_one_source(connection, source_file_id)
-        totals = {
-            "source_count": connection.execute("SELECT COUNT(*) FROM source_files").fetchone()[0],
-            "paragraph_count": connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0],
-            "eligible_paragraph_count": connection.execute(
-                "SELECT COUNT(*) FROM paragraphs WHERE eligible_for_search = 1"
-            ).fetchone()[0],
-        }
-        connection.executemany(
-            "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            [(key, _json(value)) for key, value in totals.items()],
-        )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-    return {
-        "source_file_ids": ids,
-        "deleted": deleted,
-        "backup_path": str(backup_path) if backup_path else None,
-        **totals,
-    }
+    return delete_source_rows(ids, db_path, backup_path)
 
 
 def delete_source_from_database(

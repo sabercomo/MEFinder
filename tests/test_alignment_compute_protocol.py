@@ -413,3 +413,20 @@ class NoPublishOnFailureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowsSpawnWindowTests(unittest.TestCase):
+    """The installed compute runtime is a console python.exe; spawning it from
+    the windowed app must not pop a terminal window on every realignment."""
+
+    def test_windows_spawn_hides_console_window(self):
+        runner = ac.SubprocessAlignmentComputeRunner(
+            task_id="t", launch_command=["python.exe", "worker"], cwd=Path(".")
+        )
+        with mock.patch.object(ac.os, "name", "nt"), mock.patch.object(
+            ac.subprocess, "Popen"
+        ) as popen:
+            runner._spawn(["--probe", "control.ndjson"])
+        flags = popen.call_args.kwargs["creationflags"]
+        self.assertTrue(flags & 0x08000000, "CREATE_NO_WINDOW missing")
+        self.assertTrue(flags & 0x00000200, "CREATE_NEW_PROCESS_GROUP missing")

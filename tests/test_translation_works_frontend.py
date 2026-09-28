@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "me_finder" / "static"
 WORKS_JS = (STATIC / "js" / "35-works.js").read_text(encoding="utf-8")
+RANGE_JS = (STATIC / "js" / "36-works-range.js").read_text(encoding="utf-8")
 WORKS_CSS = (STATIC / "css" / "45-works.css").read_text(encoding="utf-8")
 LIBRARY_JS = (STATIC / "js" / "30-library.js").read_text(encoding="utf-8")
 INIT_JS = (STATIC / "js" / "90-init.js").read_text(encoding="utf-8")
@@ -62,7 +63,9 @@ class TranslationWorksFrontendTests(unittest.TestCase):
             "不代表对应一定准确",
         ):
             self.assertIn(phrase, status)
-        combined = WORKS_JS + (STATIC / "reader.js").read_text(encoding="utf-8")
+        from tests.reader_source import reader_js_source
+
+        combined = WORKS_JS + reader_js_source()
         self.assertNotIn("覆盖率", combined)
         self.assertNotIn("准确率", combined)
         # 没有真实批次进度，不显示百分比。
@@ -111,10 +114,10 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         # 队列中逐个任务不弹提示，结束时汇总一次。
         watch = _function_body(WORKS_JS, "async function onAlignmentJobEnd(event)")
         self.assertLess(watch.index("advanceRealignQueue(event.outcome"), watch.index("对齐已生成"))
-        # 任务监听只有一份（在 reader.js 里），作品页只认领并订阅，不再自己轮询。
+        # 任务监听只有一份（15-alignment-jobs.js），作品页只认领并订阅，不再自己轮询。
         self.assertNotIn("/api/text-alignments/status", WORKS_JS)
-        self.assertIn("global.MEFinderReader.alignmentJobs.subscribe(", WORKS_JS)
-        self.assertIn("jobs.watch(jobId, {", WORKS_JS)
+        self.assertIn("global.MEFinderAlignmentJobs.subscribe(", WORKS_JS)
+        self.assertIn("global.MEFinderAlignmentJobs.watch(jobId, {", WORKS_JS)
         # 提示只由发起方给出，阅读器发起的任务由阅读器报告。
         self.assertIn("event.meta.origin === 'works'", watch)
         # 关闭阅读器：直接采用交回的位置，不清空缓存、不用定时器重查。
@@ -123,7 +126,7 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         self.assertNotIn("setTimeout", close)
         self.assertNotIn("works.positions = {}", WORKS_JS)
         # 换模型后作品页的状态快照必须失效。
-        settings = (STATIC / "js" / "60-settings.js").read_text(encoding="utf-8")
+        settings = (STATIC / "js" / "64-settings-model.js").read_text(encoding="utf-8")
         self.assertIn("global.MEFinder.works.invalidate();", settings)
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
@@ -201,7 +204,7 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
         self.assertNotIn("blocked", entry[:entry.index("}));")])
 
     def test_body_range_submits_both_ranges_once_and_keeps_the_last_segment(self) -> None:
-        dialog = _function_body(WORKS_JS, "function openBodyRangeDialog(group, a, b) {")
+        dialog = _function_body(RANGE_JS, "function openBodyRangeDialog(ctx, group, a, b) {")
         # 界面的「结尾」是最后一段，库内是半开区间：+1 才不漏末段。
         self.assertIn("ranges[side.side] = [side.start, side.end + 1];", dialog)
         self.assertIn("startJob(group, order[0], order[1], true, ranges, sets)", dialog)
@@ -219,7 +222,7 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
         self.assertIn("!state.sides.some(invalid)", dialog)
 
     def test_failed_body_range_submission_keeps_the_draft_for_retry(self) -> None:
-        dialog = _function_body(WORKS_JS, "function openBodyRangeDialog(group, a, b) {")
+        dialog = _function_body(RANGE_JS, "function openBodyRangeDialog(ctx, group, a, b) {")
         self.assertIn("works.rangeDrafts[draftKey] = {sets: sets, ranges: ranges};", dialog)
         # 草稿只在同一份分段数据上恢复，运行成功后由 clearRangeDraft 清掉。
         self.assertIn("draft.sets[side.side] === side.segment_set_id", dialog)
@@ -236,6 +239,7 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
 
     def test_dom_is_built_without_html_strings_and_css_uses_tokens(self) -> None:
         self.assertNotIn("innerHTML", WORKS_JS)
+        self.assertNotIn("innerHTML", RANGE_JS)
         self.assertNotIn("insertAdjacentHTML", WORKS_JS)
         self.assertNotRegex(WORKS_CSS, r"#[0-9a-fA-F]{3,8}\b")
         self.assertNotIn("transition: all", WORKS_CSS)
@@ -248,9 +252,15 @@ const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};r
         self.assertTrue(literals)
         self.assertEqual([text for text in literals if text.endswith("。")], [])
 
-    def test_startup_loads_lightweight_status_without_a_fixed_delay(self) -> None:
-        self.assertRegex(INIT_JS, re.compile(r"^MEFinder\.works\.load\(\);", re.MULTILINE))
+    def test_startup_prefetches_works_after_the_library_summary_without_a_fixed_delay(self) -> None:
+        # The overview holds the index lock; sent first, it queued the library
+        # summary for seconds on a cold start (2026-09-25, 5.5 s vs 0.36 s).
+        self.assertNotRegex(INIT_JS, re.compile(r"^MEFinder\.works\.load\(\);", re.MULTILINE))
         self.assertNotIn("setTimeout(function () { MEFinder.works.load();", INIT_JS)
+        prefetch = INIT_JS.index("MEFinder.works.load()")
+        self.assertLess(INIT_JS.index("navigateTo(initialPage)"), prefetch)
+        self.assertLess(INIT_JS.index("searchStore.libraryCatalogPromise"), prefetch)
+        self.assertIn("requestIdleCallback", INIT_JS)
         overview = _function_body(WORKS_JS, "async function loadGroupsAndOverview()")
         self.assertIn("requestJSON('/api/translation-works/overview?include_statistics=0')", overview)
         library = _function_body(LIBRARY_JS, "async function loadLibrary(force)")

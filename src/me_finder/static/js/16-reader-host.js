@@ -24,7 +24,7 @@
     saving = true;
     renderReaderWindowSetting();
     try {
-      var response = await fetch('/api/preferences', {
+      var response = await MEFinderApi.fetch('/api/preferences', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({reader_window_enabled: value === true})
       });

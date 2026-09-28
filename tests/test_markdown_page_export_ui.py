@@ -26,13 +26,14 @@ for (const id of ['md-page-mode-printed','md-page-mode-physical','md-page-mode-p
   nodes[id] = {value:'',textContent:'',disabled:false,checked:false,classList:classList(),focus(){},querySelector(){return null;},
     showModal(){this.open=true;},close(){this.open=false;}};
 }
-const context = {module:{exports:{}}, libraryStore:{sources:[{source_file_id:'pdf',source_type:'pdf'}, {source_file_id:'epub',source_type:'word'}]},
+const context = {module:{exports:{}}, MEFinderActions:{register(){},registerInline(){}}, libraryStore:{sources:[{source_file_id:'pdf',source_type:'pdf'}, {source_file_id:'epub',source_type:'word'}]},
   document:{activeElement:{isConnected:true,focus(){}},getElementById(id){return nodes[id];}},
   sourceFormatLabel(s){return s.source_type === 'pdf' ? 'PDF' : 'EPUB';},
   chooseDesktopExportDirectory:async()=>picker,
   fetch:async(url,opts)=>{calls.push([url,JSON.parse(opts.body)]);return new Promise(r=>{resolveFetch=r;});},
   showToast(...args){toasts.push(args);}};
-vm.createContext(context); vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
+vm.createContext(context); // 被测文件经 07-api.js 发请求:先装配统一请求出口。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context); vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 const event = {preventDefault(){}};
 (async()=>{
   context.MEFinder.library.pageExport.open('epub');

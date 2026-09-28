@@ -38,6 +38,8 @@ GET_API_ROUTES = frozenset(
         "/api/sources",
         "/api/update/status",
         "/api/vision-providers",
+        "/api/zotero/overview",
+        "/api/zotero/status",
     }
 )
 
@@ -127,6 +129,8 @@ POST_API_ROUTES = frozenset(
         "/api/vision-providers",
         "/api/vision-providers/models",
         "/api/vision-providers/test",
+        "/api/zotero/preview",
+        "/api/zotero/sync",
     }
 )
 

@@ -60,6 +60,19 @@ class ImportTaskQueue:
         with self._state_lock:
             return self._accepting
 
+    @property
+    def free_slots(self) -> int:
+        """How many tasks ``submit`` would take right now.
+
+        Callers use this to size a batch before submitting; it is advisory, so
+        a submit that races with a full queue still raises.
+        """
+
+        with self._state_lock:
+            if not self._accepting:
+                return 0
+        return max(0, self.max_pending_tasks - self._tasks.qsize())
+
     def shutdown(self, *, wait: bool = True, timeout: float | None = None) -> bool:
         """Stop accepting work and let already accepted tasks finish.
 

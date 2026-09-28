@@ -336,6 +336,7 @@ const vm = require('node:vm');
 const requests = [];
 const context = {
   module: {exports: {}},
+  MEFinderActions: {register() {}, registerInline() {}},
   settingsStore: {},
   fetch: async (url, options) => {
     requests.push({url, payload: JSON.parse(options.body)});
@@ -343,6 +344,8 @@ const context = {
   }
 };
 vm.createContext(context);
+// 被测文件经 07-api.js 发请求:先装配统一请求出口。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context);
 vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 const library = context.module.exports;
 (async () => {

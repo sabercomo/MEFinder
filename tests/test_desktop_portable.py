@@ -23,6 +23,35 @@ class _Event:
 
 
 class DesktopPortableTests(unittest.TestCase):
+    def test_windows_main_window_waits_for_page_then_shows_only_once(self) -> None:
+        for initial_page in (
+            {"url": "http://127.0.0.1:52345/"}, {},
+            {"error": ("未找到索引数据库", "详情")},
+        ):
+            with self.subTest(initial_page=initial_page):
+                events = types.SimpleNamespace(**{
+                    name: _Event() for name in
+                    ("before_show", "maximized", "restored", "loaded", "moved", "closed")
+                })
+                window = mock.Mock(events=events)
+                webview = mock.Mock()
+                webview.create_window.return_value = window
+                with mock.patch.object(desktop.sys, "platform", "win32"):
+                    desktop.create_main_window(webview, "frost-blue", **initial_page)
+
+                self.assertTrue(webview.create_window.call_args.kwargs.get("hidden"))
+                window.show.assert_not_called()
+                observer = mock.Mock()
+                events.loaded += observer
+                for callback in events.loaded.callbacks:
+                    callback()
+                window.show.assert_called_once_with()
+                observer.assert_called_once_with()
+                # Refresh or loading-page navigation must not restore a minimized window.
+                for callback in list(events.loaded.callbacks):
+                    callback()
+                window.show.assert_called_once_with()
+
     def test_windows_main_window_uses_html_titlebar_and_scoped_drag_region(self) -> None:
         class Event:
             def __init__(self) -> None:
@@ -83,6 +112,7 @@ class DesktopPortableTests(unittest.TestCase):
         options = webview.create_window.call_args.kwargs
         self.assertNotIn("frameless", options)
         self.assertNotIn("js_api", options)
+        self.assertNotIn("hidden", options)
         self.assertTrue(options["text_select"])
         self.assertEqual(options["min_size"], (960, 640))
         self.assertEqual(events.before_show.callbacks[0], desktop.configure_macos_titlebar)

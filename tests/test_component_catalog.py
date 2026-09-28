@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -33,6 +34,23 @@ class ComponentCatalogTests(unittest.TestCase):
             LOCAL_OCR_MANIFEST_FILE.read_text(encoding="utf-8")
         )
         self.bundled.write_text(json.dumps(self.payload), encoding="utf-8")
+
+    def test_close_waits_for_background_catalog_request(self) -> None:
+        started = threading.Event()
+        release = threading.Event()
+
+        def opener(_request, timeout):
+            started.set()
+            release.wait()
+            return _Response(json.dumps(self.payload).encode())
+
+        catalog = ComponentCatalog(self.root, self.bundled, opener=opener)
+        self.assertTrue(catalog.start_background_check())
+        self.assertTrue(started.wait(1))
+        self.assertFalse(catalog.close(timeout=0))
+        release.set()
+        self.assertTrue(catalog.close(timeout=1))
+        self.assertFalse(catalog.start_background_check())
 
     def test_successful_check_caches_catalog_and_waits_twenty_four_hours(self) -> None:
         now = [1000.0]

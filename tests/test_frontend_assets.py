@@ -24,6 +24,7 @@ PLACEHOLDERS = (
     "/*__READER_CSS__*/",
     "//__APP_JS__",
     "//__READER_JS__",
+    "//__VUE_JS__",
     "__APP_VERSION__",
 )
 
@@ -48,6 +49,10 @@ def _split_js_assets():
     return _split_dir_assets("static/js", ".js")
 
 
+def _reader_js_assets():
+    return _split_dir_assets("static/reader", ".js")
+
+
 def _split_css_assets():
     return _split_dir_assets("static/css", ".css")
 
@@ -55,7 +60,10 @@ def _split_css_assets():
 # 必须被装进产物的静态资源；拆分后在此追加新文件即可。
 CSS_ASSETS = _split_css_assets() + ("static/reader.css",)
 
-JS_ASSETS = _split_js_assets() + ("static/reader.js",)
+JS_ASSETS = _split_js_assets() + _reader_js_assets()
+
+# 第三方随包文件：压缩代码不走自有 JS 的逐行守卫，单独钉版本与哈希。
+VENDOR_JS_ASSETS = ("static/vendor/vue.global.prod.js",)
 
 
 def _read(relative):
@@ -67,6 +75,103 @@ def _existing(relatives):
 
 
 class FrontendAssetAssemblyTests(unittest.TestCase):
+    def test_c4_inline_events_and_inner_html_do_not_increase(self):
+        template = _read("templates/index.html")
+        self.assertLessEqual(
+            len(re.findall(r"\bon(?:click|change|input)\s*=", template)), 0
+        )
+        inner_html_baseline = {
+            "20-search.js": 0, "25-toast.js": 0, "30-library.js": 0,
+            "40-bibliography.js": 0, "50-calibration.js": 0,
+            "60-settings.js": 0, "62-zotero.js": 0, "64-settings-model.js": 0, "70-vision.js": 0,
+            "71-vision-providers.js": 0, "72-vision-stats.js": 0,
+            "79-import-batch.js": 0, "80-import.js": 0,
+        }
+        for relative in _split_js_assets():
+            name = Path(relative).name
+            self.assertLessEqual(_read(relative).count("innerHTML"),
+                                 inner_html_baseline.get(name, 0), name)
+        inline_attribute = re.compile(
+            r"(?<![.\w])on(?:click|change|input|paste|keydown|submit|cancel|dblclick)\s*="
+        )
+        for relative in _split_js_assets():
+            self.assertNotRegex(_read(relative), inline_attribute, relative)
+
+    def test_template_has_no_inline_events(self):
+        template = _read("templates/index.html")
+        self.assertNotRegex(template, r"\bon(?:click|change|input|keydown|dblclick|cancel|submit)\s*=")
+        self.assertIn('data-action="', template)
+        self.assertIn('data-action-change="', template)
+        self.assertIn('data-action-input="', template)
+        names = set(re.findall(r'data-action(?:-[a-z]+)?="(template\w+)"', template))
+        registered = set(re.findall(
+            r"MEFinderActions\.registerInline\('(template\w+)'",
+            _read("static/js/09-template-actions.js"),
+        ))
+        self.assertEqual(names, registered)
+
+    def test_generated_action_names_are_registered_once(self):
+        sources = [_read(relative) for relative in _split_js_assets()]
+        names = set(re.findall(
+            r'data-action(?:-[a-z]+)?="([A-Za-z][A-Za-z0-9]*)"',
+            "\n".join(sources),
+        ))
+        registered = re.findall(
+            r"MEFinderActions\.register(?:Inline)?\('([A-Za-z][A-Za-z0-9]*)'",
+            "\n".join(sources),
+        )
+        self.assertEqual(names - set(registered), set())
+        self.assertEqual(len(registered), len(set(registered)))
+
+    def test_library_entries_use_delegated_click(self):
+        library = _read("static/js/30-library.js")
+        self.assertIn("entry.dataset.action = 'openLibraryEntry'", library)
+        self.assertNotIn('onclick="handleLibraryEntryClick(', library)
+        self.assertNotIn('global.handleLibraryEntryClick =', library)
+
+    def test_library_nested_controls_use_delegated_click(self):
+        library = _read("static/js/30-library.js")
+        self.assertIn("check.dataset.action = 'toggleLibraryEntrySelection'", library)
+        self.assertIn("link.dataset.action = 'openLibraryWork'", library)
+        self.assertNotIn('onclick="event.stopPropagation();', library)
+        self.assertNotIn('global.toggleLibraryDeleteSelection =', library)
+
+    def test_library_facets_use_delegated_click(self):
+        library = _read("static/js/30-library.js")
+        self.assertIn("button.dataset.action = 'setLibraryFacet'", library)
+        self.assertIn("chip.dataset.action = 'removeLibraryFacet'", library)
+        self.assertNotIn('onclick="setLibFacet(', library)
+        self.assertNotIn('onclick="removeLibFacet(', library)
+        self.assertNotIn('global.setLibFacet =', library)
+        self.assertNotIn('global.removeLibFacet =', library)
+
+    def test_pure_markup_has_no_inline_events(self):
+        pure = _read("static/js/06-pure.js")
+        self.assertNotRegex(pure, r"\bon(?:click|change|input)\s*=")
+        self.assertIn("button.dataset.action = 'selectThemeChoice'", _read("static/js/60-settings.js"))
+        self.assertIn("range.dataset.actionInput = 'updateSegmentGutter'", _read("static/js/50-calibration.js"))
+        self.assertIn("checkbox.dataset.actionChange = 'handleScanCheckChange'", _read("static/js/80-import.js"))
+        owners = {
+            "selectThemeChoice": "60-settings.js",
+            "setSegmentReadingDirection": "50-calibration.js",
+            "updateSegmentGutter": "50-calibration.js",
+            "setSegmentNumberStyle": "50-calibration.js",
+            "setSegmentLayout": "50-calibration.js",
+            "applyLibStatusFilter": "30-library.js",
+            "toggleSegmentSelect": "20-search.js",
+            "handleScanCheckChange": "80-import.js",
+            "toggleDetailContext": "20-search.js",
+        }
+        for action, owner in owners.items():
+            self.assertRegex(_read("static/js/" + owner),
+                             rf"MEFinderActions\.register(?:Inline)?\('{action}'")
+
+    def test_search_markup_has_no_inline_events(self):
+        search = _read("static/js/20-search.js")
+        self.assertNotRegex(search, r"\bon(?:click|change|input)\s*=")
+        self.assertIn("searchScopeOption(group.title, count + ' 个版本', selected, 'selectSearchGroup'", search)
+        self.assertIn("detailAction('打开原文', 'openSearchSource'", search)
+
     def test_no_placeholder_survives_assembly(self):
         for marker in PLACEHOLDERS:
             self.assertNotIn(
@@ -117,7 +222,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """产物长度 = 模板 + 各资源 - 占位标记，容差为版本号替换带来的差值。"""
 
         template = _read("templates/index.html")
-        assets = sum(len(_read(rel)) for rel in _existing(CSS_ASSETS + JS_ASSETS))
+        assets = sum(
+            len(_read(rel)) for rel in _existing(CSS_ASSETS + JS_ASSETS + VENDOR_JS_ASSETS)
+        )
         consumed = sum(
             len(marker) for marker in PLACEHOLDERS if marker != "__APP_VERSION__"
         )
@@ -135,7 +242,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """资源内联进 <style>/<script>，不引入额外的外部请求。"""
 
         self.assertEqual(HTML.count("<style>"), 2)
-        self.assertEqual(HTML.count("<script>"), 3)
+        # 首屏侧栏折叠探测 / Vue（试点）/ 应用脚本 / 阅读器脚本。
+        self.assertEqual(HTML.count("<script>"), 4)
         self.assertNotIn('src="/static/app.js', HTML)
         self.assertNotIn('href="/static/app.css', HTML)
         self.assertNotIn("<script src=", HTML)
@@ -300,6 +408,24 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         missing = sorted(n for n in referenced - builtins if n not in defined)
         self.assertEqual(missing, [], f"内联处理器引用了不存在的函数：{missing}")
 
+    def test_http_requests_go_through_the_api_module(self):
+        """前端请求只能经 07-api.js 发出（v0.5.7 B1 棘轮，只降不升）。
+
+        阶段 D1 起独立阅读窗口也装配 07-api.js，reader-window.js 已清零；
+        reader.js 的 configure({fetch}) 注入经 MEFinderApi.withFetch 走同一出口。
+        """
+
+        bare_fetch = re.compile(r"(?<![\w.$])fetch\(")
+        allowed = {"static/js/07-api.js": 1}
+        counts = {}
+        for relative in sorted(
+            set(_split_js_assets()) | set(_reader_js_assets()) | {"static/reader-window.js"}
+        ):
+            found = len(bare_fetch.findall(_read(relative)))
+            if found:
+                counts[relative] = found
+        self.assertEqual(counts, allowed, "请改用 MEFinderApi.fetch / getJSON / postJSON")
+
     def test_large_domain_modules_keep_bounded_global_command_surfaces(self):
         """大型领域模块必须留在 IIFE；直接全局命令不得重新无界增长。"""
 
@@ -312,15 +438,29 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 0.5.2 +1：弹窗底部一键重新对齐已有译本（净 48）。
             # 0.5.5 译本对照改版：作品组管理弹窗、范围下拉与「加入作品组」下拉移出文献库，
             # 相关 27 个直接命令删除；作品管理迁入 35-works.js 的 MEFinder.works 命名 API（净 21）。
-            "static/js/30-library.js": 21,
+            "static/js/30-library.js": 13,
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
+            "static/js/36-works-range.js": 1,
             # +1：书目「语言」自定义下拉的选择入口 pickBibLanguage。
-            "static/js/40-bibliography.js": 27,
+            "static/js/40-bibliography.js": 10,
+            "static/js/60-settings.js": 26,
+            "static/js/61-settings-data.js": 3,
+            "static/js/63-settings-update.js": 5,
+            "static/js/64-settings-model.js": 7,
+            # Vue 试点：模型行视图只暴露 MEFinderAlignmentModelView 一个命名空间。
+            "static/js/64-settings-model-view.js": 1,
+            # Vue 试点第二块：托管 MinerU 卡片只暴露 MEFinderManagedMineruView。
+            "static/js/70-managed-mineru-view.js": 1,
             # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
-            "static/js/70-vision.js": 25,
-            "static/js/71-vision-providers.js": 18,
-            "static/js/80-import.js": 20,
+            "static/js/70-vision.js": 23,
+            "static/js/71-vision-providers.js": 10,
+            "static/js/72-vision-stats.js": 4,
+            "static/js/79-import-batch.js": 6,
+            "static/js/80-import.js": 13,
+            # 0.5.6 Zotero 来源同步：只经 MEFinder.zotero 命名 API 暴露（唯一直接赋值是
+            # 命名空间 MEFinder 本身），不新增直接全局命令。
+            "static/js/62-zotero.js": 1,
         }
         for relative, budget in budgets.items():
             with self.subTest(asset=relative):
@@ -518,10 +658,36 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     #   关闭阅读器把刚写出的位置交回宿主。
     # 0.5.5 本地 MinerU 接口自适应：检测连接的提示带上握手到的接口代数与版本。
     # 0.5.5 托管 MinerU：补「检查新版本」入口与安装目标版本来源说明。
+    # 0.5.6 Zotero 来源同步：设置目录新增「来源 → Zotero」（index.html 分区 +
+    #   62-zotero.js 分类树 / 立即同步明细 + 30-settings.css .zotero-*），
+    #   书目来源标签新增「Zotero 元数据」「Zotero 元数据（茉莉花）」。
+    # 0.5.7 重构 B1：新增 07-api.js 统一请求出口，105 处 fetch( 改为
+    #   MEFinderApi.fetch(；35-works / 62-zotero 私有 JSON helper 改为转发。
+    # 0.5.6 版本号落库（__version__ 0.5.5→0.5.6，经 web_assets `__APP_VERSION__`
+    #   注入装配文档；字节数不变，仅摘要变化）。
+    # 启动时译本对照预取改到文献库摘要之后、浏览器空闲时（90-init.js）。
+    # 0.5.7 C5：toast 与设置页改用 DOM 构造。
+    # 书目编辑器切换文献类型时，可见字段按编辑值整值回填（修书名被原值覆盖）。
+    # 0.5.7 D1：07-api.js 新增 withFetch 可注入客户端；reader.js 的 JSON 请求
+    #   改走统一客户端，原始状态请求默认出口改为 MEFinderApi.fetch。
+    # 0.5.7 D2：对齐任务监听迁到 15-alignment-jobs.js（MEFinderAlignmentJobs），
+    #   作品页直接订阅服务，阅读器保留结局处理与 alignmentJobs 兼容转发。
+    # 0.5.7 D4：阅读器可变状态改由各职责模块单独写入，生命周期只调用重置入口。
+    # 0.5.7 版本号落库：装配字节数不变，版本文字使摘要变化。
+    # 0.5.7 D4 审阅：05-dom 缩进与 destroyDom 命名，移除四个无人使用的内部注册。
+    # 0.5.7 Zotero：分类默认折叠，PDF 解析方式与导入页即时同步。
+    # 任务状态请求代次：新增 14-task-state.js，对齐模型/运行时、本地 OCR、
+    #   托管 MinerU 的轮询与操作只采信最后发起的请求。
+    # Vue 3 试点：内联 static/vendor/vue.global.prod.js（3.5.43）为独立 <script>；
+    #   设置页「译本对齐模型」行改由 64-settings-model-view.js 渲染，模板两行静态标记删除。
+    # Vue 试点第二块：托管 MinerU 卡片改由 70-managed-mineru-view.js 渲染；字节与剩余时间
+    #   两个格式化函数移入 06-pure.js；.managed-mineru-profile[hidden] 真正收起 VLM 行。
+    # Zotero 设置分栏与顶部同步摘要；设置目录内联 Lucide 图标。
+    # 设置导航与内容区滚动条改为悬停才显示，导航收紧上下留白以免多余滚动。
     BASELINE_SHA256 = (
-        "e51c13bdd608be9348f878fc93d471ebb01bd6d0f0eedc48ac95657fa8dcca96"
+        "ff3a588392843d51ac129d7975fc40d746baab839d7c3a964b291a878fa14045"
     )
-    BASELINE_BYTES = 1232915
+    BASELINE_BYTES = 1510203
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
@@ -532,6 +698,33 @@ class FrontendAssetBaselineTests(unittest.TestCase):
             "装配产物与基线不一致。纯搬移时应完全相同；"
             "若确实改了前端内容，请更新本类的基线常量。",
         )
+
+
+class VendorAssetTests(unittest.TestCase):
+    """随包的第三方前端文件：版本与字节钉死，装配位置固定。"""
+
+    VUE_SHA256 = "b72394052eef1eeda1752db3758ce1be6f88016903f22e5241cc732ea307478e"
+
+    def test_vue_bytes_match_pinned_release(self):
+        payload = (_PACKAGE_DIR / VENDOR_JS_ASSETS[0]).read_bytes()
+        self.assertTrue(payload.startswith(b"/**\n* vue v3.5.43\n"))
+        self.assertEqual(
+            hashlib.sha256(payload).hexdigest(),
+            self.VUE_SHA256,
+            "vue.global.prod.js 与钉住的 3.5.43 不一致；升级请同步 static/vendor/README.md",
+        )
+        self.assertTrue((_PACKAGE_DIR / "static/vendor/vue.LICENSE.txt").is_file())
+
+    def test_vue_loads_in_own_block_before_app_js(self):
+        vue_at = HTML.index("* vue v3.5.43")
+        self.assertLess(HTML.rindex("<script>", 0, vue_at), vue_at)
+        self.assertLess(vue_at, HTML.index("// module: 64-settings-model-view.js"))
+        self.assertIn("</script>", HTML[vue_at:HTML.index("(function (global) {  // module: 05-theme-engine.js")])
+
+    def test_reader_window_does_not_load_vue(self):
+        from src.me_finder.web_assets import READER_WINDOW_HTML
+
+        self.assertNotIn("vue v3.5.43", READER_WINDOW_HTML)
 
 
 if __name__ == "__main__":

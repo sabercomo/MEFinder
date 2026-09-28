@@ -310,6 +310,7 @@ class ComponentCatalog:
         self.state_path = self.cache_dir / "check.json"
         self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
+        self._closing = False
         self._revision = 0
         validate_component_catalog(self._read_json(self.bundled_path))
         if self.cached_path.is_file():
@@ -357,6 +358,8 @@ class ComponentCatalog:
         on_updated: Optional[Callable[[], None]] = None,
     ) -> bool:
         with self._lock:
+            if self._closing:
+                return False
             if self._thread is not None and self._thread.is_alive():
                 return False
             if not self._check_due():
@@ -370,6 +373,23 @@ class ComponentCatalog:
             self._thread = thread
             thread.start()
             return True
+
+    def begin_shutdown(self) -> None:
+        """Stop accepting background catalog checks."""
+
+        with self._lock:
+            self._closing = True
+
+    def close(self, timeout: float | None = None) -> bool:
+        """Wait for an in-flight catalog request and its refresh callback."""
+
+        self.begin_shutdown()
+        with self._lock:
+            thread = self._thread
+        if thread is None:
+            return True
+        thread.join(timeout)
+        return not thread.is_alive()
 
     def check_now(self, *, force: bool = False) -> Dict[str, object]:
         with self._lock:
@@ -402,7 +422,7 @@ class ComponentCatalog:
     ) -> None:
         before = self.revision
         self.check_now()
-        if on_updated is not None and self.revision != before:
+        if on_updated is not None and self.revision != before and not self._closing:
             on_updated()
 
     def _check_due(self) -> bool:

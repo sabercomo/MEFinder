@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>文献原句定位器 MEFinder — 找回原句，也核对引文</title>
-<meta name="description" content="文献原句定位器（MEFinder）：本地优先的 PDF / Word / EPUB 文献原句检索、页码定位与引文辅助工具。把记得的片段交给它，它在你自己的文献库里找回原句，带你回到上下文和出版方页码。">
+<title>文献原句定位器 MEFinder — 找到原句，给你书内实际页码</title>
+<meta name="description" content="文献原句定位器（MEFinder）：本地优先的 PDF / Word / EPUB 文献原句检索、页码定位与引文辅助工具。把记得的片段交给它，它在你自己的文献库里找回原句，给出书内实际页码而不是 PDF 物理页码。">
 <link rel="icon" href="assets/app_icon_256.png">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="site.css">
@@ -13,11 +13,13 @@
 <a class="skip" href="#main">跳到正文</a>
 
 <header class="top">
-  <a class="top-mark" href="./"><img src="assets/app_icon_256.png" width="28" height="28" alt="">文献原句定位器<span class="top-ver">MEFinder v<span data-rel="current">0.5.6</span></span></a>
+  <a class="top-mark" href="./"><img src="assets/app_icon_256.png" width="28" height="28" alt="">文献原句定位器<span class="top-ver">MEFinder v<span data-rel="current">0.5.7</span></span></a>
   <nav class="top-nav" aria-label="页内导航">
+    <a href="#pages">页码</a>
     <a href="#features">功能</a>
+    <a href="#mcp">MCP</a>
+    <a href="#looks">外观</a>
     <a href="#modules">模块</a>
-    <a href="#mcp">AI 助手</a>
     <a href="#limits">边界</a>
   </nav>
   <a class="btn btn-primary btn-sm top-cta" href="#get">下载</a>
@@ -27,10 +29,10 @@
 
   <section class="hero" id="try" aria-labelledby="hero-h">
     <div class="hero-copy">
-      <p class="eyebrow">PDF · Word · EPUB 本地文献原句检索</p>
-      <h1 class="hero-h1" id="hero-h">记得那句话，<br><span class="hl">想不起在哪本书</span>。</h1>
-      <p class="band-def">文献原句定位器（MEFinder）是一款本地优先的文献原句检索、页码定位与引文辅助工具。</p>
-      <p class="lede">完整句子、残缺片段、带着错字的记忆都可以交给它。它在你自己的文献库里找回原文，附上上下文和出版方页码，再把出处排成你要的格式。</p>
+      <p class="eyebrow">PDF · Word · EPUB 本地文献原句与页码定位</p>
+      <h1 class="hero-h1" id="hero-h">找到原句，<br><span class="nobr">给你<span class="hl">书内实际页码</span>。</span></h1>
+      <p class="band-def">不是 PDF 物理页码。PDF 第 69 页，书上印的是序言第 16 页。</p>
+      <p class="lede">文献原句定位器（MEFinder）是一款本地优先的文献原句检索、页码定位与引文辅助工具。完整句子、残缺片段、带着错字的记忆都可以交给它：它在你自己的文献库里找回原文，标出书内实际页码，再把出处排成你要的格式。</p>
       <div class="hero-actions">
         <a class="btn btn-primary btn-lg" id="cta-dl" href="https://github.com/sabercomo/MEFinder/releases/latest">下载 MEFinder</a>
         <a class="btn btn-quiet btn-lg" href="https://github.com/sabercomo/MEFinder"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.15.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.05-.13-.36-.99.08-2.07 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.08.13 1.94.08 2.07.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>源码</a>
@@ -53,8 +55,36 @@
         <button type="button" class="chip" data-mode="fuzzy">模糊</button>
       </div>
       <div class="demo-out" id="demo-out" aria-live="polite"></div>
-      <p class="demo-foot">书里印的是「密纳发」。换个译名、记错两个字，模糊模式照样把它找回来，并给出引用页码。真实软件检索的是你整个文献库，不是这四段。</p>
+      <p class="demo-foot">书里印的是「密纳发」。换个译名、记错两个字，模糊模式照样把它找回来，给的是书内实际页码，不是 PDF 第几页。真实软件检索的是你整个文献库，不是这四段。</p>
     </figure>
+  </section>
+
+  <!-- ============ 页码 · 软件核心 ============ -->
+  <section class="pages" id="pages" aria-labelledby="pages-h">
+    <header class="sec-head">
+      <p class="eyebrow">页码</p>
+      <h2 class="sec-h2" id="pages-h">引用的是书内实际页码，不是 PDF 物理页码</h2>
+      <p class="sec-p">PDF 阅读器显示的页数从封面算起，序言、目录、插页都占页数，和书上印的页码对不上。MEFinder 的每条检索结果都带着书内实际页码。</p>
+    </header>
+    <div class="pages-grid">
+      <ul class="pages-points">
+        <li><b>自动映射。</b>读取页边印着的页码序列，把每个 PDF 物理页对应到书内页码；序言用罗马数字、正文用阿拉伯数字这样的分段也能分开认。</li>
+        <li><b>人工分段校准。</b>自动映射不准的书，按段指定「PDF 第几页是书内第几页」，之后整段跟着改。</li>
+        <li><b>EPUB 只用出版方页码。</b>读取出版方提供的 page-list / pagebreak，绝不按屏幕排版生成页码。</li>
+        <li><b>没有就说没有。</b>找不到书内页码时如实标「页码尚未解析」，不推算、不补数。</li>
+      </ul>
+      <div>
+        <table class="spec">
+          <caption class="visually-hidden">同一本《法哲学原理》PDF 里，物理页码与书内实际页码的对照</caption>
+          <thead><tr><th scope="col">《法哲学原理》里的一句话</th><th scope="col">PDF 物理页码</th><th scope="col">书内实际页码</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">密纳发的猫头鹰要等黄昏到来，才会起飞。</th><td class="page-phys">第 69 页</td><td class="page-cite">序言第 16 页</td></tr>
+            <tr><th scope="row">婚姻作为直接伦理关系首先包括自然生活的环节。</th><td class="page-phys">第 272 页</td><td class="page-cite">第 201 页</td></tr>
+          </tbody>
+        </table>
+        <p class="pages-note">数据取自 MEFinder 对同一份 PDF（黑格尔著，范扬、张企泰译）的实际定位结果。两处相差 53 和 71 页，差值还不固定，靠「减去一个数」换算不出来。</p>
+      </div>
+    </div>
   </section>
 
   <!-- ============ 六个功能 ============ -->
@@ -117,7 +147,7 @@
         <h3>译本对照</h3>
         <div class="plate-text">
           <p>把同一部作品的原文与译本、或不同版本归入作品组，选两版逐段对齐，双栏对照阅读，在版本之间定位对应文字。对齐在本机完成。</p>
-          <p class="note">两栏跟随滚动同步推进，对齐到的段落用琥珀色框出，选中即可复制引文；页码状态按栏各自标注——英文基准有出版方页码，中译本没有，就如实显示「页码尚未解析」。</p>
+          <p class="note">两栏跟随滚动，对齐的段落用琥珀色框出，选中即可复制引文。页码按栏各自标注：英文原书有出版方页码，中译本没有，就显示「页码尚未解析」。置信度偏低的段落旁标「!」，可以人工指定对应的译文段。首次生成对齐前，要在设置里联网安装一次计算组件（约 94 MiB）和跨语言模型，之后计算全程离线。</p>
         </div>
       </div>
       <figure class="plate-media"><div class="frame"><img src="assets/50-compare.png" width="2880" height="1800" loading="lazy" alt="对照阅读视图：左栏中文译本、右栏英文原文并列，顶部是版本选择器、跟随滚动开关与复制引文按钮；右栏一段英文被琥珀色框出，表示与左栏对应段落已对齐；左栏标「页码尚未解析」，右栏正文里标出出版方页码「第 3 页」"></div><figcaption>对照阅读：对齐结果落在正文里，页码状态按栏各自说明，不推算。</figcaption></figure>
@@ -129,11 +159,190 @@
         <h3>出处与引文</h3>
         <div class="plate-text">
           <p>识别并补全书目信息，把出处一次排成中文脚注、GB/T 7714、APA、MLA 或 Chicago。已配对的脚注随正文带出。</p>
-          <p class="note">页码区分 PDF 物理页与书内引用页，自动映射之外还能人工分段校准。</p>
+          <p class="note">出处里的页码就是书内实际页码，和上面「页码」一节是同一套数据。</p>
         </div>
       </div>
       <figure class="plate-media"><div class="frame"><img src="assets/60-cite.png" width="2880" height="1800" loading="lazy" alt="引文格式设置页，中文脚注、GB/T 7714 已勾选，Chicago、APA、MLA 未启用"></div><figcaption>引文格式：状态用文字说明，不只靠颜色区分。</figcaption></figure>
     </article>
+  </section>
+
+  <!-- ============ MCP · 接入你自己的 Agent ============ -->
+  <section class="mcp" id="mcp" aria-labelledby="mcp-h">
+    <div class="mcp-head">
+      <div>
+        <p class="eyebrow">MCP</p>
+        <h2 class="sec-h2" id="mcp-h">接入你自己的 Agent</h2>
+      </div>
+      <div class="mcp-intro">
+        <p>MEFinder 自己不接大模型，也不生成回答。它提供的是一个本地 MCP 接口：发布包里附带 <code>MEFinderMCP</code>（Windows 安装版、绿色版和 macOS 版都有，不用另装 Python），你把它配进自己在用的 Agent，比如 Claude Code、Codex、WorkBuddy，Agent 就能调用 13 个工具查你的文献库。用哪个 Agent、哪个模型、哪个账号，都是你那边的事，和 MEFinder 无关。桌面端不必开着，MCP 进程本身不联网。</p>
+        <p>Agent 拿到的不是 PDF 原件，而是 MEFinder 解析好、存进库里的结构化结果：原文、文献和段落 ID、PDF 页码、书内引用页码，以及这个页码是怎么来的。查到的句子可以直接回到原书那一页核对。</p>      </div>
+    </div>
+
+    <div class="vs">
+      <h3 class="vs-h">给 Agent 的是 JSON，不是 PDF</h3>
+      <div class="vs-cols">
+        <div class="vs-col vs-pdf">
+          <p class="vs-label">直接让 Agent 读 PDF</p>
+          <ul>
+            <li>每次提问都要从 PDF 现场抽文字，扫描件还得先 OCR</li>
+            <li>文字按版面抽出来，双栏、脚注的先后要 Agent 自己理顺</li>
+            <li>只知道是 PDF 第几页，书上印的页码要 Agent 自己推</li>
+            <li>几百页的书整本塞进对话，很吃上下文</li>
+          </ul>
+        </div>
+        <div class="vs-col vs-json">
+          <p class="vs-label">让 Agent 读 MEFinder 的 JSON</p>
+          <ul>
+            <li>导入时解析一次，版面复杂的可以选 MinerU，之后读的都是现成结果</li>
+            <li>按页或段落切好，每块有自己的 ID，前后文单独给</li>
+            <li>PDF 物理页和书内引用页分开给，还标明页码是否校准、怎么映射的</li>
+            <li>只取命中处前后几页，用不着整本塞进去</li>
+          </ul>
+        </div>
+      </div>
+      <figure class="vs-sample">
+        <figcaption>在演示库里查「密纳发的猫头鹰要等黄昏到来，才会起飞」，<code>locate_quote</code> 返回的一条结果（节选，省略了整页原文和前后文）</figcaption>
+        <pre><code>{
+  "source_file_id": "pdf-import-69ba2b6b34dae613",
+  "document_title": "法哲学原理：或自然法和国家学纲要",
+  "paragraph_id": "pdf-import-69ba2b6b34dae613-P000014",
+  "matched_text": "密纳发的猫头鹰要等黄昏到来，才会起飞",
+  "match_type": "exact",
+  "match_score": 1.0,
+  "physical_page": { "start_index": 14, "end_index": 14 },
+  "citation_page": { "start": "ix", "end": "ix", "status": "calibrated" },
+  "page_mapping": { "method": "native_pdf_edge_sequence", "confidence": 0.99 }
+}</code></pre>
+      </figure>
+    </div>
+
+    <div class="mcp-uses">
+      <article class="use">
+        <p class="use-tool"><code>verify_quotes</code> · <code>diff_quote</code></p>
+        <h3>定稿前核对引文</h3>
+        <p>把正文里的引文交给 Agent，它一次批量比对，每条标出 verified（逐字一致）、approximate（相近，可能抄错）或 not_found（库里没有）。相近的几条再和原句逐字对齐，多了、漏了、改了哪几个字都会标出来。</p>
+        <pre class="use-cmd"><code>下面这五条引文，原书里是这么写的吗？</code></pre>
+      </article>
+      <article class="use">
+        <p class="use-tool"><code>locate_quote</code> · <code>verify_quotes</code></p>
+        <h3>核对笔记里的引文</h3>
+        <p>Agent 用它自己的文件权限读笔记，比如 Obsidian 里的某一篇，再把其中的引文逐条交给 MEFinder：原句在不在、页码对不对、上下文有没有被截断。MEFinder 不读也不改你的笔记文件。</p>
+        <pre class="use-cmd"><code>这篇笔记里的引文，哪些和原书对不上？</code></pre>
+      </article>
+      <article class="use">
+        <p class="use-tool"><code>find_parallel_passages</code></p>
+        <h3>找译文对应的原文</h3>
+        <p>给一句中译，指定要找的语言，比如英语、德语，返回原书里对应位置的几个候选和前后文，候选来自作品组已经生成的对齐。Agent 比较语义、专名和引文结构后再确认；合理的候选不止一个时，它会全部列出，不替你挑。反过来，给一句原文找中译也行。</p>
+        <pre class="use-cmd"><code>这句中译在德文原书里对应哪一句？</code></pre>
+      </article>
+      <article class="use">
+        <p class="use-tool"><code>find_parallel_passages</code> · <code>locate_quote</code></p>
+        <h3>笔记里给译文配上原文</h3>
+        <p>读中译本记笔记时，让 Agent 在每条引文下面附上原文和原书页码：先定位中译引文的出处，再找它在原书里的对应句。候选不唯一的地方，Agent 会标出来留给你挑，不会随手配一句。</p>
+        <pre class="use-cmd"><code>给这篇笔记里的中译引文都配上英文原文和页码。</code></pre>
+      </article>
+      <article class="use">
+        <p class="use-tool"><code>search_passages</code> · <code>read_document_window</code></p>
+        <h3>读书、整理材料</h3>
+        <p>只记得大意时，先按相关性召回段落，再逐字定位。读一本书时按需取前后几页，不必把整本塞进对话。笔记由 Agent 写，写得对不对，仍以书里的原文为准。</p>
+        <pre class="use-cmd"><code>《法哲学原理》序言里讲哲学来得太迟的是哪一段？</code></pre>
+      </article>
+    </div>
+
+    <table class="spec mcp-tools">
+      <caption class="visually-hidden">MEFinder MCP 的 13 个工具按用途分组</caption>
+      <thead><tr><th scope="col">用途</th><th scope="col">工具</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">定位与阅读</th><td><code>list_documents</code> 列出已入库文献和它们的 ID · <code>locate_quote</code> 定位原句，返回上下文、匹配方式和页码状态 · <code>read_document_window</code> 读命中处前后的若干页或段落</td></tr>
+        <tr><th scope="row">核对</th><td><code>verify_quotes</code> 批量核对多条引文 · <code>diff_quote</code> 把疑似错引和原句逐字对齐</td></tr>
+        <tr><th scope="row">检索</th><td><code>search_passages</code> 按大意召回相关段落；命中只说明内容相关，逐字核对还要用 <code>locate_quote</code></td></tr>
+        <tr><th scope="row">译本对照</th><td><code>find_parallel_passages</code> 给一句中译，按指定语言返回原书里的对应候选和前后文，不做机器翻译</td></tr>
+        <tr><th scope="row">题录</th><td><code>read_bibliographic_pages</code> 读取版权页、CIP 页 · <code>read_bibliographic_metadata</code> 列出题录字段哪些已填、存疑或缺失</td></tr>
+        <tr><th scope="row">对齐修正</th><td><code>propose_alignment_correction</code> 提出修正 · <code>confirm_alignment_correction</code> 你确认后生效 · <code>revoke_alignment_correction</code> 撤销 · <code>list_alignment_corrections</code> 查看已有修正</td></tr>
+      </tbody>
+    </table>
+    <p class="mcp-note">13 个工具里 10 个只读。其余 3 个只用来修正译本对齐，必须经你确认才会生效。这些工具不做问答、总结或翻译。</p>
+
+    <div class="hack">
+      <p class="hack-tag">邪修用法</p>
+      <h3 class="hack-h">不按说明书来的几种接法</h3>
+      <p class="hack-lede">下面这些不是 MEFinder 设计时的主要用途，是身边的人自己摸出来的，效果没有专门验证过，照做之前先拿几本书试一试。</p>
+      <ol class="hack-list">
+        <li>
+          <h4>工科：把 Zotero 里的论文整批拿去蒸馏</h4>
+          <p>有位工科朋友的文献都攒在 Zotero 里，可 Zotero 把每篇 PDF 各放在一个单独的文件夹里，想整批交给 Agent 很麻烦。他是这么接的：</p>
+          <ol class="hack-steps">
+            <li>在「设置 → 来源 → Zotero」勾选分类，论文直接导进 MEFinder</li>
+            <li>PDF 解析方式选「强制 MinerU」，图表和公式多的论文解析得更干净</li>
+            <li>接上 MCP，让 Agent 读带文献 ID 和页码的 JSON 结果，开始蒸馏</li>
+          </ol>
+        </li>
+        <li>
+          <h4>文科：让 Agent 替你读书做笔记<span class="hack-strike">（不是）</span></h4>
+          <p>书还是得自己读。Agent 能做的，是先把带页码的原句一段段摘出来，你读的时候对着核，写笔记时引文和页码都是现成的。</p>
+        </li>
+      </ol>
+    </div>
+
+    <div class="mcp-setup-wrap">
+      <h3 class="mcp-h3">接入</h3>
+      <p class="mcp-note">把命令里的路径换成你电脑上 <code>MEFinderMCP</code> 的位置：</p>
+      <dl class="mcp-paths">
+        <dt>Windows 安装版</dt><dd><code>C:\Users\&lt;用户名&gt;\AppData\Local\Programs\MEFinder\MEFinderMCP.exe</code></dd>
+        <dt>Windows 绿色版</dt><dd>解压目录里的 <code>MEFinderMCP.exe</code></dd>
+        <dt>macOS</dt><dd><code>/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP</code></dd>
+      </dl>
+      <div class="mcp-setup">
+        <div class="mcp-cmd"><span class="mcp-cmd-label">Claude Code</span><pre><code>claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"</code></pre></div>
+        <div class="mcp-cmd"><span class="mcp-cmd-label">Codex</span><pre><code>codex mcp add mefinder -- "D:\MEFinder\MEFinderMCP.exe"</code></pre></div>
+      </div>
+      <p class="mcp-note">Codex 也可以在设置里用表单添加，类型选 STDIO。WorkBuddy、ZCode 的接法和常见配置错误见 <a href="https://github.com/sabercomo/MEFinder/blob/main/docs/MCP_CLIENT_SETUP.md">MCP 配置教程</a>。</p>
+      <p class="mcp-note">配好后对 Agent 说「请只使用 mefinder，列出已经导入的文献」，能列出你库里的书就是接通了。</p>
+    </div>
+    <p class="mcp-warn"><b>隐私</b>MCP 进程本身不联网，但工具返回的原文和上下文会进入你的 Agent 的对话，再由 Agent 发给它所用的模型。未公开发表的文献、他人的手稿，接入前请先考虑这一点。</p>
+  </section>
+
+  <!-- ============ 外观 ============ -->
+  <section class="looks" id="looks" aria-labelledby="looks-h">
+    <div class="looks-head">
+      <div>
+        <p class="eyebrow">外观</p>
+        <h2 class="sec-h2" id="looks-h">18 套主题，也能自己配</h2>
+      </div>
+      <div class="looks-intro">
+        <p>浅色、深色各 9 套，分开选、分开保存。外观模式可以固定为浅色或深色，也可以跟随系统，白天和夜里各用各的那一套。</p>
+        <p>预设都不合意时，可以新建自定义主题：挑强调色、命中高亮色、背景色和文字色，再调对比度，浅色、深色各自保存。</p>
+      </div>
+    </div>
+    <div class="looks-group">
+      <h3>浅色</h3>
+      <ul class="sw-grid">
+          <li class="sw" style="--sw-bg:#F5F8FC;--sw-fg:#172033;--sw-ac:#0F62E6;--sw-hl:#D99000" title="清爽理性，适合日间使用"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">晴蓝<span class="sw-en">MEFinder Light</span></span></li>
+          <li class="sw" style="--sw-bg:#F5F6F8;--sw-fg:#1F2328;--sw-ac:#5B6472;--sw-hl:#3A6EA5" title="中性灰，不偏色彩，专注阅读"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">雾灰<span class="sw-en">Graphite</span></span></li>
+          <li class="sw" style="--sw-bg:#F3E7CC;--sw-fg:#43331C;--sw-ac:#B0742A;--sw-hl:#2563B8" title="经典书页棕，温润偏黄"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">棕褐<span class="sw-en">Sepia</span></span></li>
+          <li class="sw" style="--sw-bg:#F7F7F1;--sw-fg:#25291F;--sw-ac:#4A5F39;--sw-hl:#7656B8" title="低刺激、安静，适合长时间阅读"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">抹茶</span></li>
+          <li class="sw" style="--sw-bg:#FBF7F1;--sw-fg:#34251E;--sw-ac:#9F4A1E;--sw-hl:#2563B8" title="温暖柔和，带轻微纸张气质"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">暖沙</span></li>
+          <li class="sw" style="--sw-bg:#FDF6F8;--sw-fg:#2C2528;--sw-ac:#B0335A;--sw-hl:#1B8A99" title="清柔克制，带淡粉强调"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">樱粉</span></li>
+          <li class="sw" style="--sw-bg:#F9F7FD;--sw-fg:#282532;--sw-ac:#6544B0;--sw-hl:#B86C08" title="优雅现代，使用柔和薰衣草紫"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">薰衣草</span></li>
+          <li class="sw" style="--sw-bg:#FDF6E3;--sw-fg:#586E75;--sw-ac:#B58900;--sw-hl:#2563B8" title="经典米黄纸底 + 琥珀金，护眼耐读（Solarized Light）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">日光<span class="sw-en">Solarized</span></span></li>
+          <li class="sw" style="--sw-bg:#FAF4ED;--sw-fg:#575279;--sw-ac:#D7827E;--sw-hl:#56949F" title="柔雾玫瑰调，温软文艺（Rosé Pine Dawn）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">玫瑰<span class="sw-en">Rosé Pine Dawn</span></span></li>
+      </ul>
+    </div>
+    <div class="looks-group">
+      <h3>深色</h3>
+      <ul class="sw-grid">
+          <li class="sw" style="--sw-bg:#0D1117;--sw-fg:#E6EDF3;--sw-ac:#1F6FEB;--sw-hl:#58A6FF" title="沉静蓝黑，克制专业（GitHub Dark）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">午夜<span class="sw-en">GitHub</span></span></li>
+          <li class="sw" style="--sw-bg:#000000;--sw-fg:#EDEDED;--sw-ac:#006EFE;--sw-hl:#3291FF" title="纯黑背景 + 亮蓝，极致对比、OLED 省电（Vercel）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">纯黑<span class="sw-en">Vercel</span></span></li>
+          <li class="sw" style="--sw-bg:#1E1E2E;--sw-fg:#CDD6F4;--sw-ac:#CBA6F7;--sw-hl:#89B4FA" title="柔紫沉静，人气配色（Catppuccin Mocha）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">暮紫<span class="sw-en">Catppuccin</span></span></li>
+          <li class="sw" style="--sw-bg:#282A36;--sw-fg:#F8F8F2;--sw-ac:#FF79C6;--sw-hl:#8BE9FD" title="经典粉紫高饱和，活力十足（Dracula）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">暗夜<span class="sw-en">Dracula</span></span></li>
+          <li class="sw" style="--sw-bg:#1A1B26;--sw-fg:#A9B1D6;--sw-ac:#7AA2F7;--sw-hl:#7DCFFF" title="深靛蓝调，夜色霓虹（Tokyo Night）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">东京夜<span class="sw-en">Tokyo Night</span></span></li>
+          <li class="sw" style="--sw-bg:#282828;--sw-fg:#EBDBB2;--sw-ac:#FE8019;--sw-hl:#83A598" title="暖褐灰底 + 橙调，复古护眼（Gruvbox）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">森褐<span class="sw-en">Gruvbox</span></span></li>
+          <li class="sw" style="--sw-bg:#2D353B;--sw-fg:#D3C6AA;--sw-ac:#A7C080;--sw-hl:#7FBBB3" title="柔和森林绿，低饱和自然（Everforest）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">森绿<span class="sw-en">Everforest</span></span></li>
+          <li class="sw" style="--sw-bg:#2E3440;--sw-fg:#ECEFF4;--sw-ac:#88C0D0;--sw-hl:#81A1C1" title="冷蓝灰调，清冷内敛（Nord）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">极夜<span class="sw-en">Nord</span></span></li>
+          <li class="sw" style="--sw-bg:#2D2D2B;--sw-fg:#F9F9F7;--sw-ac:#CC7D5E;--sw-hl:#8AB4C0" title="暖陶褐点缀，中性暖灰底（Absolutely）"><span class="sw-page" aria-hidden="true"><span class="sw-aa">Aa</span><span class="sw-hit">文</span><span class="sw-bar"></span></span><span class="sw-name">陶褐<span class="sw-en">Absolutely</span></span></li>
+      </ul>
+    </div>
+    <p class="looks-note">色卡用的是软件里各主题的实际配色：大字是正文色，「文」字底色是命中高亮色，下方色条是强调色。深色主题的配色取自 GitHub Dark、Catppuccin、Dracula、Nord 等常见编辑器主题的原版色值。</p>
   </section>
 
   <!-- ============ 模块 · F3 tabular spec sheet ============ -->
@@ -151,67 +360,12 @@
         <tr><th scope="row">页码</th><td>PDF 物理页与书内引用页分开 · 自动映射 · 人工分段校准 · EPUB page-list / pagebreak</td><td>没有出版方页码时如实标注「页码尚未解析」，不推算、不补数</td></tr>
         <tr><th scope="row">对照</th><td>作品组 · 原文与译本逐段自动对齐 · 双栏阅读 · 正文范围人工修正 · 一次全部重跑</td><td>自动对齐只支持 PDF 与 EPUB 文献</td></tr>
         <tr><th scope="row">引用</th><td>书目识别与补全 · 中文脚注 / GB&#47;T 7714 / APA / MLA / Chicago · 按页导出 Markdown 与 EPUB</td><td>EPUB 页外脚注暂不保证随正文带出</td></tr>
-        <tr><th scope="row">MCP</th><td>13 个工具接入支持 MCP 的 AI 助手：批量核对引文是否逐字命中、比对错引差异、按主题召回段落、读取版权页与题录缺口、辅助修正对齐</td><td>侧车读的是同一个本机库；库被桌面端占用时以桌面端为准</td></tr>
+        <tr><th scope="row">MCP</th><td>13 个工具接入你自己的 Agent（任何支持 MCP 的客户端）：批量核对引文是否逐字命中、比对错引差异、按主题召回段落、读取版权页与题录缺口、辅助修正对齐</td><td>侧车读的是同一个本机库；库被桌面端占用时以桌面端为准</td></tr>
+        <tr><th scope="row">应用</th><td>18 套界面主题（浅色、深色各 9 套）· 跟随系统切换深浅色 · 自定义主题 · 独立阅读窗口 · 数据位置：打开或迁移资料库，比如云盘同步的文件夹</td><td>「导出备份」只含页码、书目和偏好，不含 PDF 与索引库；完整备份要复制整个数据目录</td></tr>
         <tr><th scope="row">数据</th><td>SQLite schema 版本化迁移 · 嵌入向量携带 <code>model_id</code>，不跨模型混用</td><td>旧版本无法打开升级后的库</td></tr>
       </tbody>
     </table>
-    <figure class="shot"><div class="frame"><img src="assets/70-settings.png" width="2880" height="1800" loading="lazy" alt="设置页，左侧目录按译本对齐、来源、解析、引用、应用分组，右侧是 Zotero 连接状态"></div><figcaption>设置页的目录分组，就是上面这张表在界面里的样子。</figcaption></figure>
-  </section>
-
-  <!-- ============ MCP · 接上 AI 助手 ============ -->
-  <section class="mcp" id="mcp" aria-labelledby="mcp-h">
-    <p class="eyebrow">AI 助手</p>
-    <h2 class="sec-h2" id="mcp-h">接上 Agent，让它自己回原文查</h2>
-    <p class="sec-p">MEFinder 自带一个本地 MCP 服务，Windows 与 macOS 的发布包里都有 <code>MEFinderMCP</code>，不用装 Python。Claude Code、Codex 这类桌面 Agent 连上它，就能直接调用 13 个工具读你的文献库。桌面端不用开着，MCP 进程本身也不联网。</p>
-    <p class="sec-p">库里存的已经是解析好的页级文本、页码映射和题录。Agent 调工具拿到的是带文献 ID、页码锚点与字符区间的结构化结果，核完能直接指回原页。把 PDF 原样交给 Agent 读，每次都要现场解析一遍，扫描件还得先过 OCR。</p>
-
-    <div class="mcp-uses">
-      <article class="use">
-        <h3>论文定稿前核对引文</h3>
-        <p>把正文里的引文一段段交给 Agent，它用 <code>verify_quotes</code> 批量回原文比对，逐条给 verified（逐字命中）、approximate（疑似错引）、not_found（没找到）。疑似错引的那几条再用 <code>diff_quote</code> 跟最接近的原句逐字符对齐，多哪几个字、漏哪几个字、改了哪个字都标出来。</p>
-        <pre class="use-cmd"><code>请用 mefinder 的 verify_quotes 批量核对下面这五条引文，逐条告诉我是否逐字命中。</code></pre>
-      </article>
-      <article class="use">
-        <h3>笔记里的引用准不准</h3>
-        <p>读你的 Obsidian 笔记靠的是 Agent 自己的文件权限，MEFinder 不碰笔记。它管另一半：笔记里每条引文在书里有没有对应的原句、页码对不对、上下文有没有被截歪。核对结果按笔记里的顺序列回来，你只管决定哪几条要改。</p>
-        <pre class="use-cmd"><code>读我 vault 里这篇笔记，把其中所有引文逐条交给 mefinder 核对，指出与原句不一致的和页码对不上的。</code></pre>
-      </article>
-    </div>
-
-    <table class="spec mcp-tools">
-      <caption class="visually-hidden">MEFinder MCP 的 13 个工具按用途分组</caption>
-      <thead><tr><th scope="col">用途</th><th scope="col">工具与产出</th></tr></thead>
-      <tbody>
-        <tr><th scope="row">定位与阅读</th><td><code>list_documents</code> 列出已入库文献并拿到稳定 ID · <code>locate_quote</code> 定位原句，返回上下文、匹配方式与页码状态 · <code>read_document_window</code> 从命中处读有界窗口，看前后页与相邻段落</td></tr>
-        <tr><th scope="row">核对</th><td><code>verify_quotes</code> 一次批量核对多条引文 · <code>diff_quote</code> 把疑似错引与原句逐字符对齐，标注增、漏、改</td></tr>
-        <tr><th scope="row">检索</th><td><code>search_passages</code> 只记得大意时按相关性召回段落。相关性检索，命中等于内容相关，逐字核对还要再走 <code>locate_quote</code></td></tr>
-        <tr><th scope="row">译本对照</th><td><code>find_parallel_passages</code> 给一句中文，返回其他译本的多个候选与前后文；Agent 比较跨语言语义、专名和引文结构之后才确认，证据不唯一就报歧义</td></tr>
-        <tr><th scope="row">题录</th><td><code>read_bibliographic_pages</code> 读取版权页与 CIP 页候选 · <code>read_bibliographic_metadata</code> 列出现有字段的已填、存疑、缺失</td></tr>
-        <tr><th scope="row">对齐修正</th><td><code>propose_alignment_correction</code> 记录待确认的修正提议 · <code>confirm_alignment_correction</code> 经你同意才生效 · <code>revoke_alignment_correction</code> 随时撤销 · <code>list_alignment_corrections</code> 复核已有修正</td></tr>
-      </tbody>
-    </table>
-    <p class="mcp-note">13 个工具里 10 个只读。3 个写操作只用于对齐修正，且必须你明确确认之后 Agent 才能调用。工具本身不做问答、总结或翻译。</p>
-
-    <h3 class="mcp-h3">再往前一点，可以这样用</h3>
-    <dl class="mcp-plays">
-      <dt>整批入库，让 Agent 自己读</dt>
-      <dd>要写的专题先全部导进来。Agent 通过工具拿到带页码锚点和字符区间的结果，读书笔记、综述材料都从库里取，不用再往对话里扔导出的文本。一本几百页的书，它按需取有界窗口，用不着把整本塞进上下文。</dd>
-      <dt>从 Zotero 迁过来，跟着 Zotero 走</dt>
-      <dd>在「设置 → 来源 → Zotero」勾选分类，MEFinder 走 Zotero 7 自带的本机只读接口，把其中的 PDF 与 EPUB 按自己的解析管线入库；增删和题录以 Zotero 为准，含茉莉花插件抓取的知网题录，同时不读 Zotero 的全文索引、不改你的 Zotero 库。</dd>
-      <dt>扫描件按版面选解析档</dt>
-      <dd>默认「自动选择」，文字层不可靠时自动转 MinerU。图表密、版面复杂的书直接选「强制 MinerU」更稳。日文扫描件与繁体竖排古籍可以装本机离线 OCR（NDL 引擎，装好后全程离线）；现代中文扫描件不在本机 OCR 的覆盖范围内，那类仍然要走在线解析。</dd>
-      <dt>让 Agent 读书、做笔记</dt>
-      <dd>一本一本读下来，产出带出处的笔记。MEFinder 给的是原句、上下文和页码，笔记由 Agent 写——它写得对不对，还得回到书里核。</dd>
-    </dl>
-
-    <h3 class="mcp-h3">配置就一条命令</h3>
-    <p class="mcp-note">下面用的是 Windows 绿色版的示例路径，换成你机器上的位置即可：安装版通常在 <code>C:\Users\&lt;你的用户名&gt;\AppData\Local\Programs\MEFinder\MEFinderMCP.exe</code>，macOS 在 <code>/Applications/MEFinder.app/Contents/MacOS/MEFinderMCP</code>。Codex 也可以走设置里的表单，类型选 STDIO。</p>
-    <div class="mcp-setup">
-      <div class="mcp-cmd"><span class="mcp-cmd-label">Claude Code</span><pre><code>claude mcp add --transport stdio --scope user mefinder -- "D:\MEFinder\MEFinderMCP.exe"</code></pre></div>
-      <div class="mcp-cmd"><span class="mcp-cmd-label">Codex</span><pre><code>codex mcp add mefinder -- "D:\MEFinder\MEFinderMCP.exe"</code></pre></div>
-    </div>
-    <p class="mcp-note">图文步骤、WorkBuddy 与 ZCode 的接法，以及最常见的配置错误都在 <a href="https://github.com/sabercomo/MEFinder/blob/main/docs/MCP_CLIENT_SETUP.md">MCP 配置教程</a> 里。配好之后在 Agent 里问一句「请只使用 mefinder，列出当前已经导入的文献」，能列出你库里的书就算通了。</p>
-    <p class="mcp-note mcp-warn">还有一条要说清楚：MCP 进程不访问网络，可工具返回的原文和上下文会进入 AI 客户端的对话记录与模型上下文。未公开发表的文献、别人的手稿，接之前先想清楚这一点。</p>
+    <figure class="shot"><div class="frame"><img src="assets/70-settings.png" width="2880" height="1800" loading="lazy" alt="设置页，左侧目录按译本对齐、来源、解析、引用、应用分组；右侧 Zotero 页顶部是连接状态与立即同步，下方左栏勾选要同步的分类，右栏是同步开关、自动同步时机与 PDF 解析方式"></div><figcaption>设置页的目录分组，就是上面这张表在界面里的样子。</figcaption></figure>
   </section>
 
   <!-- ============ 边界与数据 · 全页唯一的染色断带 ============ -->
@@ -222,7 +376,7 @@
     <ul class="limits-list">
       <li><b>不猜出处。</b><span>没找到就是没找到，它不会给一个像模像样的答案。</span></li>
       <li><b>不虚构页码。</b><span>EPUB 只用出版方给的页码表；没有就标「页码尚未解析」——上面的演示里就能看到一条。</span></li>
-      <li><b>不默认联网。</b><span>只有扫描件、乱码文本层或复杂版面 PDF 才由你决定是否交给外部解析服务。</span></li>
+      <li><b>不默认联网。</b><span>检索、索引、页码映射、对齐计算和本机 OCR 都在本机完成。会联网的只有这几件事，都要你手动发起：把 PDF 交给 MinerU 或其他视觉 API 解析；「查图书信息」这类题录查询；首次安装对齐组件、模型和本机 OCR 组件；检查软件更新。</span></li>
       <li><b>不扩成知识库。</b><span>它的定位是找回原句与核对引文，不做笔记工作台、文献计量或推荐内容。</span></li>
       <li><b>不动你的 Zotero。</b><span>只读取本机接口，增删与题录以 Zotero 为准。</span></li>
     </ul>
@@ -232,7 +386,7 @@
   <section class="get" id="get">
     <p class="eyebrow">下载</p>
     <h2 class="sec-h2">装到你自己的电脑上</h2>
-    <p class="version-line">Version <b data-rel="released">0.5.5</b> · 发布于 <span data-rel="date">2026-09-24</span> · <a href="https://github.com/sabercomo/MEFinder/releases">更新日志</a><span data-rel-dev-only> · v<span data-rel="dev">0.5.6</span> 迭代中（主题：<span data-rel="devTopic">Zotero 来源同步</span>）</span></p>
+    <p class="version-line">Version <b data-rel="released">0.5.5</b> · 发布于 <span data-rel="date">2026-09-24</span> · <a href="https://github.com/sabercomo/MEFinder/releases">更新日志</a><span data-rel-dev-only> · v<span data-rel="dev">0.5.7</span> 迭代中（主题：<span data-rel="devTopic">架构重构与跨平台验收</span>）</span></p>
     <div class="get-actions">
       <a class="btn btn-primary" href="https://github.com/sabercomo/MEFinder/releases/latest">到 GitHub Releases 下载</a>
       <a class="btn btn-quiet" href="https://github.com/sabercomo/MEFinder/releases">查看历史版本</a>
@@ -247,7 +401,14 @@
         <tr><th scope="row">macOS · Intel</th><td><a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-x86_64.dmg" data-asset="macos-x86_64.dmg">dmg</a> · <a href="https://github.com/sabercomo/MEFinder/releases/download/v0.5.5/MEFinder-v0.5.5-macos-x86_64.zip" data-asset="macos-x86_64.zip">zip</a></td><td class="num" data-size="macos-x86_64.dmg">99.0 MB</td><td><a href="https://github.com/sabercomo/MEFinder/releases/tag/v0.5.5" data-rel-tag>随附 sidecar</a></td></tr>
       </tbody>
     </table>
-    <p class="get-also">装好后先看这两处：<a href="https://github.com/sabercomo/MEFinder#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">快速开始</a> 讲怎么建库和导入；<a href="https://github.com/sabercomo/MEFinder/blob/main/docs/MCP_CLIENT_SETUP.md">MCP 配置</a> 讲怎么让 AI 助手读你的库。</p>
+    <ul class="get-notes">
+      <li><b>Windows</b><span>Windows 10 21H2 及以上。安装版可以在软件里检查更新，数据存在 <code>%LOCALAPPDATA%\MEFinder</code>；绿色版解压后双击「文献原句定位器.exe」，程序和数据都留在解压目录里。发布包没有代码签名，首次运行可能出现 SmartScreen 提示。</span></li>
+      <li><b>macOS</b><span>Apple 芯片需要 macOS 14 及以上，Intel 需要 macOS 12 及以上。打开 DMG 后把 MEFinder.app 拖进「应用程序」。应用没有经过 Apple 公证，第一次打开被拦下时，到「系统设置 → 隐私与安全性」点「仍要打开」。</span></li>
+      <li><b>Homebrew</b><span>需要 macOS 14 及以上。新版 Homebrew 要先信任这个 tap；之后用 <code>brew upgrade --cask mefinder</code> 升级。</span><pre class="get-cmd"><code>brew trust sabercomo/mefinder
+brew tap sabercomo/mefinder
+brew install --cask mefinder</code></pre></li>
+    </ul>
+    <p class="get-also">装好后先看这两处：<a href="https://github.com/sabercomo/MEFinder#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B">快速开始</a> 讲怎么建库和导入；<a href="https://github.com/sabercomo/MEFinder/blob/main/docs/MCP_CLIENT_SETUP.md">MCP 配置</a> 讲怎么把库接进你的 Agent。</p>
   </section>
 
   <section class="origin">
@@ -279,7 +440,7 @@
       <a href="https://github.com/sabercomo/MEFinder/blob/main/THIRD_PARTY_LICENSES">第三方声明</a>
     </nav>
   </div>
-  <p class="colophon">MEFinder <span data-rel-dev-only>v<span data-rel="dev">0.5.6</span>（迭代中）· </span>最新已发布 v<span data-rel="released">0.5.5</span> · <span data-rel="date">2026-09-24</span> · 支持格式 <code>.pdf .docx .epub</code> · 检索模式 5 · 引文格式 5 · MCP 工具 13 · 数据库 schema v8 · 本页界面截图均来自 MEFinder 真实运行画面，演示语料为四段短引文并标注引用页码；未使用统计指标、用户数或推荐内容。</p>
+  <p class="colophon"><span class="colophon-facts">MEFinder <span data-rel-dev-only>v<span data-rel="dev">0.5.7</span>（迭代中）· </span>最新已发布 v<span data-rel="released">0.5.5</span> · <span data-rel="date">2026-09-24</span> · 支持格式 <code>.pdf .docx .epub</code> · 检索模式 5 · 引文格式 5 · MCP 工具 13 · 数据库 schema v8</span><span class="colophon-note">本页界面截图均来自 MEFinder 真实运行画面，演示语料为四段短引文并标注引用页码；未使用统计指标、用户数或推荐内容。</span></p>
 </footer>
 
 <script src="release.js"></script>

@@ -8,12 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
-from .connection import open_writable_index
+from .connection import open_writable_index, table_exists
 from .index_schema import DATABASE_SCHEMA_VERSION
 from .schema_installers import (
     install_document_group_schema,
     install_text_alignment_schema,
     install_translation_workspace_schema,
+    install_zotero_sync_schema,
 )
 
 
@@ -31,7 +32,7 @@ def _install_text_segment_paragraph_spans(
 ) -> bool:
     table_name = "text_segment_paragraph_spans"
     index_name = "idx_segment_paragraph_spans_source_position"
-    changed = not _table_exists(connection, table_name) or not _index_exists(
+    changed = not table_exists(connection, table_name) or not _index_exists(
         connection, index_name
     )
     connection.execute(
@@ -58,13 +59,14 @@ def _install_text_segment_paragraph_spans(
 
 # v1 -> v2 changed paragraph payload/search storage and is still performed by
 # database.ensure_database_search_index because it publishes a replacement
-# file atomically. v3 through v7 are pure additive DDL and belong here.
+# file atomically. v3 through v8 are pure additive DDL and belong here.
 INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=3, apply=install_document_group_schema),
     Migration(target_version=4, apply=install_text_alignment_schema),
     Migration(target_version=5, apply=_install_text_segment_paragraph_spans),
     Migration(target_version=6, apply=install_text_alignment_schema),
     Migration(target_version=7, apply=install_translation_workspace_schema),
+    Migration(target_version=8, apply=install_zotero_sync_schema),
 )
 
 
@@ -104,7 +106,7 @@ def migrate_index_database(
         changed = current_version != DATABASE_SCHEMA_VERSION
         for migration in pending:
             changed = migration.apply(connection) or changed
-        if _table_exists(connection, "metadata"):
+        if table_exists(connection, "metadata"):
             connection.execute(
                 "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
                 (
@@ -120,15 +122,6 @@ def migrate_index_database(
         raise
     finally:
         connection.close()
-
-
-def _table_exists(connection: sqlite3.Connection, name: str) -> bool:
-    return (
-        connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
-        ).fetchone()
-        is not None
-    )
 
 
 def _index_exists(connection: sqlite3.Connection, name: str) -> bool:

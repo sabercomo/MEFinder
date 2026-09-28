@@ -28,7 +28,7 @@ from src.me_finder.web import make_handler
 
 WEB_SOURCE = "\n".join(
     Path(f"src/me_finder/{name}").read_text(encoding="utf-8")
-    for name in ("web.py", "web_runtime.py", "http_routes.py")
+    for name in ("web.py", "web_runtime.py", "import_assembly.py", "http_routes.py", "upload_import_controller.py")
 )
 ORCHESTRATOR_SOURCE = Path(
     "src/me_finder/application/import_orchestrator.py"
@@ -144,7 +144,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_resume_requires_an_explicit_api_call_before_queueing(self) -> None:
         self.assertIn('"/api/import-resumable":', WEB_SOURCE)
-        self.assertIn('"/api/import-resume": import_job_controller.resume', WEB_SOURCE)
+        self.assertIn('"/api/import-resume": mutating(import_job_controller.resume)', WEB_SOURCE)
         resume_start = ORCHESTRATOR_SOURCE.index("def resume_import_job(")
         resume_end = ORCHESTRATOR_SOURCE.index(
             "def dismiss_import_job(", resume_start
@@ -187,7 +187,8 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_cancel_all_button_preserves_item_dismiss_and_cancels_serially(self) -> None:
         self.assertIn('id="import-cancel-all-btn"', TEMPLATE_SOURCE)
-        self.assertIn('onclick="cancelAllImports()"', TEMPLATE_SOURCE)
+        self.assertIn('id="import-cancel-all-btn"', TEMPLATE_SOURCE)
+        self.assertIn('data-action="templateClick068"', TEMPLATE_SOURCE)
         self.assertIn(">全部取消</button>", TEMPLATE_SOURCE)
         self.assertIn("function cancelAllImports()", APP_SOURCE)
         self.assertIn("function cancellableImportQueue()", APP_SOURCE)
@@ -204,8 +205,8 @@ class ImportResumeWebWiringTests(unittest.TestCase):
             APP_SOURCE,
         )
         # 每条任务右上角的 × 和逐项继续入口必须继续存在。
-        self.assertIn('class="import-item-remove" onclick="removeImport(', APP_SOURCE)
-        self.assertIn("onclick=\"resumeImport(\\'", APP_SOURCE)
+        self.assertIn("remove.dataset.action = 'removeImport'", APP_SOURCE)
+        self.assertIn("'resumeImport', q.id, true", APP_SOURCE)
         self.assertIn("fetch('/api/import-resume-dismiss'", APP_SOURCE)
 
     def test_resume_revalidates_identity_and_prevents_duplicate_workers(self) -> None:
@@ -244,7 +245,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
         )
         self.assertIn("jobs=self", ORCHESTRATOR_SOURCE)
         self.assertIn(
-            '"/api/import-resume-dismiss": import_job_controller.dismiss',
+            '"/api/import-resume-dismiss": mutating(import_job_controller.dismiss)',
             WEB_SOURCE,
         )
         self.assertIn("function removeImport(id, options)", APP_SOURCE)
@@ -266,7 +267,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_interrupted_vision_job_can_switch_to_mineru_without_upload(self) -> None:
         self.assertIn(
-            '"/api/import-retry-mineru": import_job_controller.retry_with_mineru',
+            '"/api/import-retry-mineru": mutating(import_job_controller.retry_with_mineru)',
             WEB_SOURCE,
         )
         self.assertIn("force_mineru=True", IMPORT_JOB_CONTROLLER_SOURCE)
@@ -344,7 +345,7 @@ class ImportResumeWebWiringTests(unittest.TestCase):
 
     def test_document_removal_blocks_running_parser_and_clears_old_jobs(self) -> None:
         self.assertIn(
-            '"/api/documents/remove": document_lifecycle_controller.remove',
+            '"/api/documents/remove": mutating(document_lifecycle_controller.remove)',
             WEB_SOURCE,
         )
         self.assertIn(
@@ -773,7 +774,7 @@ class SinglePDFReservationTests(unittest.TestCase):
                 root.mkdir()
                 os.chdir(root)
                 with patch(
-                    "src.me_finder.web_runtime.detect_imported_pdf",
+                    "src.me_finder.import_assembly.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "native_text",
                         "pdf_page_count": 1,
@@ -821,7 +822,7 @@ class SinglePDFReservationTests(unittest.TestCase):
                 root.mkdir()
                 os.chdir(root)
                 with patch(
-                    "src.me_finder.web_runtime.detect_imported_pdf",
+                    "src.me_finder.import_assembly.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "native_text",
                         "pdf_page_count": 1,
@@ -926,19 +927,19 @@ class SinglePDFReservationTests(unittest.TestCase):
                 root.mkdir()
                 os.chdir(root)
                 with patch(
-                    "src.me_finder.web_runtime.detect_imported_pdf",
+                    "src.me_finder.import_assembly.detect_imported_pdf",
                     return_value={
                         "detected_pdf_type": "broken_text",
                         "pdf_page_count": 1,
                     },
                 ), patch(
-                    "src.me_finder.web_runtime.parse_pdf_with_mineru",
+                    "src.me_finder.import_assembly.parse_pdf_with_mineru",
                     return_value=None,
                 ) as mineru, patch(
-                    "src.me_finder.web_runtime.extract_pdf_source",
+                    "src.me_finder.import_assembly.extract_pdf_source",
                     side_effect=fake_pdf_extraction,
                 ), patch(
-                    "src.me_finder.web_runtime.replace_source_in_database",
+                    "src.me_finder.import_assembly.replace_source_in_database",
                     side_effect=flaky_replace,
                 ):
                     handler, server = self._runtime(root)

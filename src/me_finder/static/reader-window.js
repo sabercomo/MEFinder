@@ -10,9 +10,13 @@
   }
 
   async function refreshPreferences() {
-    var response = await fetch('/api/preferences');
-    var data = await response.json();
-    if (!response.ok || data.error) throw new Error(data.error || '读取设置失败');
+    var data;
+    try {
+      data = await global.MEFinderApi.requestJSON('/api/preferences');
+    } catch (error) {
+      if (error.status && !(error.payload && error.payload.error)) error.message = '读取设置失败';
+      throw error;
+    }
     var appearance = data.appearance;
     var custom = {};
     Object.keys(appearance.custom_themes).forEach(function (id) {

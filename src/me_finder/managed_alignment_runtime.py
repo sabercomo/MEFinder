@@ -72,6 +72,14 @@ _MODELS_DIR = "models"
 # How long an install/upgrade/uninstall waits for an in-flight compute task
 # before giving up (so a stuck task cannot wedge the operation forever).
 _MAINTENANCE_WAIT_TIMEOUT = 30 * 60
+# Windows keeps a just-exited interpreter image, or a file Defender / the search
+# indexer is scanning, open for a moment, so deleting it fails with WinError
+# 5/32/33 (or 145 for a parent whose child is still delete-pending). Uninstall
+# retries those briefly instead of stranding a half-deleted runtime.
+_REMOVE_TREE_ATTEMPTS = 10
+_REMOVE_TREE_INITIAL_DELAY_SECONDS = 0.1
+_REMOVE_TREE_MAX_DELAY_SECONDS = 1.0
+_TRANSIENT_REMOVE_WINERRORS = frozenset({5, 32, 33, 145})
 
 # --- Download robustness + domestic mirrors ------------------------------- #
 # The install pulls three artifacts across international hosts (the uv binary
@@ -1288,10 +1296,25 @@ class ManagedAlignmentRuntime:
     @staticmethod
     def _remove_tree(path: Path, *, strict: bool = False) -> None:
         if strict:
-            if path.is_dir():
-                shutil.rmtree(path)
-            elif path.exists():
-                path.unlink()
+            for attempt in range(_REMOVE_TREE_ATTEMPTS):
+                try:
+                    if path.is_dir():
+                        shutil.rmtree(path)
+                    elif path.exists():
+                        path.unlink()
+                    return
+                except OSError as exc:
+                    transient = (
+                        getattr(exc, "winerror", None) in _TRANSIENT_REMOVE_WINERRORS
+                    )
+                    if not transient or attempt + 1 >= _REMOVE_TREE_ATTEMPTS:
+                        raise
+                    time.sleep(
+                        min(
+                            _REMOVE_TREE_INITIAL_DELAY_SECONDS * (2**attempt),
+                            _REMOVE_TREE_MAX_DELAY_SECONDS,
+                        )
+                    )
             return
         if path.is_dir():
             shutil.rmtree(path, ignore_errors=True)

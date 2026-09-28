@@ -318,18 +318,6 @@ function importStepsFor(q) {
   return ['读取文件', '类型检测', '本地解析', '建立索引'];
 }
 
-function importRouteBadge(q) {
-  if (q.type !== 'pdf' || !q.detectedType) return '';
-  var mineru = q.route === 'mineru';
-  var localMineru = mineru && q.providerId === 'mineru-local';
-  var vision = q.route === 'vision';
-  var localOCR = q.route === 'local_ocr';
-  return '<span class="import-route-badge ' + (mineru ? 'mineru' : vision ? 'vision' : localOCR ? 'local-ocr' : 'native') + '">'
-    + esc(pdfTypeLabel(q.detectedType))
-    + (localMineru ? ' · 本地 MinerU' : mineru ? ' · 提交 MinerU' : vision ? ' · ' + esc(q.providerName || '其他视觉 API') : localOCR ? ' · ' + esc(q.providerName || '本地 OCR') : ' · 本地解析')
-    + '</span>';
-}
-
 function localOCRProviderName(providerId) {
   return {
     'ndlocr-lite': 'NDL 日文 OCR',
@@ -538,7 +526,7 @@ function metadataStatusLabel(status) {
 
 // 书目元数据来源中文名。原在 40-bibliography.js，纯映射。
 function metadataSourceLabel(source) {
-  return ({manual:'人工维护',auto:'自动识别',automatic_recognition:'自动识别',pdf_metadata:'PDF 元数据',epub_package:'EPUB 元数据'})[source] || source || '未知';
+  return ({manual:'人工维护',auto:'自动识别',automatic_recognition:'自动识别',pdf_metadata:'PDF 元数据',epub_package:'EPUB 元数据',zotero:'Zotero 元数据',zotero_jasminum:'Zotero 元数据（茉莉花）'})[source] || source || '未知';
 }
 
 // 合并书源的书目字段：优先取顶层非空值覆盖嵌套元数据。原在 40-bibliography.js。
@@ -560,22 +548,6 @@ function bibliographicMissingText(meta) {
   }).join('、') : '';
 }
 
-// 主题预览缩略图标记。原在 60-settings.js，纯字符串拼接。
-// styleAttr 非空时（新预设/自定义主题）以内联派生 token 着色；内置 CSS 主题
-// 仍靠 data-preview-theme 的样式块，缩略图内部一律用 var(--token)，天然复用真实设计 token。
-function themePreviewMarkup(themeId, styleAttr) {
-  // 色板样张同时展示按钮色与正文强调色，避免把两个不同角色误认成同一颜色。
-  return '<span class="theme-preview" data-preview-theme="' + themeId + '"' + (styleAttr ? ' style="' + styleAttr + '"' : '') + ' aria-hidden="true">'
-    + '<span class="theme-swatch-top">'
-    + '<span class="theme-swatch-aa">Aa</span>'
-    + '<span class="theme-swatch-colors"><span class="theme-swatch-accent"></span><span class="theme-swatch-highlight"></span></span>'
-    + '</span>'
-    + '<span class="theme-swatch-card">'
-    + '<span class="theme-swatch-line"></span>'
-    + '<span class="theme-swatch-line is-short"></span>'
-    + '</span></span>';
-}
-
 // 派生 token 的内联 style 串（新预设/自定义主题的缩略图与卡片着色用）。
 function themePreviewInlineStyle(def) {
   if (typeof deriveThemeTokens !== 'function') return '';
@@ -585,22 +557,6 @@ function themePreviewInlineStyle(def) {
     if (tokens.hasOwnProperty(key)) out.push(key + ':' + tokens[key]);
   }
   return out.join(';');
-}
-
-// 主题选项按钮标记。现由 THEME_PRESETS/自定义主题驱动，点击走 selectThemeChoice。
-// preset: { id, name, label, mode, builtinCss, desc, accent, background, foreground, contrast }
-function themeOptionMarkup(preset) {
-  // 画廊已按当前明暗模式过滤，浅/深徽标是废话，去掉；仅自定义主题标一枚小徽标。
-  var name = preset.label || preset.name || preset.id;
-  var desc = preset.desc || '';
-  var styleAttr = preset.builtinCss ? '' : themePreviewInlineStyle(preset);
-  var chip = preset.custom ? '<span class="theme-option-tag">自定义</span>' : '';
-  return '<button class="theme-option" type="button" data-theme-choice="' + preset.id + '" role="radio" aria-checked="false" onclick="selectThemeChoice(\'' + preset.id + '\')">'
-    + themePreviewMarkup(preset.id, styleAttr)
-    + '<span class="theme-option-head"><span class="theme-option-identity"><span class="theme-option-name">' + esc(name) + '</span>' + chip + '</span>'
-    + '<span class="theme-option-check" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span></span>'
-    + (desc ? '<span class="theme-option-description">' + esc(desc) + '</span>' : '')
-    + '</button>';
 }
 
 // 卷册索引：source_file_id → volume。原在 20-search.js，纯。
@@ -624,153 +580,12 @@ function matchTypeLabel(t) {
   return m[t] || t || '';
 }
 
-// 双开页分段的引用页码摘要文案。原在 50-calibration.js，纯字符串，依赖 spreadCitationPair。
-function spreadSummaryHtml(seg) {
-  var firstPdf = seg.pdf_page_start != null ? seg.pdf_page_start + 1 : 1;
-  var pair = spreadCitationPair(seg);
-  if (!pair.mapped) {
-    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
-      + ' PDF 第 ' + firstPdf + ' 页 → 该分段未设引用页码，仅按双开切分';
-  }
-  return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
-    + ' PDF 第 ' + firstPdf + ' 页 → 左半页 <b>引文 ' + pair.left + ' 页</b>，右半页 <b>引文 ' + pair.right + ' 页</b>';
-}
-
-// 双开页分段设置面板的 HTML。原在 50-calibration.js，纯字符串拼接（onclick 均为字面量）。
-function segmentSpreadPanelRow(seg, index) {
-  if ((seg.layout_mode || 'single') !== 'spread') return '';
-  var direction = seg.reading_direction === 'rtl' ? 'rtl' : 'ltr';
-  var gp = spreadGutterPercent(seg);
-  var pair = spreadCitationPair(seg);
-  var leftFirst = direction !== 'rtl';
-  var leftLabel = pair.mapped ? '引文 ' + pair.left + ' 页' : '不映射';
-  var rightLabel = pair.mapped ? '引文 ' + pair.right + ' 页' : '不映射';
-  var diagram = '<div class="spread-diagram" id="spread-diagram-' + index + '">'
-    + '<div class="spread-half left" id="spread-half-left-' + index + '" style="width:' + gp + '%">'
-    + '<span class="spread-badge" id="spread-badge-left-' + index + '">' + (leftFirst ? '1' : '2') + '</span>'
-    + '<span class="spread-half-name">左半页</span>'
-    + '<span class="spread-half-page" id="spread-page-left-' + index + '">' + leftLabel + '</span>'
-    + '</div>'
-    + '<div class="spread-half right" id="spread-half-right-' + index + '" style="width:' + (100 - gp) + '%">'
-    + '<span class="spread-badge alt" id="spread-badge-right-' + index + '">' + (leftFirst ? '2' : '1') + '</span>'
-    + '<span class="spread-half-name">右半页</span>'
-    + '<span class="spread-half-page" id="spread-page-right-' + index + '">' + rightLabel + '</span>'
-    + '</div>'
-    + '<div class="spread-gutter-line" id="spread-gutter-line-' + index + '" style="left:' + gp + '%"></div>'
-    + '</div>';
-  var controls = '<div class="spread-controls">'
-    + '<div class="spread-field"><span class="spread-field-label">阅读方向</span>'
-    + '<div class="segment-direction-control" role="group" aria-label="双开页阅读方向">'
-    + '<button class="segment-direction-btn' + (direction === 'ltr' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'ltr' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'ltr\')">左→右</button>'
-    + '<button class="segment-direction-btn' + (direction === 'rtl' ? ' is-active' : '') + '" type="button" aria-pressed="' + (direction === 'rtl' ? 'true' : 'false') + '" onclick="setSegmentReadingDirection(' + index + ',\'rtl\')">右→左</button>'
-    + '</div></div>'
-    + '<div class="spread-field"><div class="spread-field-row"><span class="spread-field-label">中缝位置</span><span class="spread-gutter-out" id="spread-gutter-out-' + index + '">' + gp + '%</span></div>'
-    + '<input class="spread-gutter-range" type="range" min="30" max="70" step="1" value="' + gp + '" aria-label="中缝横向位置" oninput="updateSegmentGutter(' + index + ',this.value)">'
-    + '</div></div>';
-  var summary = '<div class="spread-summary" id="spread-summary-' + index + '">' + spreadSummaryHtml(seg) + '</div>';
-  return '<tr class="segment-spread-row"><td colspan="7">'
-    + '<div class="segment-spread-panel">'
-    + '<div class="spread-panel-main">' + diagram + controls + '</div>'
-    + summary
-    + '</td></tr>';
-}
-
 // 详情上下文条目拼成纯文本。原在 20-search.js，纯数组处理。
 function detailContextText(items) {
   if (!Array.isArray(items)) return '';
   return items.map(function(item) {
     return item && item.text != null ? String(item.text) : '';
   }).filter(Boolean).join('\n');
-}
-
-// HTML 转义。原在 20-search.js，纯函数，前移以消除 06-pure 对外部符号的依赖。
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// 校准状态统计的图标 SVG。原在 50-calibration.js，纯映射。
-function statusStatIcon(icon) {
-  var paths = {
-    document:'<path d="M6 3h9l3 3v15H6z"/><path d="M15 3v4h4"/>',
-    book:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/>',
-    check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/>',
-    clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    notice:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>',
-    danger:'<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/>'
-  };
-  return '<span class="status-stat__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[icon] || paths.notice) + '</svg></span>';
-}
-
-// 校准状态芯片的图标 SVG。原在 50-calibration.js，纯映射。
-function statusChipIcon(group) {
-  var icons = {
-    calibrated:'<circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/>',
-    pending:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    review:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>',
-    failed:'<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17.5h.01"/>',
-    mapping:'<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/>'
-  };
-  var spinning = group === 'mapping' ? ' is-spinning' : '';
-  return '<span class="status-chip__icon' + spinning + '" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (icons[group] || icons.pending) + '</svg></span>';
-}
-
-// 校准状态统计按钮。原在 50-calibration.js，纯字符串，依赖 statusStatIcon。
-function statusStatButton(status, label, value, variant, icon, activeFilter, handlerName) {
-  return '<button type="button" data-status="' + status + '" class="status-stat status-stat--' + variant + (activeFilter === status ? ' active' : '') + '" onclick="' + handlerName + '(\'' + status + '\')">'
-    + statusStatIcon(icon)
-    + '<span class="status-stat__label">' + label + '</span>'
-    + '<span class="status-stat__count">' + value + '</span></button>';
-}
-
-// 书目补全来源菜单。原在 40-bibliography.js，纯字符串。
-function bibSourceMenuHTML(sid, active) {
-  function item(source, label, note) {
-    return '<button class="bib-menu-item' + (active === source ? ' active' : '') + '" type="button" role="menuitem" onclick="bibSetSource(event,\'' + sid + '\',\'' + source + '\')">' + label
-      + (note ? '<span class="bib-menu-note">' + note + '</span>' : '') + '</button>';
-  }
-  return item('auto', '智能补全', '推荐')
-    + item('cnki', '知网补全', '中文')
-    + item('crossref', 'Crossref 补全', '外文')
-    + '<div class="bib-menu-sep"></div>'
-    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'paste\',\'' + sid + '\')">粘贴引文</button>'
-    + '<button class="bib-menu-item" type="button" role="menuitem" onclick="bibMenuAction(event,\'opencnki\',\'' + sid + '\')">打开知网检索</button>';
-}
-
-// 抽屉信息行。原在 40-bibliography.js，仅依赖 esc。
-function drawerInfoRow(label, value) {
-  return '<div class="drawer-info-row"><span class="drawer-info-label">' + esc(label) + '</span><span class="drawer-info-value">' + esc(String(value || '—')) + '</span></div>';
-}
-
-// 书目缺失徽标。原在 40-bibliography.js，依赖 bibliographicMissingText + esc。
-function bibliographicMissingBadge(meta) {
-  var text = bibliographicMissingText(meta);
-  if (!text) return '';
-  return '<span class="bibliographic-missing" title="ISBN、ISSN 与 DOI 不计入引文必需字段"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/></svg><span>' + esc(text) + '</span></span>';
-}
-
-// 联网补全候选卡骨架。三套源（知网/图书目录/Crossref）结构与类名完全一致，
-// 差异全部由 config 描述：标题/详情兜底文案、详情中段字段、详情后缀、动作按钮。
-// 类名固定为 cnki-candidate*（CSS 与批量列表共用，不得改动）。纯函数，只依赖 esc。
-function candidateCardHTML(sourceId, candidate, index, config) {
-  var meta = candidate.metadata || {};
-  var match = candidate.match || {};
-  var levelLabel = match.level === 'high' ? '高匹配' : (match.level === 'medium' ? '需核对' : '低匹配');
-  var detail = [meta.author, meta[config.detailMidField], candidate.publish_date || meta.publish_year].filter(Boolean).join(' · ');
-  var reasons = (match.reasons || []).join('、');
-  var conflicts = (match.conflicts || []).join('、');
-  var extra = config.detailExtra && meta[config.detailExtra.field]
-    ? ' · ' + config.detailExtra.label + ' ' + esc(meta[config.detailExtra.field]) : '';
-  var actions = config.actions.map(function(btn) {
-    return '<button class="action-btn' + (btn.primary ? ' primary' : '') + '" type="button" onclick="' + btn.handler + '(\'' + esc(sourceId) + '\',' + index + ')">' + btn.label + '</button>';
-  }).join('');
-  return '<div class="cnki-candidate ' + esc(match.level || 'low') + '">'
-    + '<div class="cnki-candidate-main"><div class="cnki-candidate-title">' + esc(meta.title || config.titleFallback) + '</div>'
-    + '<div class="cnki-candidate-detail">' + esc(detail || config.detailFallback) + extra + '</div>'
-    + '<div class="cnki-candidate-match"><span>' + esc(levelLabel) + (match.score != null ? ' · ' + Math.round(Number(match.score) * 100) + '%' : '') + '</span>'
-    + (reasons ? '<span>' + esc(reasons) + '</span>' : '')
-    + (conflicts ? '<span class="has-warning">冲突：' + esc(conflicts) + '</span>' : '') + '</div></div>'
-    + '<div class="cnki-candidate-actions">' + actions + '</div>'
-    + '</div>';
 }
 
 // 三套候选卡的差异配置（纯数据；handler 为 40-bibliography.js 中的按钮回调名）。
@@ -807,12 +622,7 @@ function isLibraryDeleteSelectable(source) {
 // 自动标定失败原因转中文提示（纯函数）
 function autoFailureReasons(reasons) {
   var labels = {no_page_labels:'没有 PDF Page Labels',no_bookmarks:'没有数字书签',no_mineru_candidates:'现有 MinerU 结果没有可靠页码候选',no_edge_candidates:'页边区域未发现页码候选',sequence_not_found:'未找到稳定递增页码序列',spread_sequence_not_found:'识别到双开布局，但未找到可靠的双页页码序列',source_missing:'原始 PDF 文件不存在'};
-  return reasons.map(function(reason) { return '• ' + (labels[reason] || reason); }).join('<br>');
-}
-
-// 页面详情行渲染：拼接 label/value 的转义 HTML（纯函数）
-function pdRow(label, value) {
-  return '<div class="page-detail-row"><span class="page-detail-label">' + esc(label) + '</span><span>' + esc(String(value)) + '</span></div>';
+  return reasons.map(function(reason) { return '• ' + (labels[reason] || reason); }).join('\n');
 }
 
 // 纯函数：由滚动容器与指针事件算出框选锚点坐标（读参数，无副作用）
@@ -848,45 +658,6 @@ function dragSelectionHits(element, box, scroller) {
     && top + rect.height >= box.top && top <= box.bottom;
 }
 
-// 纯函数：给定页码样式与索引，渲染分段页码样式选择控件的 HTML（无副作用）
-function segmentNumberStyleControl(style, index) {
-  var values = ['arabic','roman_lower','roman_upper','none'];
-  return '<div class="app-select segment-style-select" id="segment-style-select-' + index + '">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-style-select-' + index + '\')"><span class="app-select-value">' + segmentNumberStyleLabel(style) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
-    + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
-      return '<button class="app-select-option' + (style === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentNumberStyle(event,' + index + ',\'' + value + '\')">' + segmentNumberStyleLabel(value) + '</button>';
-    }).join('') + '</div></div>';
-}
-
-// 纯函数：给定版式与索引，渲染分段版式选择控件的 HTML（无副作用）
-function segmentLayoutControl(layout, index) {
-  var values = ['single','spread'];
-  return '<div class="app-select segment-layout-select" id="segment-layout-select-' + index + '">'
-    + '<button class="app-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleAppSelect(event,\'segment-layout-select-' + index + '\')"><span class="app-select-value">' + segmentLayoutLabel(layout) + '</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></button>'
-    + '<div class="app-select-menu" role="listbox">' + values.map(function(value) {
-      return '<button class="app-select-option' + (layout === value ? ' is-selected' : '') + '" type="button" data-value="' + value + '" onclick="setSegmentLayout(event,' + index + ',\'' + value + '\')">' + segmentLayoutLabel(value) + '</button>';
-    }).join('') + '</div></div>';
-}
-
-// 纯函数：给定扫描条目与勾选状态，渲染扫描列表行的 HTML（无副作用）
-function scanEntryRow(entry, index, checkable, checked) {
-  var typeCls = entry.file_type === 'pdf' ? 'pdf' : 'word';
-  var note = '';
-  if (entry.status === 'processing') note = '已提交，正在导入…';
-  else if (entry.status === 'name_conflict') note = '与已导入文献同名但大小不同，请重命名后再导入';
-  else if (entry.needs_ocr === true) note = '需 OCR';
-  else if (entry.needs_ocr === null && entry.file_type === 'pdf' && entry.status === 'new') note = '未预检测，导入时自动判断；非原生文本将提交 MinerU';
-  return '<div class="scan-row' + (entry.status === 'imported' ? ' is-imported' : '') + '">'
-    + (checkable
-      ? '<input type="checkbox" class="scan-check" id="scan-check-' + index + '" data-index="' + index + '"' + (checked ? ' checked' : '') + ' onchange="handleScanCheckChange(this)">'
-      : '<span class="scan-check-placeholder"></span>')
-    + '<span class="type-badge ' + typeCls + '">' + (entry.file_type === 'pdf' ? 'PDF' : entry.file_type === 'epub' ? 'EPUB' : 'DOCX') + '</span>'
-    + '<label class="scan-row-name"' + (checkable ? ' for="scan-check-' + index + '"' : '') + ' title="' + esc(entry.path) + '">' + esc(entry.name) + '</label>'
-    + '<span class="scan-row-size">' + formatFileSize(entry.size_bytes) + '</span>'
-    + (note ? '<span class="scan-row-note">' + esc(note) + '</span>' : '')
-    + '</div>';
-}
-
 // 纯常量：详情页上下文预览的最大可见字符数（原在 00-state.js，无副作用）
 const DETAIL_CONTEXT_PREVIEW_CHARS = 180;
 
@@ -900,22 +671,20 @@ function detailContextPreview(text, side) {
   return characters.slice(0, DETAIL_CONTEXT_PREVIEW_CHARS).join('') + '…';
 }
 
-// 纯函数：给定上下文条目与方向，渲染详情页上/下文区块的 HTML（依赖已在 06-pure 的 detailContextText/detailContextPreview/esc + 常量，无副作用）
-function detailContextHTML(items, side) {
-  const fullText = detailContextText(items);
-  if (!fullText) return '';
-  const isBefore = side === 'before';
-  const label = isBefore ? '上文' : '下文';
-  const contentId = 'detail-context-' + side;
-  const characterTruncated = Array.from(fullText).length > DETAIL_CONTEXT_PREVIEW_CHARS;
-  return '<section class="detail-context-section detail-context-' + side + '">'
-    + '<div class="detail-context-heading">'
-    + '<span class="detail-context-label">' + label + '</span>'
-    + '<button class="detail-context-toggle" type="button" aria-label="展开' + label + '" aria-expanded="false" aria-controls="' + contentId + '" data-context-label="' + label + '" data-character-truncated="' + (characterTruncated ? 'true' : 'false') + '"' + (characterTruncated ? '' : ' hidden') + ' onclick="toggleDetailContext(this)">展开</button>'
-    + '</div>'
-    + '<div class="detail-context" id="' + contentId + '" role="region" aria-label="' + label + '">'
-    + '<span class="detail-context-preview">' + esc(detailContextPreview(fullText, side)) + '</span>'
-    + '<span class="detail-context-full" hidden>' + esc(fullText) + '</span>'
-    + '</div>'
-    + '</section>';
+// 纯函数：组件下载的字节数与剩余时间文案（本地 OCR 与托管 MinerU 共用，原在 70-vision.js）。
+function localOCRByteSize(value) {
+  var bytes = Number(value) || 0;
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function localOCREstimatedWait(value) {
+  var seconds = Math.max(0, Number(value) || 0);
+  if (!seconds) return '即将完成';
+  if (seconds < 60) return '预计剩余约 ' + Math.max(10, Math.ceil(seconds / 10) * 10) + ' 秒';
+  if (seconds < 3600) return '预计剩余约 ' + Math.ceil(seconds / 60) + ' 分钟';
+  var hours = Math.floor(seconds / 3600);
+  var minutes = Math.ceil((seconds % 3600) / 60);
+  return '预计剩余约 ' + hours + ' 小时' + (minutes ? ' ' + minutes + ' 分钟' : '');
 }

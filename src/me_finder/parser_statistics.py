@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Mapping, Optional
 
+from .persistence.connection import connect_index
+
 
 MINERU_PROVIDER_ID = "mineru-cloud"
 
@@ -87,7 +89,7 @@ def _indexed_pdf_books(database_path: Path) -> list[Dict[str, object]]:
     if not database_path.is_file():
         return []
     try:
-        connection = sqlite3.connect(str(database_path))
+        connection = connect_index(str(database_path), row_factory=None)
     except sqlite3.Error:
         return []
     try:

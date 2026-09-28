@@ -6,11 +6,11 @@ import copy
 import json
 import re
 import shutil
-import sqlite3
 import uuid
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from .persistence.connection import connect_index
 from .database import backup_database, delete_sources_from_database
 from .import_config_store import locked_import_config, save_import_config
 
@@ -301,7 +301,7 @@ class DocumentDeletionService:
         return retained
 
     def _source_record(self, source_file_id: str) -> Dict[str, object]:
-        connection = sqlite3.connect(str(self.database_path))
+        connection = connect_index(str(self.database_path), row_factory=None)
         try:
             row = connection.execute(
                 "SELECT source_type, payload_json FROM source_files WHERE source_file_id = ?",

@@ -7,7 +7,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -143,7 +143,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -272,7 +272,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -408,7 +408,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -537,7 +537,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -1647,7 +1647,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -6771,7 +6771,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -7881,7 +7881,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -8017,7 +8017,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -8041,7 +8041,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -8504,7 +8504,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -8640,7 +8640,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -9755,7 +9755,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -9779,7 +9779,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -10959,7 +10959,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -12139,7 +12139,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,
@@ -13319,7 +13319,7 @@
     "index_metadata": {
      "anchor_spec_version": 1,
      "database_built_at": "<timestamp>",
-     "database_schema_version": 7,
+     "database_schema_version": 8,
      "eligible_paragraph_count": 736,
      "paragraph_count": 736,
      "paragraph_fts_version": 1,

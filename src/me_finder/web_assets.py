@@ -10,6 +10,9 @@ from . import __version__
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 
+# 随包分发的 Vue 3 全局构建（试点，见 static/vendor/README.md）；离线可用，不引入 Node 构建。
+VUE_ASSET = "static/vendor/vue.global.prod.js"
+
 
 def _load_asset(relative: str) -> str:
     return (_PACKAGE_DIR / relative).read_text(encoding="utf-8")
@@ -51,13 +54,21 @@ def _load_app_css() -> str:
     return bundled if bundled else _load_asset("static/app.css")
 
 
+def _load_reader_js() -> str:
+    """Return the ordered reader modules shared by both application windows."""
+
+    return _load_asset_dir("static/reader", ".js")
+
+
 HTML = (
     _load_asset("templates/index.html")
     .replace("/*__APP_CSS__*/", _load_app_css(), 1)
     .replace("/*__READER_CSS__*/", _load_asset("static/reader.css"), 1)
     .replace("//__APP_JS__", _load_app_js(), 1)
-    .replace("//__READER_JS__", _load_asset("static/reader.js"), 1)
+    .replace("//__READER_JS__", _load_reader_js(), 1)
     .replace("__APP_VERSION__", __version__)
+    # Vue 最后替换：它是第三方压缩代码，放在最后可保证前面的占位替换不会扫进它的正文。
+    .replace("//__VUE_JS__", _load_asset(VUE_ASSET), 1)
 )
 
 
@@ -66,7 +77,9 @@ READER_WINDOW_HTML = (
     .replace("/*__APP_CSS__*/", _load_app_css(), 1)
     .replace("/*__READER_CSS__*/", _load_asset("static/reader.css"), 1)
     .replace("//__THEME_JS__", _load_asset("static/js/05-theme-engine.js"), 1)
-    .replace("//__READER_JS__", _load_asset("static/reader.js"), 1)
+    .replace("//__API_JS__", _load_asset("static/js/07-api.js"), 1)
+    .replace("//__ALIGNMENT_JOBS_JS__", _load_asset("static/js/15-alignment-jobs.js"), 1)
+    .replace("//__READER_JS__", _load_reader_js(), 1)
     .replace("//__WINDOW_JS__", _load_asset("static/reader-window.js"), 1)
 )
 

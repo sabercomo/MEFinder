@@ -967,30 +967,6 @@ class MatchTypeLabelTests(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class ThemeMarkupTests(unittest.TestCase):
-    """主题预览/选项的纯字符串构造：只校验结构骨架，不锁死整段 HTML。"""
-
-    def test_preview_wraps_theme_id(self):
-        html = _call("themePreviewMarkup", "dawn")
-        self.assertTrue(html.startswith('<span class="theme-preview" data-preview-theme="dawn"'))
-
-    def test_option_wraps_choice_and_embeds_preview(self):
-        # 新契约：主题选项由 THEME_PRESETS/自定义主题驱动，字段为 label/mode/desc，
-        # 点击走引擎的 selectThemeChoice。
-        theme = {"id": "dawn", "label": "晨", "mode": "light", "desc": "desc",
-                 "builtinCss": True}
-        html = _call("themeOptionMarkup", theme)
-        self.assertTrue(html.startswith('<button class="theme-option" type="button" data-theme-choice="dawn"'))
-        self.assertIn('onclick="selectThemeChoice(\'dawn\')"', html)
-        # themeOptionMarkup 内嵌 themePreviewMarkup 的产物。
-        self.assertIn('<span class="theme-preview" data-preview-theme="dawn"', html)
-        self.assertIn('class="theme-swatch-highlight"', html)
-        self.assertIn(">晨<", html)
-        self.assertIn(">desc<", html)
-        # 画廊已按明暗模式过滤，浅/深徽标是废话，已去掉；仅自定义主题才标徽标。
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class DetailContextTextTests(unittest.TestCase):
     """详情上下文拼接：取每条 item.text，非空的用换行连成一段。"""
 
@@ -1007,209 +983,6 @@ class DetailContextTextTests(unittest.TestCase):
 
     def test_empty_array_is_empty(self):
         self.assertEqual(_call("detailContextText", []), "")
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class SpreadSummaryHtmlTests(unittest.TestCase):
-    """双开页摘要文案。PDF 页序号库内 0 基，展示 +1。"""
-
-    def test_unmapped_segment_explains_split_only(self):
-        seg = {"pdf_page_start": 0, "number_style": "none"}
-        html = _call("spreadSummaryHtml", seg)
-        self.assertIn("PDF 第 1 页", html)
-        self.assertIn("未设引用页码", html)
-
-    def test_mapped_segment_reports_both_halves(self):
-        seg = {"pdf_page_start": 4, "citation_page_start": "5",
-               "number_style": "arabic"}
-        html = _call("spreadSummaryHtml", seg)
-        self.assertIn("PDF 第 5 页", html)
-        self.assertIn("左半页 <b>引文 5 页</b>", html)
-        self.assertIn("右半页 <b>引文 6 页</b>", html)
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class SegmentSpreadPanelRowTests(unittest.TestCase):
-    """双开页面板行：非 spread 分段返回空；spread 时拼出示意图/控件/摘要。"""
-
-    def test_non_spread_is_empty(self):
-        self.assertEqual(
-            _call("segmentSpreadPanelRow", {"layout_mode": "single"}, 0), "")
-
-    def test_spread_builds_panel_markup(self):
-        seg = {"layout_mode": "spread", "citation_page_start": "5",
-               "number_style": "arabic", "reading_direction": "ltr"}
-        html = _call("segmentSpreadPanelRow", seg, 2)
-        self.assertTrue(html.startswith("<tr class=\"segment-spread-row\">"))
-        self.assertIn("spread-diagram-2", html)
-        self.assertIn("spread-summary-2", html)
-        self.assertIn("引文 5 页", html)
-        self.assertIn("引文 6 页", html)
-
-    def test_ltr_puts_badge_one_on_left(self):
-        seg = {"layout_mode": "spread", "citation_page_start": "5",
-               "number_style": "arabic", "reading_direction": "ltr"}
-        html = _call("segmentSpreadPanelRow", seg, 0)
-        left = html.index("spread-badge-left-0")
-        right = html.index("spread-badge-right-0")
-        # 左半页徽标为 1、右半页为 2（左→右阅读）。
-        self.assertIn(">1<", html[left:left + 60])
-        self.assertIn(">2<", html[right:right + 60])
-
-    def test_rtl_swaps_badges(self):
-        seg = {"layout_mode": "spread", "citation_page_start": "5",
-               "number_style": "arabic", "reading_direction": "rtl"}
-        html = _call("segmentSpreadPanelRow", seg, 0)
-        left = html.index("spread-badge-left-0")
-        right = html.index("spread-badge-right-0")
-        # 右→左阅读时左半页徽标变 2、右半页变 1。
-        self.assertIn(">2<", html[left:left + 60])
-        self.assertIn(">1<", html[right:right + 60])
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class EscTests(unittest.TestCase):
-    """HTML 转义。所有渲染函数拼接前的第一道防线，纯函数、无 DOM。"""
-
-    def test_ampersand_is_escaped(self):
-        self.assertEqual(_call("esc", "a & b"), "a &amp; b")
-
-    def test_angle_brackets_are_escaped(self):
-        self.assertEqual(_call("esc", "<div>"), "&lt;div&gt;")
-
-    def test_quotes_are_escaped(self):
-        self.assertEqual(
-            _call("esc", "he said \"hi\" & 'bye'"),
-            "he said &quot;hi&quot; &amp; &#39;bye&#39;",
-        )
-
-    def test_all_special_chars_together(self):
-        self.assertEqual(_call("esc", "&<>\"'"), "&amp;&lt;&gt;&quot;&#39;")
-
-    def test_plain_text_is_unchanged(self):
-        self.assertEqual(_call("esc", "纯文本无需转义"), "纯文本无需转义")
-
-    def test_non_string_is_coerced(self):
-        self.assertEqual(_call("esc", 42), "42")
-
-    def test_null_is_coerced_to_string(self):
-        self.assertEqual(_call("esc", None), "null")
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class StatusStatIconTests(unittest.TestCase):
-    """校准状态统计图标：按名取 SVG，未知回退到 notice。"""
-
-    def test_known_icon_renders_full_svg_span(self):
-        self.assertEqual(
-            _call("statusStatIcon", "check"),
-            '<span class="status-stat__icon" aria-hidden="true">'
-            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" '
-            'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
-            'stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>'
-            '<path d="m8 12 2.6 2.6L16.5 9"/></svg></span>',
-        )
-
-    def test_unknown_icon_falls_back_to_notice(self):
-        html = _call("statusStatIcon", "totally_unknown")
-        self.assertIn('<path d="M12 7.5v5.5"/>', html)
-        self.assertIn('<path d="M12 16.5h.01"/>', html)
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class StatusChipIconTests(unittest.TestCase):
-    """校准状态芯片图标：mapping 组带旋转动画，未知回退到 pending。"""
-
-    def test_mapping_group_is_spinning(self):
-        self.assertIn("is-spinning", _call("statusChipIcon", "mapping"))
-
-    def test_calibrated_group_is_not_spinning(self):
-        self.assertNotIn("is-spinning", _call("statusChipIcon", "calibrated"))
-
-    def test_unknown_group_falls_back_to_pending(self):
-        # pending 图标为时钟：圆 + 指针路径。
-        html = _call("statusChipIcon", "totally_unknown")
-        self.assertIn('<path d="M12 7v5l3 2"/>', html)
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class StatusStatButtonTests(unittest.TestCase):
-    """校准状态统计按钮：拼接图标/文案/计数，命中当前筛选时高亮。"""
-
-    def test_active_button_gets_active_class(self):
-        html = _call("statusStatButton", "manual_mapped", "已校准", 5,
-                     "success", "check", "manual_mapped", "applyLibStatusFilter")
-        self.assertIn("status-stat--success", html)
-        self.assertIn(" active", html)
-        self.assertIn(">已校准<", html)
-        self.assertIn(">5<", html)
-        self.assertIn("applyLibStatusFilter('manual_mapped')", html)
-
-    def test_inactive_button_omits_active_class(self):
-        html = _call("statusStatButton", "manual_mapped", "已校准", 5,
-                     "success", "check", "needs_review", "applyLibStatusFilter")
-        self.assertNotIn(" active", html)
-
-    def test_button_embeds_icon_markup(self):
-        html = _call("statusStatButton", "manual_mapped", "已校准", 5,
-                     "success", "check", "", "applyLibStatusFilter")
-        self.assertIn('<span class="status-stat__icon"', html)
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class BibSourceMenuHTMLTests(unittest.TestCase):
-    """书目补全来源菜单：标记当前来源、内含固定动作项。"""
-
-    def test_active_source_is_marked(self):
-        html = _call("bibSourceMenuHTML", "sid-1", "cnki")
-        self.assertIn('onclick="bibSetSource(event,\'sid-1\',\'cnki\')"', html)
-        # 当前来源那一项带 active。
-        cnki_at = html.index("'cnki')")
-        head = html.rfind("<button", 0, cnki_at)
-        self.assertIn("active", html[head:cnki_at])
-
-    def test_menu_has_auto_and_paste_actions(self):
-        html = _call("bibSourceMenuHTML", "sid-1", "cnki")
-        self.assertIn(">智能补全", html)
-        self.assertIn("bibMenuAction(event,'paste','sid-1')", html)
-        self.assertIn("bibMenuAction(event,'opencnki','sid-1')", html)
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class DrawerInfoRowTests(unittest.TestCase):
-    """抽屉信息行：转义标签与取值，空值显示破折号。"""
-
-    def test_basic_row(self):
-        self.assertEqual(
-            _call("drawerInfoRow", "作者", "马克思"),
-            '<div class="drawer-info-row"><span class="drawer-info-label">作者</span>'
-            '<span class="drawer-info-value">马克思</span></div>',
-        )
-
-    def test_value_is_escaped(self):
-        self.assertEqual(
-            _call("drawerInfoRow", "x", "<b>"),
-            '<div class="drawer-info-row"><span class="drawer-info-label">x</span>'
-            '<span class="drawer-info-value">&lt;b&gt;</span></div>',
-        )
-
-    def test_empty_value_shows_dash(self):
-        self.assertIn("—", _call("drawerInfoRow", "y", ""))
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class BibliographicMissingBadgeTests(unittest.TestCase):
-    """书目缺失徽标：完整时为空，缺失时给出带类名的提示。"""
-
-    def test_complete_meta_yields_empty(self):
-        meta = {"title": "资本论", "author": "马克思", "publisher": "人民出版社",
-                "publish_place": "北京", "publish_year": "2004"}
-        self.assertEqual(_call("bibliographicMissingBadge", meta), "")
-
-    def test_missing_meta_renders_badge(self):
-        html = _call("bibliographicMissingBadge", {})
-        self.assertIn('class="bibliographic-missing"', html)
-        self.assertIn("书目缺失", html)
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
@@ -1261,115 +1034,8 @@ class AutoFailureReasonsTests(unittest.TestCase):
     def test_unknown_reason_passthrough_and_join(self):
         self.assertEqual(
             _call("autoFailureReasons", ["no_page_labels", "unknown_reason"]),
-            "• 没有 PDF Page Labels<br>• unknown_reason",
+            "• 没有 PDF Page Labels\n• unknown_reason",
         )
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class PdRowTests(unittest.TestCase):
-    """页码明细行：标签与值都经 esc 转义后拼进固定结构。"""
-
-    def test_plain_row(self):
-        self.assertEqual(
-            _call("pdRow", "页码", 12),
-            '<div class="page-detail-row">'
-            '<span class="page-detail-label">页码</span><span>12</span></div>',
-        )
-
-    def test_html_escaped(self):
-        self.assertEqual(
-            _call("pdRow", "<b>", "a&b"),
-            '<div class="page-detail-row">'
-            '<span class="page-detail-label">&lt;b&gt;</span>'
-            '<span>a&amp;b</span></div>',
-        )
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class SegmentNumberStyleControlTests(unittest.TestCase):
-    """分段页码样式选择控件：渲染四个选项，当前样式带 is-selected。"""
-
-    def test_arabic_selected_and_all_options_present(self):
-        html = _call("segmentNumberStyleControl", "arabic", 0)
-        self.assertIn('id="segment-style-select-0"', html)
-        self.assertIn(
-            '<button class="app-select-option is-selected" type="button"'
-            ' data-value="arabic"', html)
-        for value in ("arabic", "roman_lower", "roman_upper", "none"):
-            self.assertIn('data-value="' + value + '"', html)
-
-    def test_index_threaded_into_ids_and_handlers(self):
-        html = _call("segmentNumberStyleControl", "none", 3)
-        self.assertIn('id="segment-style-select-3"', html)
-        self.assertIn("setSegmentNumberStyle(event,3,'roman_lower')", html)
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class SegmentLayoutControlTests(unittest.TestCase):
-    """分段版式选择控件：单页/双开页两项，当前版式带 is-selected。"""
-
-    def test_single_selected(self):
-        html = _call("segmentLayoutControl", "single", 0)
-        self.assertIn('id="segment-layout-select-0"', html)
-        self.assertIn(
-            '<button class="app-select-option is-selected" type="button"'
-            ' data-value="single"', html)
-        self.assertIn('data-value="spread"', html)
-
-    def test_spread_selected_with_index(self):
-        html = _call("segmentLayoutControl", "spread", 2)
-        self.assertIn('id="segment-layout-select-2"', html)
-        self.assertIn(
-            '<button class="app-select-option is-selected" type="button"'
-            ' data-value="spread"', html)
-        self.assertIn("setSegmentLayout(event,2,'single')", html)
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class ScanEntryRowTests(unittest.TestCase):
-    """扫描列表行：类型徽标、勾选框、备注文案随状态变化，路径/名称经 esc。"""
-
-    def _entry(self, **over):
-        base = {"file_type": "pdf", "status": "new", "needs_ocr": None,
-                "path": "/a/b.pdf", "name": "b.pdf", "size_bytes": 1234}
-        base.update(over)
-        return base
-
-    def test_new_pdf_unchecked_row(self):
-        html = _call("scanEntryRow", self._entry(), 2, True, False)
-        self.assertIn('id="scan-check-2"', html)
-        self.assertIn('data-index="2"', html)
-        self.assertNotIn(" checked", html)
-        self.assertIn('<span class="type-badge pdf">PDF</span>', html)
-        self.assertIn("未预检测", html)
-
-    def test_checked_and_word_type(self):
-        html = _call("scanEntryRow",
-                     self._entry(file_type="word", needs_ocr=False), 0, True, True)
-        self.assertIn(" checked", html)
-        self.assertIn('<span class="type-badge word">DOCX</span>', html)
-
-    def test_epub_type(self):
-        html = _call(
-            "scanEntryRow",
-            self._entry(file_type="epub", needs_ocr=False, name="book.epub"),
-            0,
-            True,
-            False,
-        )
-        self.assertIn('<span class="type-badge word">EPUB</span>', html)
-
-    def test_ocr_note_and_escaping(self):
-        html = _call("scanEntryRow",
-                     self._entry(needs_ocr=True, name="<x>", path="a&b"), 1, True, False)
-        self.assertIn("需 OCR", html)
-        self.assertIn("&lt;x&gt;", html)
-        self.assertIn("a&amp;b", html)
-
-    def test_non_checkable_uses_placeholder(self):
-        html = _call("scanEntryRow", self._entry(), 4, False, False)
-        self.assertIn('<span class="scan-check-placeholder">', html)
-        self.assertNotIn('type="checkbox"', html)
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
@@ -1437,37 +1103,6 @@ class DetailContextPreviewTests(unittest.TestCase):
         self.assertEqual(got, "文" * 180 + "…")
 
 
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class DetailContextHTMLTests(unittest.TestCase):
-    """上下文段落 HTML：空输入返回空串；短文本 toggle 隐藏且不截断；
-    长文本 toggle 可见、预览按 180 码点截断并加省略号，完整文本另存隐藏节点。"""
-
-    def test_empty_items_yield_empty(self):
-        self.assertEqual(_call("detailContextHTML", [], "before"), "")
-
-    def test_short_context_not_truncated(self):
-        html = _call("detailContextHTML", [{"text": "短上文内容"}], "before")
-        self.assertIn('detail-context-before', html)
-        self.assertIn('<span class="detail-context-label">上文</span>', html)
-        self.assertIn('data-character-truncated="false"', html)
-        # 未截断时 toggle 按钮带 hidden 属性
-        self.assertIn('data-character-truncated="false" hidden', html)
-        self.assertIn('<span class="detail-context-preview">短上文内容</span>', html)
-        self.assertIn('<span class="detail-context-full" hidden>短上文内容</span>', html)
-
-    def test_long_context_truncates_preview(self):
-        html = _call("detailContextHTML", [{"text": "文" * 300}], "after")
-        self.assertIn('detail-context-after', html)
-        self.assertIn('<span class="detail-context-label">下文</span>', html)
-        self.assertIn('data-character-truncated="true"', html)
-        # 截断时 toggle 按钮不带 hidden
-        self.assertNotIn('data-character-truncated="true" hidden', html)
-        # 预览按 180 码点截断加省略号
-        self.assertIn('<span class="detail-context-preview">' + "文" * 180 + "…</span>", html)
-        # 完整文本存进隐藏节点，保留全部 300 字
-        self.assertIn('<span class="detail-context-full" hidden>' + "文" * 300 + "</span>", html)
-
-
 # const/let 声明不会从 eval 泄漏到外层作用域，所以引用 06-pure.js 里的具名常量
 # （如 CNKI_CARD_CONFIG）时，必须把源码与表达式拼进同一次 eval——等同浏览器里
 # 各文件拼成同一 script 作用域的情形。
@@ -1479,6 +1114,7 @@ process.stdout.write(JSON.stringify(eval(src + '\n;\n' + expr)));
 """
 
 _FRONTEND_STORE_STUB = r"""
+var MEFinderActions = {actions: {}, register: function(name, callback) { this.actions[name] = callback; }, registerInline: function(name, callback) { this.register(name, callback); }};
 var searchStore = {documentId:'', groupId:'', sourceFiles:[], libraryCatalog:null};
 var libraryStore = {
   sources:[], volumes:[], volumeBySource:new Map(), works:[], stats:null,
@@ -1554,6 +1190,258 @@ def _bib_eval(tail):
     return _module_eval(expr)
 
 
+# 最小 DOM 桩：只实现候选卡构造用到的接口，并按插入顺序序列化为 HTML，
+# 以便 C5 的节点构造与 C4 golden 字符串逐字比对。
+_FAKE_DOM = r"""
+function __escText(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function __escAttr(s) { return __escText(s).replace(/"/g, '&quot;'); }
+function __element(tag) {
+  var attrs = [];
+  var node = {tag: tag, children: [], dataset: {},
+    setAttribute: function(name, value) {
+      attrs = attrs.filter(function(pair) { return pair[0] !== name; });
+      attrs.push([name, String(value)]);
+    },
+    appendChild: function(child) {
+      if (child && child.fragment) child.children.forEach(function(c) { node.children.push(c); });
+      else node.children.push(child);
+      return child;
+    },
+    get outerHTML() {
+      var parts = [];
+      if (this.className) parts.push('class="' + __escAttr(this.className) + '"');
+      if (this.type) parts.push('type="' + __escAttr(this.type) + '"');
+      attrs.forEach(function(pair) { parts.push(pair[0] + '="' + __escAttr(pair[1]) + '"'); });
+      Object.keys(this.dataset).forEach(function(key) {
+        parts.push('data-' + key.replace(/[A-Z]/g, function(c) { return '-' + c.toLowerCase(); })
+          + '="' + __escAttr(node.dataset[key]) + '"');
+      });
+      var inner = this.children.map(function(c) { return c.text != null ? __escText(c.text) : c.outerHTML; }).join('');
+      if (this.textContent != null && !this.children.length) inner = __escText(this.textContent);
+      else if (this.textContent != null) inner = __escText(this.textContent) + inner;
+      return '<' + tag + (parts.length ? ' ' + parts.join(' ') : '') + '>' + inner + '</' + tag + '>';
+    }};
+  return node;
+}
+var document = {
+  createElement: __element,
+  createElementNS: function(_ns, tag) { return __element(tag); },
+  createTextNode: function(text) { return {text: String(text)}; },
+  createDocumentFragment: function() {
+    var fragment = {fragment: true, children: [], appendChild: function(c) { this.children.push(c); return c; }};
+    return fragment;
+  },
+  querySelectorAll: function() { return []; },
+  getElementById: function() { return null; }
+};
+function __fragmentHTML(fragment) { return fragment.children.map(function(c) { return c.outerHTML; }).join(''); }
+"""
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过候选卡 DOM golden 测试")
+class CandidateCardDomGoldenTests(unittest.TestCase):
+    """C5 把候选卡改为节点构造后，渲染结果仍须与 C4 golden 逐字一致。
+
+    覆盖 high/medium/low/无级别、有无 score/reasons/conflicts、ISBN/DOI 后缀、
+    标题与详情兜底，以及知网三按钮与图书/Crossref 单按钮的差异。
+    """
+
+    FIXTURE = ROOT / "tests" / "fixtures" / "candidate_cards_golden.json"
+
+    def test_cards_match_pre_refactor_golden(self):
+        fixture = json.loads(self.FIXTURE.read_text(encoding="utf-8"))
+        tail = _FAKE_DOM + (
+            "var sid = %s; var cs = %s; var out = {};"
+            "var configs = module.exports.lookupConfigs;"
+            "[['cnki', configs.CNKI_LOOKUP], ['book', configs.BOOK_LOOKUP],"
+            " ['crossref', configs.CROSSREF_LOOKUP]].forEach(function(pair) {"
+            "  pair[1].stateMap[sid] = {candidates: cs};"
+            "  out[pair[0]] = __fragmentHTML(pair[1].listNode(sid));"
+            "});"
+            "return out;"
+        ) % (json.dumps(fixture["sourceId"]), json.dumps(fixture["candidates"]))
+        got = _bib_eval(tail)
+        for key in ("cnki", "book", "crossref"):
+            self.assertEqual(got[key], fixture["expected"][key],
+                             f"{key} 候选卡 DOM 渲染与 C4 golden 不一致")
+
+    def test_candidate_text_is_not_parsed_as_html(self):
+        tail = _FAKE_DOM + (
+            "var cfg = module.exports.lookupConfigs.CNKI_LOOKUP;"
+            "cfg.stateMap['s'] = {candidates: [{metadata: {title: '<img src=x>&'}, match: {}}]};"
+            "var card = cfg.listNode('s').children[0];"
+            "return card.children[0].children[0].textContent;"
+        )
+        self.assertEqual(_bib_eval(tail), "<img src=x>&")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过书目菜单事件测试")
+class BibMenuDelegationTests(unittest.TestCase):
+    def test_paste_action_receives_event_and_opens_panel(self):
+        result = _bib_eval("""
+var panel = {hidden: true};
+var stopped = 0;
+var document = {
+  querySelectorAll: function() { return []; },
+  getElementById: function(id) { return id === 'bib-citation-panel' ? panel : null; }
+};
+MEFinderActions.actions.bibMenuAction(
+  {stopPropagation: function() { stopped++; }},
+  {dataset: {menuAction: 'paste', sourceId: "a'\\\"<b>&"}}
+);
+return {panelOpen: !panel.hidden, stopped: stopped};
+""")
+        self.assertEqual(result, {"panelOpen": True, "stopped": 1})
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过书目详情事件测试")
+class BibliographicDetailDelegationTests(unittest.TestCase):
+    def test_detail_actions_are_registered(self):
+        names = _bib_eval("return Object.keys(MEFinderActions.actions);")
+        for name in ("enterBibEdit", "exitBibEdit", "bibEditAndRun", "bibRunLookup",
+                     "setBibliographicType", "lookupGoogleBooks",
+                     "detectBibliographicMetadata", "saveBibliographicMetadata",
+                     "pickBibLanguage", "openBibLanguageSelect", "bibToggleMenu",
+                     "parseCnkiCitationText"):
+            self.assertIn(name, names)
+
+    def test_special_source_id_is_data_in_read_and_edit_views(self):
+        source = (ROOT / "src/me_finder/static/js/40-bibliography.js").read_text(encoding="utf-8")
+        self.assertIn("node.dataset.sourceId = sid", source)
+        self.assertIn("button.dataset.sourceId = sid", source)
+        self.assertIn("host.appendChild(bibEditMode[src.source_file_id] ? bibliographicEditorNode(src) : bibliographicReadNode(src))", source)
+        self.assertNotIn("innerHTML", source)
+
+    def test_language_selection_marks_clicked_option(self):
+        result = _bib_eval("""
+var hidden = {value: ''};
+var label = {textContent: ''};
+var selected = [];
+var menu = {querySelectorAll: function() { return selected; }};
+var button = {dataset: {code: 'fr', label: 'Français'},
+  classList: {add: function(name) { selected.push(name); }}};
+var stopped = 0;
+var document = {
+  getElementById: function(id) {
+    return id === 'bib-language' ? hidden : (id === 'bib-language-value' ? label : null);
+  },
+  querySelector: function() { return menu; }
+};
+MEFinderActions.actions.pickBibLanguage(
+  {stopPropagation: function() { stopped++; }}, button);
+return {code: hidden.value, label: label.textContent,
+  selected: selected, stopped: stopped};
+""")
+        self.assertEqual(result, {"code": "fr", "label": "Français",
+                                  "selected": ["is-selected"], "stopped": 1})
+
+    def test_menu_triggers_forward_event_and_id(self):
+        result = _bib_eval("""
+var calls = [];
+var openVersionSelect = function(event, id) { calls.push(['language', event.tag, id]); };
+var document = {getElementById: function(id) {
+  calls.push(['lookup', id]);
+  return null;
+}};
+MEFinderActions.actions.openBibLanguageSelect(
+  {tag: 'click'}, {dataset: {selectId: 'bib-language-select'}});
+MEFinderActions.actions.bibToggleMenu(
+  {stopPropagation: function() { calls.push(['stop']); }},
+  {dataset: {menuId: 'bib-source-menu'}});
+return calls;
+""")
+        self.assertEqual(result, [["language", "click", "bib-language-select"],
+                                  ["stop"], ["lookup", "bib-source-menu"]])
+
+
+# 在 _FAKE_DOM 之上补一层“活” DOM：按 id 查找、replaceWith、类型按钮选择器，
+# 让 setBibliographicType 能在 Node 里真实地收集表单、重建编辑器、回填字段。
+_LIVE_BIB_DOM = r"""
+var __root = {children: []};
+function __walk(node, visit) {
+  if (!node || !node.children) return null;
+  for (var i = 0; i < node.children.length; i++) {
+    var child = node.children[i];
+    if (visit(child, node, i)) return child;
+    var hit = __walk(child, visit);
+    if (hit) return hit;
+  }
+  return null;
+}
+var __baseElement = __element;
+__element = function(tag) {
+  var node = __baseElement(tag);
+  node.classList = {add: function() {}, remove: function() {}};
+  node.insertBefore = function(child) { node.children.unshift(child); return child; };
+  node.replaceWith = function(next) {
+    __walk(__root, function(child, parent, i) {
+      if (child === node) { parent.children[i] = next; return true; }
+      return false;
+    });
+  };
+  return node;
+};
+document.createElement = __element;
+document.createElementNS = function(_ns, tag) { return __element(tag); };
+document.getElementById = function(id) {
+  return __walk(__root, function(child) { return child.id === id; });
+};
+document.querySelector = function(selector) {
+  if (selector !== '#bib-doctype-control .seg-btn.active') return null;
+  var control = document.getElementById('bib-doctype-control');
+  return control ? __walk(control, function(child) {
+    return / seg-btn(?= |$)|^seg-btn(?= |$)/.test(child.className || '') && / active(?= |$)/.test(child.className || '');
+  }) : null;
+};
+"""
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过书目类型切换测试")
+class BibliographicTypeSwitchTests(unittest.TestCase):
+    """切换文献类型重建表单时，已编辑的字段值不得被原始元数据覆盖。"""
+
+    def _run(self, script):
+        tail = _FAKE_DOM + _LIVE_BIB_DOM + r"""
+var src = {source_file_id: 's1', source_type: 'epub', bibliographic_metadata: {
+  document_type: 'book', title: '原书名', author: '原作者', journal_name: '原刊名'}};
+libraryStore.sources = [src];
+libraryStore.selectedId = 's1';
+var host = __element('div');
+host.id = 'bib-host';
+host.replaceChildren = function(node) { host.children = [node]; };
+host.querySelector = function() { return null; };
+__root.children.push(host);
+MEFinderActions.actions.enterBibEdit(null, {dataset: {sourceId: 's1'}});
+function setBibliographicType(sid, docType) {
+  MEFinderActions.actions.setBibliographicType(null, {dataset: {sourceId: sid, doctype: docType}});
+}
+function val(id) { var el = document.getElementById('bib-' + id); return el ? el.value : null; }
+function set(id, v) { document.getElementById('bib-' + id).value = v; }
+""" + script
+        return _bib_eval(tail)
+
+    def test_edited_title_survives_type_round_trip(self):
+        result = self._run(r"""
+set('title', '新书名'); set('translator', '某译者');
+setBibliographicType('s1', 'journal_article');
+var journal = {title: val('title'), journal: val('journal-name')};
+setBibliographicType('s1', 'book');
+return {journal: journal, book: {title: val('title'), translator: val('translator')}};
+""")
+        self.assertEqual(result, {
+            "journal": {"title": "新书名", "journal": "原刊名"},
+            "book": {"title": "新书名", "translator": "某译者"},
+        })
+
+    def test_cleared_field_stays_cleared_after_type_switch(self):
+        result = self._run(r"""
+set('author', '');
+setBibliographicType('s1', 'thesis');
+return val('author');
+""")
+        self.assertEqual(result, "")
+
+
 def _import_eval(tail):
     """在 06-pure.js + 80-import.js 同一 eval 里跑 tail（可注入 DOM 桩与 return）。
 
@@ -1579,8 +1467,16 @@ def _vision_eval(tail):
     js_dir = ROOT / "src" / "me_finder" / "static" / "js"
     runtime = js_dir / "70-vision.js"
     providers = js_dir / "71-vision-providers.js"
-    expr = "(function(){%s\n%s\n%s\n%s})()" % (
+    api = js_dir / "07-api.js"  # 两个模块经统一请求出口发请求
+    task_state = js_dir / "14-task-state.js"  # 70-vision 的轮询与操作共用请求代次
+    pure = js_dir / "06-pure.js"  # 字节数与剩余时间文案
+    mineru_view = js_dir / "70-managed-mineru-view.js"  # 托管 MinerU 卡片视图（无 Vue 时只有 store）
+    expr = "(function(){%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s})()" % (
         _FRONTEND_STORE_STUB,
+        pure.read_text(encoding="utf-8"),
+        api.read_text(encoding="utf-8"),
+        task_state.read_text(encoding="utf-8"),
+        mineru_view.read_text(encoding="utf-8"),
         runtime.read_text(encoding="utf-8"),
         providers.read_text(encoding="utf-8"),
         tail,
@@ -1713,7 +1609,7 @@ class DragSelectionMarqueeLifecycleTests(unittest.TestCase):
         })
 
 
-# 视觉下拉弹层的极小 DOM 桩：pop 需 hidden/innerHTML/querySelector，input 需
+# 视觉下拉弹层的极小 DOM 桩：pop 需 hidden/replaceChildren/querySelector，input 需
 # setAttribute，选中项需 scrollIntoView。
 _VISION_POP_STUB = r"""
 function mkInput() {
@@ -1722,7 +1618,8 @@ function mkInput() {
 }
 function mkPop(activeEl) {
   return {
-    hidden: null, innerHTML: 'STALE', _active: activeEl || null,
+    hidden: null, children: ['STALE'], _active: activeEl || null,
+    replaceChildren: function () { this.children = Array.from(arguments); },
     querySelector: function (sel) { this._lastSelector = sel; return this._active; }
   };
 }
@@ -1743,18 +1640,18 @@ class VisionPopVisibilityTests(unittest.TestCase):
         var pop = mkPop();
         var input = mkInput();
         module.exports.hideVisionPop(pop, input);
-        return {hidden: pop.hidden, innerHTML: pop.innerHTML, aria: input._attrs['aria-expanded']};
+        return {hidden: pop.hidden, children: pop.children, aria: input._attrs['aria-expanded']};
         """
         self.assertEqual(_vision_eval(tail),
-                         {"hidden": True, "innerHTML": "", "aria": "false"})
+                         {"hidden": True, "children": [], "aria": "false"})
 
     def test_hide_tolerates_missing_input(self):
         tail = _VISION_POP_STUB + r"""
         var pop = mkPop();
         module.exports.hideVisionPop(pop, null);
-        return {hidden: pop.hidden, innerHTML: pop.innerHTML};
+        return {hidden: pop.hidden, children: pop.children};
         """
-        self.assertEqual(_vision_eval(tail), {"hidden": True, "innerHTML": ""})
+        self.assertEqual(_vision_eval(tail), {"hidden": True, "children": []})
 
     def test_reveal_shows_and_scrolls_active_into_view(self):
         tail = _VISION_POP_STUB + r"""
@@ -1813,11 +1710,12 @@ class MineruLocalDisplayTests(unittest.TestCase):
           service:{running:false},
           profiles:[{profile:'pipeline', display_name:'Pipeline', supported:true, installed:false, state:'not_installed'}]
         });
+        var view = MEFinderManagedMineruView;
         return {
-          state:elements['managed-mineru-pipeline-state'].textContent,
-          install:elements['managed-mineru-pipeline-install'].textContent,
-          auto:elements['managed-mineru-auto-install'].textContent,
-          hint:elements['managed-mineru-hint'].textContent
+          state:view.profileView('pipeline').stateText,
+          install:view.profileView('pipeline').install.label,
+          auto:view.cardView().auto.label,
+          hint:view.cardView().hint
         };
         """
         self.assertEqual(_vision_eval(tail), {
@@ -1854,12 +1752,13 @@ class MineruLocalDisplayTests(unittest.TestCase):
           service:{running:true, profile:'pipeline', endpoint:'http://127.0.0.1:8000'},
           profiles:[profile]
         });
+        var view = MEFinderManagedMineruView;
         var whileRunning = elements['mineru-local-status'].textContent;
-        var runningEndpoint = elements['managed-mineru-pipeline-progress'].textContent;
-        var runningEndpointHidden = elements['managed-mineru-pipeline-progress'].hidden;
-        var hardware = elements['managed-mineru-hardware'].textContent;
-        var autoInstall = elements['managed-mineru-auto-install'].textContent;
-        var runningHint = elements['managed-mineru-hint'].textContent;
+        var runningEndpoint = view.profileView('pipeline').progressHint.text;
+        var runningEndpointHidden = !view.profileView('pipeline').progressHint.visible;
+        var hardware = view.cardView().hardware;
+        var autoInstall = view.cardView().auto.label;
+        var runningHint = view.cardView().hint;
         var whileVlmRunning = module.exports.managedMineruSummaryLabel(
           {enabled:true, managed:true, managed_profile:'vlm'},
           {service:{running:true, profile:'vlm'}}
@@ -1879,9 +1778,9 @@ class MineruLocalDisplayTests(unittest.TestCase):
           runningHint:runningHint,
           whileVlmRunning:whileVlmRunning,
           afterStop:elements['mineru-local-status'].textContent,
-          state:elements['managed-mineru-pipeline-state'].textContent,
-          startHidden:elements['managed-mineru-pipeline-start'].hidden,
-          stopHidden:elements['managed-mineru-pipeline-stop'].hidden
+          state:view.profileView('pipeline').stateText,
+          startHidden:!view.profileView('pipeline').start.visible,
+          stopHidden:!view.profileView('pipeline').stop.visible
         };
         """
         self.assertEqual(_vision_eval(tail), {
@@ -1931,15 +1830,11 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_vlm_option_is_hidden_only_when_hardware_is_not_qualified(self):
         tail = r"""
-        var vlmSection = {hidden:null};
-        globalThis.document = {
-          getElementById:function() { return null; },
-          querySelector:function() { return vlmSection; }
-        };
+        globalThis.document = {getElementById:function() { return null; }};
         module.exports.renderManagedMineru({hardware:{vlm_supported:false}, profiles:[], service:{}});
-        var cpuOnly = vlmSection.hidden;
+        var cpuOnly = MEFinderManagedMineruView.cardView().vlmHidden;
         module.exports.renderManagedMineru({hardware:{vlm_supported:true}, profiles:[], service:{}});
-        return {cpuOnly:cpuOnly, gpuCapable:vlmSection.hidden};
+        return {cpuOnly:cpuOnly, gpuCapable:MEFinderManagedMineruView.cardView().vlmHidden};
         """
         self.assertEqual(_vision_eval(tail), {
             "cpuOnly": True,
@@ -1948,7 +1843,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_transfer_summary_uses_gigabytes_speed_and_estimated_total(self):
         tail = r"""
-        return module.exports.managedMineruTransferSummary({
+        return MEFinderManagedMineruView.transferSummary({
           downloaded_bytes:1073741824,
           total_bytes:2147483648,
           total_is_estimate:true,
@@ -1963,7 +1858,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_transfer_summary_marks_paused_payload_as_network_or_processing(self):
         tail = r"""
-        return module.exports.managedMineruTransferSummary({
+        return MEFinderManagedMineruView.transferSummary({
           downloaded_bytes:686817280,
           total_bytes:2328028720,
           total_is_estimate:true,
@@ -1978,7 +1873,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_proxy_failure_is_presented_as_concise_chinese(self):
         tail = r"""
-        return module.exports.managedMineruErrorText(
+        return MEFinderManagedMineruView.errorText(
           'MinerU 安装子进程退出 2：Failed to fetch: `https://pypi.org/simple/mineru/` Caused by: tunnel error: unsuccessful'
         );
         """
@@ -1989,7 +1884,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
 
     def test_huggingface_failure_is_presented_as_concise_chinese(self):
         tail = r"""
-        return module.exports.managedMineruErrorText(
+        return MEFinderManagedMineruView.errorText(
           'huggingface_hub/file_download.py xet_get OSError: I/O error: error decoding response body'
         );
         """
@@ -2157,56 +2052,6 @@ class CnkiLookupConfigTests(unittest.TestCase):
         tail = ("module.exports.lookupConfigs.CNKI_LOOKUP.saveErrorState({error:'e'}, 's1');"
                 "return module.exports.cnkiLookupState;")
         self.assertEqual(_bib_eval(tail), {})
-
-
-@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
-class CandidateCardHTMLGoldenTests(unittest.TestCase):
-    """联网补全候选卡抽出 candidateCardHTML 后，三套源的渲染必须逐字不变。
-
-    夹具的 expected 是重构前 cnki/book/crossref 三个 List 函数的真实输出（golden
-    baseline）。这里用重构后的 candidateCardHTML + 三套真实配置重新渲染同一批候选，
-    断言与 golden 逐字一致——覆盖 high/medium/low/无级别、有无 score/reasons/conflicts、
-    ISBN/DOI 后缀与标题/详情兜底，以及知网 3 按钮 vs 图书/Crossref 1 按钮的差异。
-    """
-
-    FIXTURE = ROOT / "tests" / "fixtures" / "candidate_cards_golden.json"
-
-    def test_cards_match_pre_refactor_golden(self):
-        fixture = json.loads(self.FIXTURE.read_text(encoding="utf-8"))
-        source_id = fixture["sourceId"]
-        candidates = fixture["candidates"]
-        expr = (
-            "(function(){var sid=%s;var cs=%s;var out={};"
-            "[['cnki',CNKI_CARD_CONFIG],['book',BOOK_CARD_CONFIG],"
-            "['crossref',CROSSREF_CARD_CONFIG]].forEach(function(p){"
-            "out[p[0]]=cs.map(function(c,i){return candidateCardHTML(sid,c,i,p[1]);}).join('');});"
-            "return out;})()"
-        ) % (json.dumps(source_id), json.dumps(candidates))
-        got = _module_eval(expr)
-        for key in ("cnki", "book", "crossref"):
-            self.assertEqual(
-                got[key],
-                fixture["expected"][key],
-                f"{key} 候选卡渲染与重构前 golden 不一致",
-            )
-
-    def test_cnki_has_three_action_buttons(self):
-        # 知网是两阶段流程：先补列表字段 / 获取完整题录 / 打开记录。
-        html = _call(
-            "candidateCardHTML", "S", {"metadata": {"title": "x"}, "match": {}}, 0,
-            {
-                "titleFallback": "未识别篇名", "detailMidField": "journal_name",
-                "detailFallback": "联网记录", "detailExtra": None,
-                "actions": [
-                    {"handler": "applyCnkiSearchCandidate", "label": "先补列表字段", "primary": False},
-                    {"handler": "fetchCnkiCandidate", "label": "获取完整题录", "primary": True},
-                    {"handler": "openCnkiCandidate", "label": "打开记录", "primary": False},
-                ],
-            },
-        )
-        self.assertEqual(html.count("<button"), 3)
-        self.assertIn('class="cnki-candidate ', html)
-        self.assertIn("cnki-candidate-actions", html)
 
 
 if __name__ == "__main__":

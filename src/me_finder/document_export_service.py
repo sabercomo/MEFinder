@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterator, Mapping, Optional
 
+from .persistence.connection import connect_index
 from .document_export import (
     DOCUMENT_SCHEMA_VERSION,
     DocumentExportError,
@@ -618,8 +619,7 @@ def _safe_file_stem(value: object) -> str:
 
 
 def _connect(path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(str(Path(path)), timeout=30)
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(Path(path), busy_timeout_ms=30000)
     return connection
 
 

@@ -39,6 +39,7 @@ _SWP_NOACTIVATE = 0x0010
 _SWP_FRAMECHANGED = 0x0020
 _WM_NCCALCSIZE = 0x0083
 _WM_NCHITTEST = 0x0084
+_WM_NCLBUTTONDOWN = 0x00A1
 _DWMWA_WINDOW_CORNER_PREFERENCE = 33
 _DWMWA_BORDER_COLOR = 34
 _DWMWCP_ROUND = 2
@@ -48,10 +49,13 @@ _DWMWA_COLOR_NONE = 0xFFFFFFFE
 _HTCLIENT = 1
 _HTLEFT = 10
 _HTRIGHT = 11
+_HTTOP = 12
+_HTTOPLEFT = 13
+_HTTOPRIGHT = 14
 _HTBOTTOM = 15
 _HTBOTTOMLEFT = 16
 _HTBOTTOMRIGHT = 17
-# Grab thickness (px) for the invisible resize border on left/right/bottom edges.
+# Grab thickness (px) for the invisible resize border on all four edges.
 _FRAMELESS_RESIZE_GRAB = 8
 
 
@@ -66,15 +70,20 @@ def frameless_resize_hit(
 ) -> int:
     """Resize hit-test for a frameless window whose frame border was removed.
 
-    The HTML titlebar owns the top edge, so top-edge (and top-corner) resizing
-    is intentionally not offered — only the left, right and bottom edges plus
-    the two bottom corners report resize codes. Everything else is client area,
-    which keeps the titlebar drag region and web content interactive.
+    All four edges and corners report resize codes. The titlebar below the
+    narrow top grab remains client area for dragging and window controls.
     """
 
     on_left = left <= x < left + grab
     on_right = right - grab <= x < right
+    on_top = top <= y < top + grab
     on_bottom = bottom - grab <= y < bottom
+    if on_top and on_left:
+        return _HTTOPLEFT
+    if on_top and on_right:
+        return _HTTOPRIGHT
+    if on_top:
+        return _HTTOP
     if on_bottom and on_left:
         return _HTBOTTOMLEFT
     if on_bottom and on_right:
@@ -86,6 +95,80 @@ def frameless_resize_hit(
     if on_bottom:
         return _HTBOTTOM
     return _HTCLIENT
+
+# HTML resize handles (see 10-shell.js) name the edge they cover.
+_RESIZE_EDGE_HITS = {
+    "top": _HTTOP,
+    "top-left": _HTTOPLEFT,
+    "top-right": _HTTOPRIGHT,
+    "left": _HTLEFT,
+    "right": _HTRIGHT,
+    "bottom": _HTBOTTOM,
+    "bottom-left": _HTBOTTOMLEFT,
+    "bottom-right": _HTBOTTOMRIGHT,
+}
+
+
+def _post_native_resize(hwnd: int, hit: int) -> bool:
+    """Hand the pressed mouse button to the native sizing loop for ``hit``."""
+
+    user32 = _library("user32")
+    user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    user32.GetCursorPos.restype = wintypes.BOOL
+    user32.ReleaseCapture.argtypes = []
+    user32.ReleaseCapture.restype = wintypes.BOOL
+    user32.PostMessageW.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint,
+        ctypes.c_size_t,
+        ctypes.c_ssize_t,
+    ]
+    user32.PostMessageW.restype = wintypes.BOOL
+    point = wintypes.POINT()
+    if not user32.GetCursorPos(ctypes.byref(point)):
+        return False
+    lparam = (point.x & 0xFFFF) | ((point.y & 0xFFFF) << 16)
+    # WebView2 holds the mouse capture after the mousedown; release it so the
+    # posted non-client press starts DefWindowProc's modal sizing loop.
+    user32.ReleaseCapture()
+    return bool(user32.PostMessageW(hwnd, _WM_NCLBUTTONDOWN, hit, lparam))
+
+
+def begin_windows_resize(
+    window: object,
+    edge: str,
+    *,
+    resize_poster: Optional[Callable[[int, int], bool]] = None,
+) -> bool:
+    """Start a native edge resize of a frameless window from an HTML handle.
+
+    The collapsed resize frame (``remove_windows_top_resize_inset``) leaves the
+    WebView2 control covering every pixel, so ``WM_NCHITTEST`` on the form is
+    never consulted at the edges and no resize cursor appears. Transparent
+    HTML handles show the cursor and forward the press here instead.
+    """
+
+    if sys.platform != "win32":
+        return False
+    hit = _RESIZE_EDGE_HITS.get(str(edge))
+    native = getattr(window, "native", None)
+    if hit is None or native is None:
+        return False
+    poster = resize_poster or _post_native_resize
+    result = [False]
+
+    def start() -> None:
+        result[0] = bool(poster(_window_handle(window), hit))
+
+    # ReleaseCapture only affects the calling thread, so run on the UI thread.
+    if bool(getattr(native, "InvokeRequired", False)):
+        from System import Action
+
+        native.Invoke(Action(start))
+    else:
+        start()
+    return result[0]
+
 
 _CALLBACK_FACTORY = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)
 _SUBCLASSPROC = _CALLBACK_FACTORY(
@@ -231,9 +314,9 @@ def remove_windows_top_resize_inset(hwnd: int) -> bool:
     active-window frame line shows through (a bright border that appears only
     while the window is focused). To make the shell look identical on Windows 10
     and 11, we collapse *all four* insets so the client area fills the entire
-    window (no frame line on any edge), then restore left/right/bottom + the two
-    bottom corners as resize zones via ``WM_NCHITTEST``. Top-edge resizing stays
-    given up so the HTML titlebar drag region is unobstructed.
+    window (no frame line on any edge), then restore all edges and corners as
+    resize zones via ``WM_NCHITTEST``. The titlebar below the narrow top grab
+    remains available for dragging.
     """
 
     if hwnd in _top_inset_subclasses:
@@ -408,6 +491,7 @@ class WindowsWindowController:
         self,
         *,
         maximize_bounds_preparer: Callable[[object], bool] = prepare_windows_maximized_bounds,
+        resize_starter: Callable[[object, str], bool] = begin_windows_resize,
     ) -> None:
         # Keep the bound window private. pywebview recursively reflects public
         # js_api attributes and would otherwise walk the native WinForms tree.
@@ -415,6 +499,7 @@ class WindowsWindowController:
         self._maximized = False
         self._lock = threading.RLock()
         self._maximize_bounds_preparer = maximize_bounds_preparer
+        self._resize_starter = resize_starter
 
     def _bind(self, window: object) -> None:
         with self._lock:
@@ -511,6 +596,18 @@ class WindowsWindowController:
             raise
         self._sync_html_state()
         return not was_maximized
+
+    def start_resize(self, edge: str) -> bool:
+        window = self._bound_window()
+        with self._lock:
+            maximized = self._maximized
+        if window is None or maximized:
+            return False
+        try:
+            return self._resize_starter(window, edge)
+        except Exception:
+            logging.debug("could not start native edge resize", exc_info=True)
+            return False
 
     def close(self) -> bool:
         window = self._bound_window()

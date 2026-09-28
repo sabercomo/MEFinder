@@ -15,19 +15,26 @@ that correspondence is correct, and callers must not present it as accuracy.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import sqlite3
-from contextlib import nullcontext
+import sys
+import threading
+from contextlib import nullcontext, suppress
 from itertools import combinations
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence, Tuple
 
 from .alignment_overrides import confirm_override, create_override_proposal
 from .alignment_regions import alignment_body_bounds
-from .persistence.connection import open_writable_index
-from .persistence.schema_installers import (
-    install_document_group_schema,
-    install_text_alignment_schema,
-    install_translation_workspace_schema,
+from .persistence.connection import connect_index, table_exists
+from .tasks.background_tasks import BackgroundTasks
+from .persistence.translation_work_store import (
+    clear_review_deferral_row,
+    defer_review_row,
+    dismiss_suggestion_row,
+    save_reading_position_row,
+    workspace_write_transaction,
 )
 from .text_alignment import (
     ALIGNMENT_ALGORITHM,
@@ -46,7 +53,6 @@ from .text_alignment import (
     _segment_set_id_for_source,
     _source_kind,
     _source_row,
-    _table_exists,
     _validate_nonnegative_integer,
     _validate_source_id,
     confirmed_overrides_for_pair,
@@ -59,28 +65,15 @@ MAX_CANDIDATE_RADIUS = 5
 
 
 def _read_connection(db_path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(str(db_path))
-    connection.row_factory = sqlite3.Row
+    connection = connect_index(str(db_path))
     return connection
 
 
 def _write(db_path: Path, write_window: WriteWindow | None, operation):
     transaction_window = write_window or nullcontext
     with transaction_window():
-        connection = open_writable_index(Path(db_path))
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            install_document_group_schema(connection)
-            install_text_alignment_schema(connection)
-            install_translation_workspace_schema(connection)
-            result = operation(connection)
-            connection.commit()
-            return result
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
+        with workspace_write_transaction(db_path) as connection:
+            return operation(connection)
 
 
 def _clean_ids(values: object, *, name: str, allow_empty: bool = False) -> List[str]:
@@ -105,7 +98,7 @@ def read_reading_position(db_path: Path, document_group_id: object) -> Dict[str,
         raise InvalidAlignmentRequest("document_group_id 必填。")
     connection = _read_connection(db_path)
     try:
-        if not _table_exists(connection, "document_group_reading_positions"):
+        if not table_exists(connection, "document_group_reading_positions"):
             return {"document_group_id": group_id, "position": None}
         row = connection.execute(
             "SELECT left_source_file_id, right_source_file_id, item_index, "
@@ -157,16 +150,8 @@ def save_reading_position(
         }
         if left_id not in members or (right_id is not None and right_id not in members):
             raise InvalidAlignmentRequest("阅读位置中的版本不属于该作品。")
-        connection.execute(
-            "INSERT INTO document_group_reading_positions(document_group_id, "
-            "left_source_file_id, right_source_file_id, item_index, char_offset, "
-            "updated_at) VALUES (?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(document_group_id) DO UPDATE SET "
-            "left_source_file_id = excluded.left_source_file_id, "
-            "right_source_file_id = excluded.right_source_file_id, "
-            "item_index = excluded.item_index, char_offset = excluded.char_offset, "
-            "updated_at = excluded.updated_at",
-            (group_id, left_id, right_id, index, offset, timestamp),
+        save_reading_position_row(
+            connection, group_id, left_id, right_id, index, offset, timestamp
         )
         return {
             "document_group_id": group_id,
@@ -190,7 +175,7 @@ def suggestion_key(source_file_ids: Sequence[str]) -> str:
 def list_suggestion_dismissals(db_path: Path) -> Dict[str, object]:
     connection = _read_connection(db_path)
     try:
-        if not _table_exists(connection, "document_group_suggestion_dismissals"):
+        if not table_exists(connection, "document_group_suggestion_dismissals"):
             return {"dismissals": []}
         rows = connection.execute(
             "SELECT source_file_ids_json FROM document_group_suggestion_dismissals "
@@ -218,11 +203,7 @@ def dismiss_suggestion(
     key = suggestion_key(ids)
 
     def operation(connection: sqlite3.Connection) -> Dict[str, object]:
-        connection.execute(
-            "INSERT OR IGNORE INTO document_group_suggestion_dismissals("
-            "suggestion_key, source_file_ids_json, created_at) VALUES (?, ?, ?)",
-            (key, json.dumps(ids, ensure_ascii=False), _now()),
-        )
+        dismiss_suggestion_row(connection, key, json.dumps(ids, ensure_ascii=False), _now())
         return {"source_file_ids": ids}
 
     return _write(db_path, write_window, operation)
@@ -253,6 +234,124 @@ def _detected_body_bounds(
             _DETECTED_BOUNDS_CACHE.clear()
         _DETECTED_BOUNDS_CACHE[segment_set_id] = bounds
     return bounds
+
+
+BODY_BOUNDS_CACHE_FILE = "alignment-body-bounds-cache.json"
+
+
+def _detector_fingerprint() -> str | None:
+    """Identify the running detection code; ``None`` disables the disk cache.
+
+    A frozen build cannot read its own sources, so the executable's size and
+    mtime stand in: every rebuild invalidates the cache, which keeps the
+    staleness check honest when detection changes. Source checkouts always
+    detect afresh.
+    """
+
+    if not getattr(sys, "frozen", False):
+        return None
+    try:
+        info = os.stat(sys.executable)
+    except OSError:
+        return None
+    return f"{sys.executable}|{info.st_size}|{info.st_mtime_ns}"
+
+
+def _read_bounds_cache(cache_path: Path, fingerprint: str) -> Dict[str, Tuple[int, int]]:
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("fingerprint") != fingerprint:
+        return {}
+    bounds = payload.get("bounds")
+    if not isinstance(bounds, dict):
+        return {}
+    return {
+        str(key): (int(value[0]), int(value[1]))
+        for key, value in bounds.items()
+        if isinstance(value, list) and len(value) == 2
+        and all(isinstance(item, int) for item in value)
+    }
+
+
+def _write_bounds_cache(cache_path: Path, fingerprint: str, bounds: Mapping[str, Tuple[int, int]]) -> None:
+    temporary = cache_path.with_name(f".{cache_path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(
+            json.dumps({"fingerprint": fingerprint, "bounds": {key: list(value) for key, value in sorted(bounds.items())}}),
+            encoding="utf-8",
+        )
+        temporary.replace(cache_path)
+    except OSError:
+        logging.warning("could not save body-range cache %s", cache_path, exc_info=True)
+        with suppress(OSError):
+            temporary.unlink()
+
+
+def warm_detected_body_bounds(
+    db_path: Path, cancel_event: threading.Event | None = None
+) -> int:
+    """Fill the detected-bounds cache for every completed detected-range run.
+
+    The overview checks each run's stored body range against current detection
+    while it holds the index lock, and detection scans every paragraph of a
+    version: cold, that took ~5 s on a 20-version library and queued the library
+    summary behind it. Segment sets are immutable, so bounds persisted by this
+    build (see :func:`_detector_fingerprint`) are exactly what the overview
+    would compute; only sets missing from the file are detected. Returns how
+    many sets were detected rather than read back.
+    """
+
+    path = Path(db_path)
+    if not path.is_file():
+        return 0
+    connection = connect_index(path, row_factory=None, readonly_uri=True)
+    try:
+        if not table_exists(connection, "alignment_runs"):
+            return 0
+        set_ids: set[str] = set()
+        for pivot_set, target_set, parameters_json in connection.execute(
+            "SELECT pivot_segment_set_id, target_segment_set_id, parameters_json "
+            "FROM alignment_runs WHERE status = 'completed'"
+        ):
+            if _json_object(parameters_json).get("body_range_source") == "detected":
+                set_ids.update(str(value) for value in (pivot_set, target_set) if value)
+        wanted = sorted(set_ids)[:_DETECTED_BOUNDS_CACHE_LIMIT]
+        fingerprint = _detector_fingerprint()
+        cache_path = path.with_name(BODY_BOUNDS_CACHE_FILE)
+        stored = _read_bounds_cache(cache_path, fingerprint) if fingerprint else {}
+        detected = 0
+        for set_id in wanted:
+            if cancel_event is not None and cancel_event.is_set():
+                return detected
+            if set_id in _DETECTED_BOUNDS_CACHE:
+                continue
+            if set_id in stored:
+                _DETECTED_BOUNDS_CACHE[set_id] = stored[set_id]
+                continue
+            _detected_body_bounds(connection, set_id)
+            detected += 1
+        current = {set_id: _DETECTED_BOUNDS_CACHE[set_id] for set_id in wanted if set_id in _DETECTED_BOUNDS_CACHE}
+        if fingerprint and current != stored:
+            _write_bounds_cache(cache_path, fingerprint, current)
+        return detected
+    finally:
+        connection.close()
+
+
+def start_body_bounds_warm_up(db_path: Path, tasks: BackgroundTasks) -> threading.Thread:
+    """Run detected-bounds warm-up as a runtime-owned background task."""
+
+    def run(cancel: threading.Event) -> None:
+        try:
+            warmed = warm_detected_body_bounds(db_path, cancel)
+            if warmed:
+                logging.info("detected body ranges for %d segment sets", warmed)
+        except Exception:  # noqa: BLE001 - the overview detects on demand instead
+            logging.exception("body-range warm-up failed")
+
+    return tasks.start("alignment-overview-warm-up", run)
 
 
 def _body_range_changed(
@@ -422,9 +521,9 @@ def alignment_overview(
             raise InvalidAlignmentRequest("target_id 需要一个不同的 source_id。")
     connection = _read_connection(db_path)
     try:
-        if not _table_exists(connection, "document_groups"):
+        if not table_exists(connection, "document_groups"):
             return {"works": []}
-        has_runs = _table_exists(connection, "alignment_runs")
+        has_runs = table_exists(connection, "alignment_runs")
         works: List[Dict[str, object]] = []
         group_query = "SELECT document_group_id, base_source_file_id FROM document_groups"
         if source_id:
@@ -447,7 +546,7 @@ def alignment_overview(
             languages: Dict[str, str] = {}
             pairs: List[Dict[str, object]] = []
             for member_id in member_ids:
-                if not _table_exists(connection, "segment_sets"):
+                if not table_exists(connection, "segment_sets"):
                     break
                 row = connection.execute(
                     "SELECT language_code FROM segment_sets WHERE source_file_id = ? "
@@ -705,7 +804,7 @@ def alignment_link_window(
         )
         overrides = corrections[0]
         deferred: set[str] = set()
-        if _table_exists(connection, "alignment_review_deferrals"):
+        if table_exists(connection, "alignment_review_deferrals"):
             deferred = {
                 str(row[0])
                 for row in connection.execute(
@@ -964,12 +1063,7 @@ def defer_review(
         source_set_id, key = _deferral_context(
             connection, source_id, target_id, source_ids
         )
-        connection.execute(
-            "INSERT OR IGNORE INTO alignment_review_deferrals(source_file_id, "
-            "target_source_file_id, source_segment_set_id, source_segment_key, "
-            "created_at) VALUES (?, ?, ?, ?, ?)",
-            (source_id, target_id, source_set_id, key, _now()),
-        )
+        defer_review_row(connection, source_id, target_id, source_set_id, key, _now())
         return {"deferred": True}
 
     try:
@@ -991,11 +1085,6 @@ def _clear_deferral(
         source_set_id, key = _deferral_context(
             connection, source_id, target_id, source_ids
         )
-        connection.execute(
-            "DELETE FROM alignment_review_deferrals WHERE source_file_id = ? "
-            "AND target_source_file_id = ? AND source_segment_set_id = ? "
-            "AND source_segment_key = ?",
-            (source_id, target_id, source_set_id, key),
-        )
+        clear_review_deferral_row(connection, source_id, target_id, source_set_id, key)
 
     _write(db_path, write_window, operation)

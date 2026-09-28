@@ -31,7 +31,7 @@
 
   async function chooseDesktopExportDirectory() {
     if (desktopShell !== 'macos' && desktopShell !== 'win32') return undefined;
-    var response = await fetch('/api/export-directory/choose', {
+    var response = await MEFinderApi.fetch('/api/export-directory/choose', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: '{}'
@@ -43,8 +43,42 @@
     return data.path;
   }
 
+  /* WebView2 盖满无边框窗口，原生边缘命中测试到不了窗体；
+     用透明热区接住按下，再交给原生系统缩放（最大化时 CSS 隐藏）。 */
+  function installWindowsResizeEdges() {
+    if (document.querySelector('.windows-resize-edge')) return;
+    ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'].forEach(function(edge) {
+      var handle = document.createElement('div');
+      handle.className = 'windows-resize-edge';
+      handle.dataset.edge = edge;
+      handle.setAttribute('aria-hidden', 'true');
+      handle.addEventListener('mousedown', function(event) {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        var api = window.pywebview && window.pywebview.api;
+        if (api && typeof api.start_resize === 'function') api.start_resize(edge);
+      });
+      document.body.appendChild(handle);
+    });
+  }
+
+  /* 窗口等页面就绪后才 show()，WinForms 激活时 WebView2 按 Tab 方式把焦点送进页面，
+     落到第一个可聚焦元素（最小化按钮）并画出键盘焦点框。标题栏按钮只在
+     键盘导航时保留焦点，其余来源的焦点直接移走。 */
+  var windowsFocusByKeyboard = false;
+  if (desktopShell === 'win32') {
+    document.addEventListener('keydown', function() { windowsFocusByKeyboard = true; }, true);
+    document.addEventListener('pointerdown', function() { windowsFocusByKeyboard = false; }, true);
+    document.addEventListener('focusin', function(event) {
+      var target = event.target;
+      if (windowsFocusByKeyboard || !target || typeof target.closest !== 'function') return;
+      if (target.closest('.windows-titlebar-controls')) target.blur();
+    });
+  }
+
   window.addEventListener('pywebviewready', function() {
     if (desktopShell === 'win32') {
+      installWindowsResizeEdges();
       callWindowsWindow('is_maximized').then(setWindowsMaximized);
     }
   });
@@ -211,7 +245,7 @@
     }
   })();
 
-  // 浏览器公共面：仅这些符号可被其它 static/js 文件与内联 onclick 访问。
+  // 浏览器公共面：仅这些符号可被其它 static/js 文件与 09-template-actions.js 的模板动作访问。
   global.minimizeWindowsWindow = minimizeWindowsWindow;
   global.toggleWindowsMaximize = toggleWindowsMaximize;
   global.closeWindowsWindow = closeWindowsWindow;

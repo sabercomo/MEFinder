@@ -1,0 +1,370 @@
+"""Protect the assembled reader's public contract before splitting its source."""
+
+import shutil
+import subprocess
+import re
+import unittest
+
+from src.me_finder.web_assets import HTML, READER_WINDOW_HTML, _PACKAGE_DIR, _load_asset
+from tests.reader_source import alignment_jobs_source, reader_js_source, reader_runtime_source
+
+
+class ReaderPublicContractTests(unittest.TestCase):
+    def test_reader_state_has_one_writer_per_domain(self) -> None:
+        directory = _PACKAGE_DIR / "static" / "reader"
+        owners = {
+            "05-dom.js": "elements",
+            "10-citation.js": "citationLoading citationMenuOpen citationRange citationRequestSerial selectionDragging",
+            "20-work-context.js": "alignmentGroupId alignmentLoading alignmentRequestSerial alignmentSourceLanguage alignmentTargets availability defaultComparisonTarget openMenu outline outlineJumpSerial outlineNavigating pendingCompareWith work workRequestSerial",
+            "30-alignment.js": "",
+            "35-links.js": "flagLayoutTimer linkRequestSerial linkedRanges links selectedLinkKey",
+            "40-comparison.js": "",
+            "45-review.js": "review",
+            "50-deeplink.js": "deepLinkTimer lastDeepLink lastHistoryAnchor lastHistoryCompare lastSession pendingDeepLink positionTimer",
+            "60-window.js": "abortController boundaryObserver currentAnchorId currentIndex hasMore hasPrevious items lastPosition loading nextStart onCurrentChange pageObserver previousStart requestSerial scrollBoundaryTimer source targetAnchorId title total visibleRatios windowEnd windowStart",
+            "70-render.js": "hashRecoveryNotice highlights matchQuote preciseHighlight resolvedHighlights showDecorations",
+            "90-lifecycle.js": "open originalUrl restoreFocus returnLabel sourceId",
+        }
+        write = re.compile(
+            r"(?<![.\w])state\.([A-Za-z]\w*)\s*(?:=(?!=)|\+=|-=|\+\+|--|\.clear\(|\.set\(|\.delete\(|\.push\()"
+        )
+        for name, expected in owners.items():
+            source = (directory / name).read_text(encoding="utf-8")
+            self.assertEqual(set(write.findall(source)), set(expected.split()), name)
+            if name != "40-comparison.js":
+                self.assertNotRegex(source, r"\bstate\.comparison\.[A-Za-z]\w*\s*(?:=(?!=)|\+=|\.clear\(|\.set\()")
+
+    def test_reader_modules_are_ordered_bounded_and_dom_safe(self) -> None:
+        directory = _PACKAGE_DIR / "static" / "reader"
+        modules = sorted(directory.glob("*.js"))
+        self.assertEqual([path.name for path in modules], [
+            "00-core.js", "05-dom.js", "10-citation.js", "20-work-context.js",
+            "30-alignment.js", "35-links.js", "40-comparison.js", "45-review.js",
+            "50-deeplink.js", "60-window.js", "70-render.js", "90-lifecycle.js",
+        ])
+        assembled = reader_js_source()
+        previous = -1
+        for path in modules:
+            source = path.read_text(encoding="utf-8")
+            self.assertLessEqual(len(source.splitlines()), 800, path.name)
+            self.assertNotIn("innerHTML", source, path.name)
+            self.assertTrue(source.startswith("(function (global) {"), path.name)
+            self.assertEqual(assembled.count(source), 1, path.name)
+            position = assembled.index(source)
+            self.assertGreater(position, previous, path.name)
+            previous = position
+
+    def test_both_windows_embed_the_same_reader_script_once(self) -> None:
+        source = reader_js_source()
+        self.assertTrue(source)
+        self.assertEqual(HTML.count(source), 1)
+        self.assertEqual(READER_WINDOW_HTML.count(source), 1)
+        self.assertNotIn("//__READER_JS__", HTML)
+        self.assertNotIn("//__READER_JS__", READER_WINDOW_HTML)
+
+    def test_both_windows_load_api_then_job_service_then_reader(self) -> None:
+        api = _load_asset("static/js/07-api.js")
+        jobs = alignment_jobs_source()
+        reader = reader_js_source()
+        for html in (HTML, READER_WINDOW_HTML):
+            self.assertEqual(html.count(api), 1)
+            self.assertEqual(html.count(jobs), 1)
+            self.assertLess(html.index(api), html.index(jobs))
+            self.assertLess(html.index(jobs), html.index(reader))
+        self.assertNotIn("//__API_JS__", READER_WINDOW_HTML)
+        self.assertNotIn("//__ALIGNMENT_JOBS_JS__", READER_WINDOW_HTML)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_reader_requests_use_the_shared_client_unless_fetch_is_injected(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const calls = [];
+let resolver = null;
+const context = {
+  document: {readyState:'loading', documentElement:{dataset:{}}, addEventListener(){}},
+  location:{pathname:'/',search:''},
+  addEventListener(){}, setTimeout(resolve){resolve();},
+  MEFinderApi: {
+    fetch: async url => { calls.push(['shared', url]); return {status:404, ok:false, json:async()=>({})}; },
+    withFetch(resolve) { resolver = resolve; return {requestJSON(){}, postJSON(){}}; }
+  }
+};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0,'utf8'), context);
+const reader = context.MEFinderReader;
+(async()=>{
+  // JSON 请求的客户端在装配时建好，但每次请求才解析实际 fetch。
+  assert.equal(typeof resolver, 'function');
+  await resolver()('/json-default');
+  // 需要原始状态码的轮询默认也走共享出口。
+  reader.alignmentJobs.watch('J1', {origin:'reader'});
+  for (let i=0;i<5 && calls.length < 2;i++) await new Promise(setImmediate);
+  reader.configure({fetch: async url => { calls.push(['injected', url]); return {status:404, ok:false, json:async()=>({})}; }});
+  await resolver()('/json-injected');
+  reader.alignmentJobs.watch('J2', {origin:'reader'});
+  for (let i=0;i<5 && calls.length < 4;i++) await new Promise(setImmediate);
+  assert.deepEqual(calls.map(call=>call[0]), ['shared','shared','injected','injected']);
+  assert.equal(calls[0][1], '/json-default');
+  assert.match(calls[1][1], /job_id=J1/);
+  assert.equal(calls[2][1], '/json-injected');
+  assert.match(calls[3][1], /job_id=J2/);
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=alignment_jobs_source() + reader_js_source(),
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_injected_client_keeps_json_error_shape_and_live_resolution(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const seen = [];
+const context = {fetch: async (url, options) => { seen.push(['global', url, options]); return {ok:true, status:200, json:async()=>({ok:1})}; }};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0,'utf8'), context);
+const api = context.MEFinderApi;
+let current = async (url, options) => { seen.push(['first', url, options]); return {ok:false, status:409, json:async()=>({error:'冲突', code:'busy'})}; };
+const client = api.withFetch(() => current);
+(async()=>{
+  const options = {headers:{'Accept':'application/json'}};
+  await assert.rejects(client.requestJSON('/a', options), error => {
+    assert.equal(error.message, '冲突'); assert.equal(error.status, 409); assert.equal(error.code, 'busy');
+    return true;
+  });
+  assert.equal(seen[0][2], options); // options pass through untouched (no cache flag added)
+  current = async (url, options) => { seen.push(['second', url, JSON.parse(options.body)]); return {ok:true, status:200, json:async()=>({saved:true})}; };
+  assert.deepEqual(await client.postJSON('/b', {x:1}), {saved:true});
+  assert.deepEqual(seen[1], ['second', '/b', {x:1}]);
+  assert.deepEqual(await api.requestJSON('/c'), {ok:1});
+  assert.equal(seen[2][0], 'global');
+  assert.equal(Object.isFrozen(client), true);
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=_load_asset("static/js/07-api.js"), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_public_methods_are_frozen_and_state_shape_is_stable(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const context = {
+  document: {
+    readyState: 'loading',
+    documentElement: {dataset: {}},
+    addEventListener() {}
+  },
+  location: {pathname: '/', search: ''},
+  addEventListener() {}
+};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0, 'utf8'), context);
+const reader = context.MEFinderReader;
+assert.deepEqual(Object.keys(reader).sort(), [
+  'alignmentJobs', 'close', 'codePointToUtf16Index', 'configure',
+  'copyCitation', 'destroy', 'getState', 'goTo', 'isOpen', 'open',
+  'openForSearchResult', 'restore'
+].sort());
+assert.equal(Object.isFrozen(reader), true);
+assert.equal(Object.hasOwn(context, '__MEFinderReaderInternal'), false);
+assert.deepEqual(Object.keys(reader.alignmentJobs).sort(), ['running', 'subscribe', 'watch']);
+assert.equal(Object.isFrozen(reader.alignmentJobs), true);
+assert.equal(reader.isOpen(), false);
+assert.equal(reader.codePointToUtf16Index('A😀B', 2), 3);
+assert.deepEqual(Object.keys(reader.getState()).sort(), [
+  'alignmentTargetCount', 'citationRange', 'comparisonAutoFollow',
+  'comparisonOpen', 'comparisonPending', 'comparisonTargetSourceId',
+  'currentAnchorId', 'currentIndex', 'hasMore', 'hasPrevious',
+  'lastDeepLink', 'lastPosition', 'linkCount', 'mountedItemCount',
+  'nextStart', 'open', 'previousStart', 'sourceId', 'total',
+  'windowEnd', 'windowStart', 'workGroupId'
+].sort());
+assert.equal(reader.getState().open, false);
+assert.equal(reader.getState().mountedItemCount, 0);
+assert.equal(reader.alignmentJobs.running(), null);
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_late_page_responses_cannot_restore_a_replaced_or_closed_book(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+class Element {
+  constructor(tag) {
+    this.tagName = tag.toUpperCase(); this.dataset = {}; this.style = {};
+    this.children = []; this.hidden = false; this.isConnected = true;
+    this.classList = {add(){}, remove(){}, toggle(){}};
+  }
+  appendChild(child) { this.children.push(child); return child; }
+  replaceChildren(...children) { this.children = children; }
+  setAttribute() {}
+  addEventListener() {}
+  querySelector() { return null; }
+  querySelectorAll() { return []; }
+  focus() {}
+  remove() { this.isConnected = false; }
+}
+const body = new Element('body');
+const document = {
+  body, activeElement: body, readyState: 'loading',
+  documentElement: {dataset: {}},
+  createElement: tag => new Element(tag),
+  createElementNS: (ns, tag) => new Element(tag),
+  querySelector: () => null,
+  addEventListener() {}
+};
+const context = {
+  document, URLSearchParams, AbortController,
+  location: {pathname:'/', search:''},
+  history: {replaceState() {}},
+  addEventListener() {}, setTimeout, clearTimeout
+};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0, 'utf8'), context);
+const reader = context.MEFinderReader;
+const requests = [];
+reader.configure({fetch(url) {
+  return new Promise(resolve => requests.push({url, resolve}));
+}});
+const page = {ok:true, json:async()=>({items:[], total:0, start:0, has_more:false})};
+(async()=>{
+  const first = reader.open({sourceId:'A'});
+  const second = reader.open({sourceId:'B'});
+  assert.equal(requests.length, 2);
+  requests[0].resolve(page);
+  assert.equal(await first, false);
+  assert.equal(reader.getState().sourceId, 'B');
+  reader.close();
+  requests[1].resolve(page);
+  assert.equal(await second, false);
+  assert.equal(reader.isOpen(), false);
+  assert.equal(reader.getState().mountedItemCount, 0);
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_alignment_job_subscribers_share_polling_and_status_outcomes(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const context = {
+  document: {
+    readyState:'loading', documentElement:{dataset:{}}, addEventListener(){}
+  },
+  location:{pathname:'/',search:''},
+  addEventListener(){}, setTimeout(resolve){resolve();}
+};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0,'utf8'), context);
+const reader = context.MEFinderReader;
+const responses = {
+  J1:[{status:202,ok:true,payload:{}},{status:200,ok:true,payload:{ok:true}}],
+  J2:[{status:200,ok:true,payload:{cancelled:true}}],
+  J3:[{status:404,ok:false,payload:{}}],
+  J4:[{status:500,ok:false,payload:{error:'failed'}}]
+};
+const polls = {};
+reader.configure({fetch:async url=>{
+  const id = new URL(url,'http://localhost').searchParams.get('job_id');
+  polls[id] = (polls[id] || 0) + 1;
+  const response = responses[id].shift();
+  return {status:response.status, ok:response.ok, json:async()=>response.payload};
+}});
+let events = [];
+const unsubscribe = reader.alignmentJobs.subscribe(event=>events.push(event));
+(async()=>{
+  reader.alignmentJobs.watch('J1',{origin:'works',groupId:'G'});
+  reader.alignmentJobs.watch('J1',{origin:'reader',groupId:'G'});
+  assert.equal(reader.alignmentJobs.running().origin,'works');
+  for (let i=0;i<5 && !events.length;i++) await new Promise(setImmediate);
+  assert.equal(polls.J1,2);
+  assert.equal(events.length,1);
+  assert.equal(events[0].meta.origin,'works');
+  assert.equal(events[0].outcome,'ok');
+  for (const [id,expected] of [['J2','cancelled'],['J3','unknown'],['J4','failed']]) {
+    reader.alignmentJobs.watch(id,{origin:'works'});
+    for (let i=0;i<5 && events.length < Number(id.slice(1));i++) await new Promise(setImmediate);
+    assert.equal(events.at(-1).outcome,expected);
+    assert.equal(polls[id],1);
+  }
+  assert.equal(events.length,4);
+  assert.equal(reader.alignmentJobs.running(),null);
+  unsubscribe();
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_job_service_runs_without_reader_or_works_page(self) -> None:
+        script = r"""
+const assert = require('assert/strict');
+const vm = require('vm');
+const fs = require('fs');
+const urls = [];
+const replies = [{status:202, ok:true, payload:{}}, {status:200, ok:true, payload:{ok:true}}];
+const context = {
+  setTimeout(resolve){resolve();},
+  MEFinderApi: {fetch: async url => { urls.push(url); const r = replies.shift(); return {status:r.status, ok:r.ok, json:async()=>r.payload}; }}
+};
+context.window = context;
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(0,'utf8'), context);
+const jobs = context.MEFinderAlignmentJobs;
+assert.equal(Object.isFrozen(jobs), true);
+assert.deepEqual(Object.keys(jobs).sort(), ['configure','running','subscribe','watch']);
+assert.equal(context.MEFinderReader, undefined);
+const events = [];
+const stop = jobs.subscribe(event => events.push(event));
+jobs.subscribe(() => { throw new Error('bad subscriber'); });
+(async()=>{
+  jobs.watch('J9', {origin:'works', groupId:'G', key:'A|B'});
+  assert.deepEqual({...jobs.running()}, {jobId:'J9', origin:'works', groupId:'G', key:'A|B'});
+  for (let i=0;i<5 && !events.length;i++) await new Promise(setImmediate);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].outcome, 'ok');
+  assert.deepEqual(urls, ['/api/text-alignments/status?job_id=J9', '/api/text-alignments/status?job_id=J9']);
+  assert.equal(jobs.running(), null);
+  stop();
+})().catch(error=>{console.error(error);process.exit(1);});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", script],
+            input=alignment_jobs_source(), capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

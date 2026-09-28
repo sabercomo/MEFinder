@@ -1,0 +1,405 @@
+# MEFinder 前后端架构重构计划
+
+2026-09-27(0.5.7 验收包):版本入口更新为 0.5.7，macOS arm64 的 DMG/ZIP 已由 `build_macos.sh` 生成并通过全量测试、签名、内置 MCP 侧车及包体验证；SHA-256 见 `docs/release-notes-0.5.7.md`。对照链接/复核完整手测及其他平台打包仍待完成，尚未正式发布。
+
+2026-09-27(D4):阅读器跨模块的 `state` 写入已改走所属模块入口：打开/关闭由生命周期编排，作品上下文、引用、左栏窗口、右栏对照、链接、深链、渲染与 DOM 各自重置或失效自己的字段。新增字段写入归属守卫、换书时过期作品请求及链接取消选中保留右栏搜索高亮的测试；本机全量 `unittest` 2584 项通过、28 项跳过，Ruff 与逐文件 Node 语法检查通过。隔离合成 DOCX 的浏览器主窗口已验证检索结果打开阅读器、正文高亮、深链刷新恢复与关闭；隔离开发桌面壳已验证打开阅读器、新窗口与返回主窗口。对照链接/复核的完整交互和实际打包冒烟仍待验收。
+
+2026-09-27(D3):`reader.js` 已按职责拆为 `static/reader/` 下 12 个有序 IIFE 文件，最大文件 618 行；两种窗口继续由 `web_assets.py` 拼成一段脚本。模块用临时私有命名空间接线，`90-lifecycle.js` 安装公共入口后删除全局临时键；共享 `state` 的写入归属留待 D4。每块拆出后均运行全量 `unittest`，收尾守卫加入后 2581 项通过、28 项跳过；四份构建脚本现逐个检查阅读器 JS。隔离合成 DOCX 的主窗口浏览器冒烟已验证搜索结果打开阅读器、三段正文、命中高亮与未解析页码提示；完整交互、桌面壳和实际打包冒烟待执行。
+
+2026-09-26:阶段 A、B1/B2、C1.1—C1.5、C2、C3、C4、C5 已实施;B3 移出本轮,数据库等待时间保持现状。下一步按计划进入阶段 D。版本号 v0.5.7 为暂定,尚未发布。
+
+2026-09-27(D0):已建立阅读器装配源码入口及公共接口、双窗口、迟到请求、对齐任务状态的执行型守卫；D1—D4 未实施,阅读器仍为 4301 行单文件。
+
+2026-09-27(D 计划审阅与 D1):审阅阶段 D 补充计划,结构与验收可行;发现一处与 D0 装配入口的冲突并在 D3 步骤中更正:`_load_reader_js` 只要 `static/reader/` 下有文件就不再读 `reader.js`,所以 D3 第一步须把 `reader.js` 整体移入该目录(剩余部分作为一个文件),之后再逐个职责拆出,不能新目录与旧单文件并存。D1 已实施:`07-api.js` 新增 `withFetch` 可注入客户端,阅读器 JSON 请求复用它,需要原始状态码的请求默认出口改为 `MEFinderApi.fetch`;独立阅读窗口在阅读器前装配 `07-api.js`,设置读取改走统一客户端,前端直接 `fetch(` 棘轮清零到只剩 `07-api.js`。D2 已实施:任务监听迁到 `static/js/15-alignment-jobs.js`(`MEFinderAlignmentJobs`:watch/subscribe/running/configure),状态端点与轮询只在此一处;阅读器保留结局处理(提示、刷新目标与作品上下文),`configure({fetch})` 同时转发给服务,`MEFinderReader.alignmentJobs` 保留为转发兼容;作品页改订阅服务。独立阅读窗口按 API → 任务服务 → 阅读器 → 宿主顺序装配。D3—D4 未实施。
+
+2026-09-27(D3/D4 与 macOS 验收包审阅,Claude):逐函数比对 `25e7682` 的 `reader.js` 与 D3 的 12 个模块,158 个函数去掉 `r.` 前缀后逐字相同,模块外顶层语句无丢失,加载期监听注册顺序不变;静态扫描无跨模块裸引用,`r.*` 读取均有唯一注册。D4 的打开/关闭重置逐项对照旧序列,差异均为收紧(关闭时作品请求序号失效、可用性结果在序号校验后写入、打开时提前中止旧分页请求与 observer),未见回归。修正:`05-dom.js` 缩进与 `destroyDom` 命名,移除四个无人使用的内部注册。验收包 SHA-256 复核一致,包内前端与提交源码逐字节相同。D2 CI `36257436103` 的 Windows 失败为后端批量导入测试超时,与前端改动无关,后续同测试均通过。
+
+2026-09-26(阶段 D 计划补充):已明确模块依赖、状态归属、双窗口装配与行为验收。
+
+2026-09-25(复测):已获用户授权开工,在 `refactor/v0.5.7-architecture`(自 `771f917` 开出)执行;复测差异见 §3.3,以复测值为准。
+
+2026-09-25(0.5.6 后续合入):从 `origin/codex/v0.5.6-integration` 的 `685d5f1` 合入 0.5.6 后续五提交(含 Zotero 队列续跑、MCP 数据根二级指针与版本号 0.5.6)。`web_runtime.py` 的队列容量接线与本轮架构变更自动合并;前端装配指纹按两边变更后的实际 HTML 重测。0.5.6 分支的发布说明仍属 0.5.6,本轮未发布 0.5.7。
+
+2026-09-25(Windows 修复合入):再次合入 `origin/codex/v0.5.6-integration` 的 `58a4ac0`(译本对照后台预热与构建缓存);新增只读连接改走 `persistence.connection.connect_index`,并重测前端装配指纹。合并后 macOS 全量 unittest 2573 通过、23 跳过。
+
+本文件是给**新会话**用的执行计划。先读"开场 prompt",再按阶段推进。§3 保留重构前基线与复测更正,不是当前代码状态;已完成项以 Git 与各阶段进展为准。动手前复测本步骤相关指标,不要从 A 重新执行。
+
+---
+
+## 0. 开场 prompt(复制到新会话)
+
+```text
+按 docs/refactor-v0.5.7-plan.md 执行架构重构。
+
+要求:
+1. 先按 AGENTS.md §5 读档并校对工作区;确认 0.5.6(Zotero 同步)已提交,否则停下告诉我。
+2. 用计划第 6 节的命令复测基线,和计划里的数字对照,差异先报告。
+3. 从当前未完成步骤继续(当前为 D1 请求出口迁移),一次只做一个阶段内的一个步骤;每步:先写/改守卫测试 → 重构 → 全量 unittest 全绿 → 按 AGENTS.md §2.1 提交。
+4. 行为不变是硬约束:不改 HTTP 契约语义、不改对齐/检索结果;需要改行为的地方(如外键约束)先出实证报告再问我。
+5. 遵守 CLAUDE.md 红线;按路径暂存,不要 git add -A。
+6. 每个阶段结束停下来,汇报基线变化和剩余风险,等我确认再进下一阶段。
+7. 技术取舍由执行者负责,不再要求用户选择超时秒数、校验模型或拆文件方式。已定取舍见 §0.1;如果候选方案会改行为,优先保留原行为并继续独立步骤。只有确实无法兼容且阻塞目标的产品取舍才带具体影响与推荐方案请用户决定。
+```
+
+### 0.1 当前技术决策(2026-09-25)
+
+用户表示不懂技术,委托代理判断。以下是本次代理据此作出的技术决策,取代此前“B3/超时待用户决定”的停点;阶段结束汇报的约定保留。
+
+- **B3 严格入参校验移出本轮**:保留现有 controller 的校验、类型转换、状态码与错误文案。本轮不引入 `parse_payload` 或新 `code` 字段。输入校验本身可以在保持行为的前提下重构;但原 B3 的“字段类型/必填校验”会收紧兼容范围,不应混在结构整理里。以后有具体缺陷时单独立项并更新契约。
+- **数据库等待时间保持现状,不再待确认**:各调用点原来等 5 秒或 30 秒就维持原值。等待更久不能消除锁竞争,现有外键审计也没有证明统一 30 秒的必要性;后续如有真实超时故障,先记录锁等待与用户响应时间再决定。
+- **接受 B2 的职责拆分结果**:`web_http.py` 当前 401 行,现有守卫上限 405 行保留。原 ≤300 行目标不再作为本轮门禁,不为行数再拆传输细节;路由唯一、业务移出、信任校验/上传排空/Range 行为不变仍是门禁。
+- **C1.1 作品组仓储迁移已完成**: `document_groups` 的 SQL 收进 `persistence/document_group_store.py`,原模块保留兼容入口;纯版本名称逻辑随仓储依赖移入 persistence 并保留原导入路径。事务边界、调用接口、返回结果与删除语义保持;SQL 散落白名单删除该文件。下一步 C1.2,不同时启动 C/D 其他步骤。
+- **C3 先调查生命周期再设计共用管理器**:统计线程创建点、取消方式、退出等待与进程回收的实际差异,不能只为消除裸 `Thread` 就强行套同一接口。暂不改变现有线程行为,具体迁移范围由调查结果决定。
+
+---
+
+## 1. 目标与不做的事
+
+**目标**:在不推倒重写的前提下,收口四类问题——DB 连接策略分散、HTTP 分发多轨、组合根过重、前端请求与 DOM 构造无统一出口。
+
+**明确不做**:
+
+- 不换 FastAPI / 不上 async / 不引 ORM / 不引 DI 容器(边界测试已禁止)。
+- 前端不引框架、不引构建步骤。
+- 本轮不切 SQLite WAL:`database.py` 依赖"临时库 + 原子替换文件"发布,WAL 的 `-wal/-shm` 与之冲突,需单独议题 + `reports/` 实证。
+
+---
+
+## 2. 前置条件
+
+1. 0.5.6(Zotero 同步)已提交。它的改动覆盖 `web_http.py` / `http_routes.py` / `migrations.py` / `schema_installers.py` 等,先重构必冲突。
+2. 全量测试在当前 `main`(或集成分支)全绿。
+3. 本计划涉及大面积重构,按 AGENTS.md §2.2 开 `refactor/*` 分支,各阶段验证后合入。
+
+---
+
+## 3. 现状基线(2026-09-25 实测)
+
+### 3.1 后端
+
+| 指标 | 值 | 说明 |
+|---|---|---|
+| `src/me_finder` 模块数 / 行数 | 183 / 约 74.7k | |
+| 内部 import 环 | 0 | 已有 `test_no_new_import_cycles_appear` |
+| `sqlite3.connect` 调用点 | 31(约 20 个模块) | 仅 2 处走 `persistence/connection.py` |
+| persistence 外含 `.execute(` 的文件 | 27 | 最多:`database.py` 67、`document_groups.py` 65、`text_alignment.py` 52、`large_document/job_ledger.py` 36、`translation_works.py` 21 |
+| `_table_exists` 定义 | 4 份 | `document_groups` / `text_alignment` / `schema_installers` / `migrations` |
+| `web_http.py` 内 `parsed.path` 分支 | 31 | 另有 `_POST_ROUTE_TABLE`、controller 路由、shell 路由三套分发 |
+| `web_runtime.py` 直接内部依赖 | 63 | `ApplicationRuntime` 28 个字段,几乎全是 `object` |
+| 自起线程的模块 | 约 14 | `managed_mineru` 5、`managed_alignment_runtime` 5、`native_document_open` 5、`alignment_compute` 4、`local_ocr_installer` 4 … |
+| `except Exception` | 148 | |
+
+**连接策略不一致(事实)**:`busy_timeout=30000` 只在 `persistence/connection.py` 与 `database.py` 部分路径设置,其余用 Python 默认 5 秒;`PRAGMA foreign_keys = ON` 只在 `open_writable_index` 与 `database.py` 部分写路径开启,`document_groups.py`、`alignment_overrides.py` 等写入未开。
+
+**与既有文档的出入**:`docs/refactor-v0.5.0.md` 写"SQL 已收进 persistence",实测不成立(见上表)。执行本计划时在该文件以日期行追加更正,不改旧结论。
+
+**已有的好模式(照抄)**:`persistence/zotero_sync_store.py`、`persistence/document_read_repository.py`(SQL 收口);`zotero_sync_assembly.py`、`managed_component_assembly.py`(按域装配);controller 返回 `(status, dict)`、不碰传输。
+
+### 3.2 前端
+
+| 指标 | 值 | 说明 |
+|---|---|---|
+| `static/js/*.js` 总行数 | 约 14.1k | 最大:`35-works` 2007、`60-settings` 1954、`80-import` 1514、`70-vision` 1394、`30-library` 1179 |
+| `static/reader.js` | 4301 行、约 167 个函数、1 个共享可变 `state` | 已禁 `innerHTML`;公共面 `MEFinderReader` 已冻结;详见阶段 D |
+| `fetch(` 调用 | 约 105,分布 14 个文件 | `70-vision` 25、`60-settings` 25、`80-import` 21;无统一客户端,`35-works` 与 `62-zotero` 各有私有 `requestJSON`/`getJSON` |
+| 使用 `innerHTML` 的 JS 文件 | 10 | 字符串拼接 HTML |
+| `index.html` 内联事件属性 | 182 | `onclick=` / `onchange=` / `oninput=` |
+
+**安全隐患(事实 + 推断)**:动态 HTML 里有 `onclick="fn(event,'` + `esc(id)` + `')"` 形式(如 `20-search.js` 的分组选项)。HTML 实体先解码再进 JS,`esc()` 挡不住单引号。**推断**:目前这些 id 由后端生成,实际利用面低;但同文件已有 `data-value` + `this.dataset.value` 的安全写法,应统一到后者。
+
+### 3.3 复测更正(2026-09-25,macOS `.venv-macos312-arm64`,HEAD `771f917`)
+
+事实(按 §6 命令与 AST 扫描复测):
+
+| 指标 | 原值 | 复测值 |
+|---|---|---|
+| 全量 unittest | — | 2534 通过 / 23 跳过;ruff `src tests scripts` 零告警 |
+| persistence 外 `sqlite3.connect` | 31(约 20 个模块) | 30(17 个模块);A2 清单漏了 `application/document_heading_enrichment.py`、`large_document/job_ledger.py` |
+| `fetch(` 分布文件数 | 14 | 13(总数 105 一致) |
+| `index.html` 内联事件(click/change/input) | 182 | 205(`771f917` 的 Zotero 设置页新增;推断,未逐条核对) |
+| 自起线程 | 约 14 模块、如 `managed_mineru` 5 | §6 命令只得 10 个模块、每个 1 行;表中数字与命令口径不一致,C3 开工前重定统计口径 |
+
+补充事实:persistence 外含 `.execute(` 的 27 个文件中有 5 个在 `application/`(`import_orchestrator`、`literature_verification_service`、`parallel_passage_service`、`script_search`、`document_heading_enrichment`),现有边界测试只禁 application import persistence,未禁直接写 SQL;A0 棘轮先冻结现状。
+
+2026-09-25(A1 实证):真实库与开发库 `foreign_key_check` 均 0 违例;`document_groups` 写入经 `open_writable_index` 已开外键,§3.1 所述不成立。统一 `busy_timeout=30000` 会改读路径等待时长,属行为变化,A2 默认保留各点现值。详见 `reports/foreign-key-audit-2026-09-25.md`。
+
+---
+
+## 4. 分阶段计划
+
+每步一个提交,提交信息按 AGENTS.md §2.1。每步结束:全量 unittest 全绿、ruff `F` 零新增、需要时更新前端指纹/预算。
+
+### 阶段 A — 后端 DB 连接收口(最先做,不影响前端)
+
+**A0 守卫测试(棘轮)**
+- 在 `tests/test_architecture_boundaries.py` 新增:
+  - persistence 外 `sqlite3.connect` 调用点白名单 = 当前清单,**只许删不许增**;
+  - persistence 外含 `.execute(` 的文件白名单,同上。
+- 提交:`test(arch): 新增 DB 连接与 SQL 散落棘轮基线`
+
+**A1 外键实证(先于改行为)**
+- 对真实用户库(先备份)与开发库跑 `PRAGMA foreign_key_check`,结果写进 `reports/`。
+- 有违例:停下,报告给用户,先设计数据修复迁移(走 `migrations.py` + `user_version`),再进 A2。
+
+**A2 统一连接入口**
+- `persistence/connection.py` 增加上下文管理器:`open_read(path)`、`open_write(path, *, immediate=False)`、`open_readonly_snapshot(path)`(URI `mode=ro`);集中连接策略,逐点保留原 `row_factory` 与等待时间(5 秒或 30 秒),写连接统一 `foreign_keys=ON`。保留现有 `open_readonly_index` / `open_writable_index`。
+- `table_exists` 下沉到 persistence,删除 4 份私有副本。
+- 按机械程度迁移调用点:`document_groups` → `alignment_overrides` / `alignment_snapshots` / `alignment_body_range` → `translation_works` / `runtime_page_mapping` / `parser_statistics` → `text_alignment` → `bibliographic_metadata` / `document_export_service` / `document_deletion` / `indexer` / `index_publisher` → `application/document_heading_enrichment` / `large_document/job_ledger`(复测补漏) → `data_location` → `database.py`。
+- 每迁一批把 A0 的白名单删掉对应条目。
+- 验收:persistence 外 `sqlite3.connect` = 0。
+- 注意:`database.py` 的临时库构建与 `ATTACH`、`data_location` 的 `backup()` 属特殊连接,可提供专用 helper,不要硬塞通用入口。
+
+### 阶段 B — HTTP 契约统一(唯一需要前后端联动的阶段,同一版本完成)
+
+**B1 前端统一请求客户端(先做)**
+- 新增 `static/js/07-api.js`:`apiGet(url, opts)`、`apiPost(url, payload, opts)`、`apiUpload(...)`;统一 `cache: 'no-store'`、JSON 解析、`!resp.ok || data.error` → 抛带 `status`/`code`/`message` 的错误。
+- 把约 105 处 `fetch(` 迁过去;删除 `35-works` / `62-zotero` 的私有 helper。上传与 Range 等特殊请求可保留直接 `fetch`,但须集中在 `07-api.js`。
+- 新增前端守卫:`07-api.js` 之外禁止 `fetch(`(棘轮)。
+- 同步:全局符号预算、`test_frontend_assets.py` 指纹(命令见 AGENTS.md §3.6)。
+
+**B2 后端单一路由注册表**
+- 在 `http_routes.py` 引入 `Route` 数据类:`method`、`path`、`handler`、`body`(`json` / `raw` / `none`)、`mutates_data_root: bool`、可选 `payload_model`。
+- `RAW_BODY_POST_PATHS`、`DATA_ROOT_MUTATING_POST_PATHS` 改为由路由属性推导,删除手写集合。
+- 把 `web_http.py` 的 31 处 `parsed.path` 分支迁出:`/api/import`、`/api/import-upload/*`、`/api/import-local`(含读偏好、校验扫描目录这段业务逻辑)进导入 controller;`/api/search` 进搜索 controller;其余同理。
+- `web_http.py` 只保留:可信来源/Host 校验、Content-Type 门、读/排空请求体(Windows 断连修复保持原样)、分发、Range 流式、关闭中 503。按 §0.1 接受现有 401 行结果,保留 `test_web_boundary_stays_split_by_responsibility` 的 405 行上限。
+- 新增测试:由注册表导出路由清单,与 `docs/contracts/` 当前版本契约比对。
+- 验收:`test_http_api_contract` 及上传/排空相关测试**不改断言**通过。
+
+2026-09-25(进展):B1、B2 已完成(`7550755` `7b23e8d` `abfc4bb` `f5febf3`)。前端 105 处 `fetch(` 收口到 `07-api.js`;后端 `http_route_table.RouteTable` 为唯一注册表,原始请求体/数据目录名单与请求体上限由路由声明推导,旧手写集合钉在 `tests/test_http_route_table.py` 证明逐项相等;`web_http.py` 763 → 401 行(未到 ≤300 目标:剩余均为计划明确保留的信任校验、读体/排空、Range 流式)。B3 暂停待用户决定:字段类型/必填校验会拒绝现在被宽松接受的输入(如数字标题)并改变部分错误文案,属行为变化。
+
+2026-09-25(技术决策):上述“B3 暂停待用户决定”已由 §0.1 取代。B3 移出本轮,保留现有输入兼容行为;阶段 B 按 B1/B2 收尾。Windows 自动测试通过不等于 Windows 打包/桌面冒烟通过,后者仍未验收。
+
+**B3 统一入参校验(移出本轮,以下保留原提案供后续议题参考)**
+- 新增轻量 `parse_payload(Model, payload)`(dataclass + 字段类型/必填校验),失败抛 `PayloadError` → 400。错误体保持 `{"error": "中文消息"}`,可增 `code`,前端 `07-api.js` 已能透传。
+- 从 `DocumentGroupController` 开始逐个 controller 迁移,把 `payload_model` 登记到 `Route`。
+- 不引 pydantic。
+
+契约若有任何可见变化(新增 `code` 字段等),按 `docs/backend-contract-change-checklist.md` 出新版 `docs/contracts/vX.Y.Z-http-api.json`。
+
+### 阶段 C — 可并行,穿插功能迭代分批做
+
+**后端 C1 SQL 进仓储**(照 `zotero_sync_store.py`)
+1. `document_groups` → `persistence/document_group_store.py`
+2. `alignment_overrides` / `alignment_snapshots` / `alignment_body_range` → `persistence/alignment_store.py`
+3. `translation_works`、`runtime_page_mapping`、`bibliographic_metadata` 写库部分
+4. `text_alignment.py` 拆:`alignment_segmentation.py`(`segment_*` 纯函数)、`alignment_generation.py`(`generate_alignment` 编排)、SQL 进 `alignment_store`
+5. `database.py` 拆:`persistence/fts_index.py`、`persistence/index_build.py`、`persistence/source_replace.py`、`persistence/storage_optimization.py`;`database.py` 暂留兼容转发
+- 顺带处理 `docs/refactor-v0.5.0.md` 记录的残留环根因(`bibliographic_metadata` 顶层依赖 `database.paragraph_payload_for_storage`)。
+- 纯搬迁,对齐/检索 golden 与 `tests/fixtures/search_pipeline_golden.json` 不得变化。每批收紧 A0 白名单。
+
+2026-09-25(C1.1 进展):作品组读写、事务、快照恢复与成员展示代码迁入 `persistence/document_group_store.py`;`document_groups.py` 保留原导入面。`document_group_metadata.py` 同样保留兼容导入面,persistence 内部使用本层的纯函数实现。棘轮从 26 个 SQL 散落文件收紧到 25 个。提交与全量门禁以本步骤结果为准。
+
+2026-09-25(C1.2a 进展):`alignment_overrides.py` 的人工校正读写、事务与列表查询进入 `persistence/alignment_store.py`;原层保留路由/分段校验与错误文案。补测“过期提议报错后撤销状态仍入库”,SQL 散落文件 25→24。C1.2 尚未完成,下一批处理 `alignment_snapshots.py`,再处理 `alignment_body_range.py`。
+
+2026-09-25(C1.2b 进展):`alignment_snapshots.py` 的配方读取、存在性查询与整体替换事务收进同一仓储;原层仍决定配方兼容与调用对齐计算。新增失败回滚测试,守住“恢复途中出错时保留原对齐”;SQL 散落文件 24→23。C1.2 最后一批为 `alignment_body_range.py`。
+
+2026-09-25(C1.2c 进展):`alignment_body_range.py` 的段落/页面锚点查询、分段窗口查询与可写审阅事务收进 `persistence/alignment_store.py`;正文范围判断、出版方页码展示和异常文案仍在原层。SQL 散落文件 23→22,C1.2 三批均已完成。下一步 C1.3 按模块分批推进。
+
+2026-09-25(C1.3a 进展):`runtime_page_mapping.py` 的 PDF 页面、段落、来源和映射写库操作进入 `persistence/page_mapping_store.py`;映射计算和备份时序仍在原层。补测段落更新失败时页面改动整体回滚;SQL 散落文件 22→21。C1.3 尚未完成,下一批处理 `translation_works.py`,再处理 `bibliographic_metadata.py`。
+
+2026-09-25(C1.3b 进展):`translation_works.py` 的阅读位置、同名建议忽略、检查暂缓四条写入和事务进入 `persistence/translation_work_store.py`;作品/对齐校验、只读查询和返回结构仍在原层。补测阅读位置写入后报错会回滚。该模块仍有只读 SQL,所以 SQL 散落文件保持 21,不提前缩减棘轮。下一批处理 `bibliographic_metadata.py` 写库。
+
+2026-09-25(C1.3c 进展):`bibliographic_metadata.py` 更新来源、卷、作品、段落的 SQL 与立即事务进入 `persistence/bibliographic_metadata_store.py`;题录归一、payload 变换及更新顺序留在原层。补测卷更新失败时来源更新回滚;SQL 散落文件 21→20。`bibliographic_metadata` 对 `database.py` 的旧环依赖已在此前的 `paragraph_payload` 下沉时消除,本批无需重复修改。C1.3 三批完成,下一步 C1.4。
+
+2026-09-25(C1.4a 进展):PDF/EPUB 纯分段类型、规则与 `segment_*` 函数进入 `alignment_segmentation.py`,`text_alignment.py` 保留导入面。迁移的 10 个函数/类型 AST 相同;原文件 2371→2054 行,行数守卫收紧到 2060,新模块上限 350。下一批再分生成编排和 SQL,此时 C1.4 尚未完成。
+
+2026-09-25(C1.4b 进展):对齐准备、生成、发布流程进入 `alignment_generation.py`,原模块保留旧导入面;生成阶段使用的 SQL 与两段立即事务进入 `persistence/alignment_store.py`。生成模块无直接 `.execute`,`text_alignment.py` 降至约 1207 行。既有测试中对计算函数的替身改指向新定义模块;定位/读取 SQL 仍在 `text_alignment.py`,下一批继续收口,C1.4 尚未完成。
+
+2026-09-25(C1.4c 完成):作品组目标、选区、定位、候选段与人工确认读取 SQL 全部进入 `persistence/alignment_store.py`;`text_alignment.py` 只保留路由判断、回退与展示数据装配,没有直接 `.execute`,`alignment_generation.py` 也没有。原模块 953 行,行数守卫收紧到 960;SQL 散落文件 20→19。C1.4 完成,下一步 C1.5。
+
+2026-09-25(C1.5a 进展):FTS5/trigram 对象检查、安装和增量升级 SQL 进入 `persistence/fts_index.py`;`database.py` 保留 `ensure_database_search_index` 兼容入口,由它把既有整库优化流程作为回调传入,避免 persistence 上行依赖。数据库构建/来源替换仍在原模块,SQL 散落文件暂为 19,C1.5 尚未完成。
+
+2026-09-25(C1.5b 进展):整库重建时的 schema/元数据/来源写入及其后的卷、作品、段落、页码锚点写入进入 `persistence/index_build.py`;`database.py` 仍按原顺序读取备份快照、还原作品组、填库、还原对齐配方与 Zotero 关联、发布临时库。原模块 1146→953 行,行数守卫收紧到 960;优化和来源替换 SQL 尚待迁移,C1.5 尚未完成。
+
+2026-09-25(C1.5c 进展):单来源替换、批量删除及旧版页码锚点清理的 SQL/事务进入 `persistence/source_replace.py`;`database.py` 保留入参处理、UTF-8 清理及先备份再写入的顺序。原模块降至约 617 行,SQL 散落文件仍为 19,优化/目录读取 SQL 尚待迁移,C1.5 尚未完成。
+
+2026-09-25(C1.5d 完成):目录元数据读取 SQL 进入 `persistence/index_build.py`;旧库稀疏化、FTS 完整性检查与临时库替换前的 SQL 进入 `persistence/storage_optimization.py`,文件替换与备份轮转仍由 `database.py` 回调。`fts_index.py` 行数守卫不放宽。`database.py` 不再直接执行 SQL,行数 466,SQL 散落文件 19→18;后端 C1 完成,下一步 C2。
+
+**后端 C2 组合根拆分**
+- `build_application_runtime` 按域拆 `library_assembly.py` / `import_assembly.py` / `alignment_assembly.py` / `settings_assembly.py`。
+- `ApplicationRuntime` 字段改 `Protocol` 或具体类型。
+- 验收:`web_runtime.py` 直接内部依赖 ≤ 20;行数上限同步收紧。
+
+2026-09-26(C2a 进展):导入、索引、备份、来源删除与题录更新的实例装配按原顺序进入 `import_assembly.py`;`web_runtime.py` 保留调用与跨域接线,直接内部依赖 64→28、行数 723→约 486。依赖/行数棘轮逐批收紧,旧测试替身改指向真实定义模块。C2 尚未完成。
+
+2026-09-26(C2b 进展):文本对齐、译本对照和结构化阅读控制器进入 `alignment_assembly.py`;组合根直接内部依赖 28→22、行数约 486→434。阅读控制器测试的替身改指向新定义模块,相关回调保持延迟求值。C2 尚未完成。
+
+2026-09-26(C2c 进展):作品组、文献库查询和来源打开回调进入 `library_assembly.py`;组合根直接内部依赖 22→19、行数 434→405,达到依赖数量门槛。设置与桌面壳装配仍在原文件,C2 尚未完成。
+
+2026-09-26(C2d 完成):偏好、解析器、托管组件和桌面壳装配进入 `settings_assembly.py`;`ApplicationRuntime` 原本泛用 `object` 的服务字段改成具体类型,四类路由表改成可调用返回类型。`web_runtime.py` 保留领域装配顺序、路由合并与关停编排,直接内部依赖 64→12、行数 723→276。C2 完成,下一步 C3。
+
+**后端 C3 后台任务统一**
+- 先按 §0.1 盘点实际线程生命周期,再确定以下抽象是否适合;不得先写通用管理器再强迁全部模块。
+- `tasks/` 下提供 `BackgroundTasks`:具名注册、取消、关闭时 join,接入 `close_runtime` / `DurableOperationGate`。
+- 迁移约 14 个模块的裸 `threading.Thread`;沿途审 `except Exception`:至少 `logging.exception`,不静默吞。
+
+2026-09-26(C3 完成):按构造调用重测为 12 处、11 个模块,并非约 14 个模块。生命周期盘点与保留理由见 `docs/issues/background-task-lifecycle.md`。新增具名、可取消和可限时等待的 `BackgroundTasks`,接管启动预热及 Zotero 手动/定时同步;进行中的 Zotero 同步仍走完当前操作,避免中途打断写入。MinerU、本地 OCR、组件目录保留领域线程但补齐关闭等待。`close_runtime` 编排移至 `tasks/runtime_lifecycle.py`,在 durable 操作与导入队列退出后等待这些任务,未退出就保留索引连接并返回 `False`;预热异常改记堆栈。直接创建线程剩 9 个自有生命周期模块,加管理器共 10 处;`web_runtime.py` 276→217 行、直接内部依赖保持 12。下一步 C4。
+
+**前端 C4 事件委托**
+- 引入 `data-action="xxx"` + 根节点委托分发,替换 `index.html` 的 205 个内联事件(§3.3 复测基线)与动态 HTML 里的 `onclick=` 字符串;优先修 `onclick="fn('` + `esc(...)` + `')"` 形式。
+- 随之收缩全局符号预算(内联事件不再需要全局函数)。
+- 守卫:`index.html` 内联事件数、各文件 `innerHTML` 数,棘轮只降不升。
+
+2026-09-26(C4 第一步):新增 `08-actions.js` 注册式点击委托;联网书目候选卡的五种按钮改用 `data-action`、`data-source-id`、`data-index`,不再把文献 ID 拼进 JavaScript。`40-bibliography.js` 对应五个直接全局入口撤销,预算 27→22。守卫固定模板 `onclick/onchange/oninput` 上限 205 和各 JS 文件 `innerHTML` 上限;此步尚未触碰模板 205 处或其余动态 HTML,下一步继续迁移带文献 ID 的动态事件。
+
+2026-09-26(C4 第二步):书目来源菜单的五个选项也改用 `data-action` 与原始文献 ID 的转义属性;渲染入口不再提前转义 ID,菜单重绘沿用同一口径。撤销 `bibSetSource`、`bibMenuAction` 两个直接全局入口,书目模块预算 22→20;`06-pure.js` 的 `onclick=` 源码出现数 12→9。模板 205 处仍未迁,下一步继续其他动态入口。
+
+2026-09-26(C4 第三步):书目详情查看/编辑态中的文献 ID 动作迁入委托,包括字段点击编辑、类型切换、补全/识别、取消与保存。根节点同时委托 `role="button"` 的 Enter/空格键,保留查看态键盘操作。书目模块直接全局入口预算 20→12,该文件 `onclick=` 源码出现数 18→4;动态内联事件上限随之固定。模板 205 处仍未迁。
+
+2026-09-26(C4 第四步):书目模块余下四处动态 `onclick=`(语言选项、语言下拉触发、补全来源菜单触发、粘贴引文补全按钮)全改委托;语言选项的选中态改用实际点击按钮,避免根委托下 `event.currentTarget` 指向 `document`。`40-bibliography.js` 的 `onclick=` 4→0,直接全局入口预算 12→11。尚有引用粘贴的 `onpaste` 延时处理,后续与其他事件类型一起迁;模板 205 处未动。
+
+2026-09-26(C4 第五步):文献库网格卡片和列表行的打开详情点击改为 `data-action` 委托,沿用已有 `data-id` 读取文献 ID;拖拽后抑制点击时阻止同一根节点上的后续监听器,保持原有行为。撤销 `handleLibraryEntryClick` 直接全局入口,预算 21→20;`30-library.js` 的 `onclick=` 21→19。复选框与作品链接留待下一步,模板 205 处未动。
+
+2026-09-26(C4 第六步):文献库卡片/行内的删除选择框和作品链接改用各自 `data-action`,在委托回调里阻止后续根节点点击监听,避免误开详情或关闭浮层。选择框沿用点击后的 `checked` 值;撤销 `toggleLibraryDeleteSelection` 直接全局入口,预算 20→19;`30-library.js` 的 `onclick=` 19→17。模板 205 处未动。
+
+2026-09-26(C4 第七步):文献库筛选项和已生效筛选 chip 改用 `data-action`、`data-kind`、`data-value`,从属性读取筛选参数;保留未保存书目信息的离开确认。撤销 `setLibFacet`、`removeLibFacet` 两个直接全局入口,预算 19→17;`30-library.js` 的 `onclick=` 17→15。模板 205 处未动。
+
+2026-09-26(C4 第八步):`index.html` 的 210 个静态内联事件属性(其中计划跟踪的 `onclick/onchange/oninput` 为 205 个)迁为 `data-action[-事件]`;对应 188 种固定动作登记在 `09-template-actions.js`,不在 HTML 中执行字符串代码。`08-actions.js` 为变更、输入、键盘、粘贴、提交、取消和双击提供委托,适配器保留内联处理器原先的 `this`、`event.currentTarget` 和阻止冒泡语义。模板内联事件计数降为 0;动态生成的 HTML 仍待后续迁移。
+
+2026-09-26(C4 第九步):`06-pure.js` 生成的主题选项、分段阅读方向/中缝、状态统计、分段下拉、扫描勾选和检索上下文按钮全部改为数据属性;动态内联事件计数 11→0。回调放在所属模块,对应直接全局入口撤销;`30-library.js` 预算 17→16、`80-import.js` 20→19。其余动态生成 HTML 仍待迁。
+
+2026-09-26(C4 第十步):`20-search.js` 的检索范围、结果行、详情操作与出处格式选项改用 `data-action` 委托,动态内联事件 11→0;涉及结果索引和文献 ID 的参数改从数据属性读取,并撤销九个直接全局入口。下一步清理文献库等模块的动态 HTML。
+
+2026-09-26(C4 完成):文献库抽屉、页码校准、书目粘贴、扫描目录、MinerU 账号、视觉解析服务和导入队列的动态内联事件全部迁入委托。静态模板内联事件 210→0,`static/js/*.js` 中生成 HTML 的内联事件清零;守卫要求所有动作只注册一次且每个 `data-action` 都有注册。原先只有动态内联调用者的直接全局导出随之撤销,`30-library.js` 预算 16→13、`40-bibliography.js` 11→10、`70-vision.js` 25→23、`71-vision-providers.js` 18→10、`80-import.js` 19→13。未改动 `innerHTML` 构造,留待 C5。
+
+**前端 C5 DOM 构造与拆文件**
+- 逐文件把 `innerHTML` 字符串拼接换成已有 DOM 辅助函数(参照 `reader.js`);清零的文件纳入"禁 `innerHTML`"守卫。
+- 拆大文件:`60-settings.js`(外观 / 数据位置 / 模型 / 更新)、`35-works.js`、`80-import.js`、`70-vision.js`。新文件沿用编号前缀与 IIFE 模式,更新装配顺序、指纹与预算。
+
+2026-09-26(C5 第一步):`25-toast.js` 的固定 SVG 图标和提示文字改为 DOM 节点构造,该文件 `innerHTML` 1→0,纳入零容忍守卫;堆叠与自动消失逻辑不变。
+
+2026-09-26(C5 第二步):`60-settings.js` 的主题画廊、当前主题摘要和扫描目录改为 DOM 节点构造,`innerHTML` 4→0;主题预览、单选语义和移除按钮保留。原来仅供字符串渲染的 `themePreviewMarkup`/`themeOptionMarkup` 已删,对应测试改验 DOM 装配。
+
+2026-09-26(C5 完成):检索、文献库、书目、校准、解析服务与导入队列的运行时 HTML 拼接改为 DOM 节点和文本节点构造;`static/js/*.js` 的 `innerHTML` 全部清零,原 `06-pure.js` 中已无调用者的 HTML 字符串工厂同步删除。检索命中保留后端字符区间并按 Unicode 码点构造 `<mark>`,避免把来源文本解析为标签。`35-works.js` 的范围选择、`60-settings.js` 的数据位置/更新/对齐模型、`70-vision.js` 的统计与备份、`80-import.js` 的知网批量补全各移入独立编号模块;拼装仍按文件名排序。对应静态守卫和装配指纹已更新;全量测试结果以本次提交门禁为准。
+
+2026-09-26(C5 审阅):以 `157257d`(C5 前)与 `fd275cd` 两个干净检出各起一个服务,喂同一份合成库(DOCX/EPUB 标题含引号与 `&<>`、MCP 夹具 PDF/Word)与同一组接口桩,逐区域比对渲染出的 DOM。文献库列表/卡片/抽屉、书目读写态与类型切换、检索结果/详情/页码详情、校准分段与双开页、自动检测成功/失败/报错、设置各分区、解析统计(含 MinerU 账号归属)、导入页与视觉 API 菜单均逐项一致,或仅有无害差异(补 `type="button"`、`aria-hidden`、属性改为属性值同义的 DOM 属性)。发现并修复六处还原偏差:MinerU 账号归属的页数单位落到 `<b>` 外(flex 行里会变成独立项,多出间距)、「查看识别依据」首条未用证据未换行、检索详情移动端返回按钮多了 `action-btn` 样式、检索范围与视觉 API 选项对勾笔画 2→1.8、文献库筛选 chip 的 × 笔画 2→1.8、视觉 API 搜索图标笔画 1.7→1.8;补 `tests/test_c5_dom_fidelity.py`(对未修代码 5 项失败)。C5 删除了 46 个针对已删字符串工厂的测试且未补 DOM 等价测试,本次恢复候选卡 golden 比对(`CandidateCardDomGoldenTests`,仍用 `candidate_cards_golden.json`);其余区域由上述页面级比对核对,未另建常驻测试。同时确认:检索高亮与后端 `match_offset_unit=unicode_codepoint` 一致,比旧版按 UTF-16 截断更准确;失败原因与导入提示改为文本节点后不再把 `<...>` 当标签渲染。
+
+2026-09-26(C5 校准回归修复):检查校准页时发现 `updateSpreadPanel` 仍按旧的 `onclick` 属性查找阅读方向按钮;C4 已将按钮迁为 `data-direction`,故切换后高亮不会刷新。选择器同步改为 `data-direction`,补回归守卫。
+
+2026-09-26(C4 审阅修复):复查 C4 委托语义时发现,`08-actions.js` 的根节点 Enter/空格委托会命中导入拖放区(`role="button"` + `data-action`);拖放区自带键盘监听已 `preventDefault` 并 `click()`,于是键盘选择文件会连开两次文件框。根委托改为跳过已被元素处理(`defaultPrevented`)的按键,书目查看态行的键盘编辑不受影响;补 `test_role_button_skips_keys_already_handled_by_element`。同时核对:模板 105 个动作所调函数在页面中均可解析;嵌套动作仅弹窗遮罩一类(自判 `event.target`)与导入视觉 API 外层 `stopPropagation`,语义不变;动态 `data-*` 属性均经 `esc()`。
+
+### 阶段 D — `reader.js` 拆分(阶段 B1 之后;可与阶段 C 并行)
+
+**现状(2026-09-25 实测)**
+
+- 单个 IIFE,约 167 个函数共用一个可变 `state` 对象(第 70 行起,约 80 个字段),内部任何函数都能读写任意字段。
+- 公共面已经很小、很好:`global.MEFinderReader = Object.freeze({open, openForSearchResult, close, goTo, restore, copyCitation, configure, destroy, isOpen, getState, codePointToUtf16Index, alignmentJobs})`。**拆分期间此公共面必须逐字不变。**
+- 已无 `innerHTML`,DOM 走 `createButton` / `createIcon` / `createDropdown` 等辅助函数;`ensureDom`(约 400 行)一次性搭整棵阅读器 DOM。
+- 自带 `readJSON` / `postJSON`,端点集中在 `DEFAULTS`(约 20 个)。
+- 对齐任务轮询(`watchAlignmentJob` / `subscribeAlignmentJob` / `pollAlignmentJob`)由**同一窗口内**的阅读器和作品页共享,作品页通过 `MEFinderReader.alignmentJobs` 订阅——它其实不属于阅读器。主窗口和独立阅读窗口各有自己的 JS 环境,现状不是跨窗口共用一次轮询。
+- 装配:`web_assets.py` 把 `reader.js` 整文件替换进 `//__READER_JS__` 占位(主窗口与独立阅读窗口两处)。
+- 测试:`test_structured_reader_frontend.py`、`test_reader_comparison_state.py` 等直接读 `reader.js` 源码(字符串断言 + node 执行)。
+
+**按职责的自然切分(函数行号区间,供定位)**
+
+| 模块 | 内容 | 约在 |
+|---|---|---|
+| `00-core` | `DEFAULTS`、`state`、码点/UTF-16 换算、锚点解析、`notify`/`setAlert` | 1–290 |
+| `05-dom` | `createButton`/`createIcon`/`createDropdown`、`ensureDom` | 290–770 |
+| `10-citation` | 引用区间、选区捕获、剪贴板、引用预取 | 766–850、2655–2930 |
+| `20-work-context` | 作品/版本/可对照目标、目录、跳章、工具栏与菜单 | 848–1410、1128–1200 |
+| 公共任务监听 + 阅读器处理器 | D2 仅抽出轮询/订阅;启动/取消、刷新与提示仍留在阅读器对应职责中 | 1606–1775 |
+| `40-comparison` | 对照阅读:版本选择、链接窗口、高亮、跟随滚动 | 1412–1606、1861–2600 |
+| `45-review` | 对齐待复核弹层、纠正保存/暂缓 | 2047–2190 |
+| `50-deeplink` | 深链解析/写回/历史,阅读位置保存 | 1775–1860、2925–3130 |
+| `60-window` | 虚拟窗口:observer、`shiftWindow`、`loadRange`/`loadWindow`、裁剪 | 3130–3300、3681–3880 |
+| `70-render` | 高亮合并、`renderItem`/`renderWindow` | 3293–3680、3878–3933 |
+| `90-lifecycle` | `configure`/`openReader`/`goTo`/`close`/`destroy`、公共面、`popstate` | 3933–4301 |
+
+**拆分后的职责与状态归属(2026-09-26 补充)**
+
+目标是让每类变化有明确的负责模块。例如改引用复制时主要看引用模块,改滚动加载时主要看窗口模块。D3 先搬位置,D4 再落实下面的写入边界;不能只把大文件切小、把字段加一层名字就算完成。
+
+| 负责模块 | 管理的内容和可变状态 | 与其他模块如何合作 |
+|---|---|---|
+| `00-core` | 公共配置、码点换算、锚点等基础规则;D3 暂存共享状态 | 基础规则不依赖业务模块;D4 不继续作为任意字段的公共写入口 |
+| `05-dom` | 阅读器固定骨架、控件及节点引用 | 接收动作回调,不直接加载文献、保存引用或启动对齐 |
+| `10-citation` | 选区、引用菜单与缓存、预取请求序号 | 读取当前位置与文本;由自身捕获/清空选区、预取/复制引用 |
+| `20-work-context` | 作品成员、目标版本、目录、可用性及相应请求状态 | 工具栏/菜单由它更新;跳章和切换版本交给已接线的动作,不直接改分页或右栏状态 |
+| `MEFinderAlignmentJobs` | 当前任务、发起方信息、轮询与订阅者 | 只查询状态并广播结果;不持有阅读器 DOM、不刷新作品页、不弹提示 |
+| `35-links` | 链接请求序号、链接缓存、左栏链接选区与标记定时器 | 对照与复核通过其失效入口刷新链接；右栏高亮交给对照模块 |
+| `40-comparison` | 右栏文献、加载与定位序号、跟随滚动及右栏高亮 | 负责对照和生成/取消操作;通过引用/渲染等模块的明确入口协作 |
+| `45-review` | 复核弹层、候选与保存/暂缓操作 | 保存后通知对照模块刷新链接,通过原有宿主回调通知数据变化 |
+| `50-deeplink` | 阅读会话快照、地址栏、位置保存与定时器 | 只在这里定义会话形状;快照读取左右栏公开的内部读取入口,恢复交给生命周期模块 |
+| `60-window` | 左栏加载范围、条目缓存、当前位置、observer、请求取消与序号 | 负责翻页/滚动加载;选区阻止裁剪仍问引用模块,当前页变化经回调通知深链和对照模块 |
+| `70-render` | 正文节点、高亮与装饰的渲染 | 按传入的条目/区间构造节点;不发网络请求、不保存阅读位置 |
+| `90-lifecycle` | 打开/关闭状态、当前文献身份、宿主配置、焦点恢复 | 负责装配及打开/换书/关闭顺序;调用各模块的重置或关闭函数,不代写它们的内部字段 |
+
+依赖与装配约定:
+
+- 保留原生 JS 和现有 Python 拼接方式,不引入框架、构建工具或通用事件总线。文件编号保证注册顺序,不能替代依赖边界。
+- `00-core` 建立临时私有命名空间,各模块注册少量实际需要的能力;注册阶段不发请求、不创建阅读器 DOM、不恢复深链。`90-lifecycle` 最后接好回调、绑定现有事件并安排初始恢复,随后冻结公共面、删除全局上的私有命名空间。
+- 模块持有传入的命名空间引用,后续调用不再从已删除的 `global.__MEFinderReaderInternal` 查找。注册时不提前读取尚未注册的函数;跨模块动作在最终接线后执行。
+- 双向协作通过具体回调完成,不互相调用初始化入口。D3 可暂保留共享状态访问;D4 按上表逐域把写入移到所属模块,读取仅暴露实际需要的信息,不为所有字段机械生成 getter/setter。
+- D3 搬迁前逐项登记现有状态的归属及调用者;D4 同时迁移该域的请求序号、取消句柄、定时器及清理顺序,避免字段移了而失效逻辑仍散在别处。`getState()` 的外部返回形状保持不变。
+- 上面的行号是原文件定位线索,有交叠,不能按区间机械裁切。按函数职责搬迁;若对照模块仍过大,优先把链接选择/高亮这一完整职责拆出,不按行数均分函数。
+
+**步骤**
+
+- **D0 守卫先行(2026-09-27 已实施)**:新增测试钉住 `MEFinderReader` 公共面的键集合、冻结状态、`alignmentJobs` 子键和 `getState()` 返回形状;测试辅助函数 `reader_js_source()` 复用 `web_assets` 的实际阅读器装配入口,所有原来直接读 `reader.js` 的行为测试改读装配结果。两种窗口都校验实际嵌入内容;对迟到页面请求及对齐任务的轮询/结果分类用完整脚本执行测试。保留仍适合当前单模块的源码片段断言;D2/D3 搬对应函数时,逐项改用公共入口或同等执行型测试,不能删掉行为断言来让搬迁通过。`reader.js` 本身未改。
+- **D1 请求改走 `07-api.js`(2026-09-27 已实施)**:统一默认网络出口,独立阅读窗口(`reader-window.html`)同样在阅读器前装配 `07-api.js`,一并迁移 `reader-window.js` 的设置请求。保留 `configure({fetch})` 的阅读器请求注入能力、端点覆盖、请求头、取消信号及原有缓存语义。普通 JSON 请求复用统一客户端;需要检查 `202/404` 等原始状态的轮询继续使用原始 Response 入口,不能一律换成 JSON 成功/抛错封装。若统一客户端需要支持注入,只增加这项必要能力,不复制一套客户端。
+- **D2 抽出对齐任务监听(2026-09-27 已实施)**:仅把 `jobWatch`、轮询与 watch/subscribe/running 迁到 `static/js/` 下独立模块(如 `36-alignment-jobs.js`),暴露 `MEFinderAlignmentJobs`;`MEFinderReader.alignmentJobs` 保留转发兼容,本轮不删除。作品页订阅新入口,阅读器自身的完成刷新与发起方提示留在阅读器。主窗口和独立阅读窗口都按“API → 任务服务 → 阅读器 → 宿主启动”接入,各装一份;任务服务不依赖主窗口的作品页或全局状态。保留当前请求注入路径、轮询间隔、结果分类与发起方归属,普通关闭阅读器不停止该窗口的后台任务监听。本轮不实现跨窗口选主或共享轮询。
+- **D3 物理拆文件**:第一步先把 `reader.js` 整体移入 `static/reader/`(D0 的装配入口在该目录非空时不再读旧单文件,两者不能并存),再逐个职责拆出。`static/reader/NN-*.js`,各文件通过 IIFE 接收私有命名空间并注册能力,按上述依赖约定由 `90-lifecycle` 最后装配。`web_assets.py` 按文件名顺序拼接后再替换两处 `//__READER_JS__`,装配结果仍是一段脚本。一次只搬一个职责,暂不重组状态;每搬一个跑全量测试。同步检查打包资源收集和 JS 语法检查脚本是否覆盖新目录,不能只让开发页面可用。
+- **D4 收拢 `state`**:仅在 D3 全绿后,按上表逐域分组并落实唯一写入归属。跨域修改通过所属模块的具体函数,生命周期模块只协调;保留关闭前保存位置、使旧请求失效及停止 observer/定时器的原顺序。D4 验收以跨域写入已收口为准,不能只统计文件行数。
+- 守卫:沿用“阅读器禁 `innerHTML`”,扩展到 `static/reader/` 全目录;各文件设行数预算(目标 ≤ 800)。模块内部不新增全局入口;显式允许装配期间的 `__MEFinderReaderInternal`,运行后必须删除;最终阅读器公共入口仍为 `MEFinderReader`,另有 D2 的 `MEFinderAlignmentJobs` 服务。模块存在与加载顺序由装配测试验证,不额外增加运行时兜底或重复注册检测。
+
+**行为验收清单**
+
+| 场景 | 必须保持的结果 |
+|---|---|
+| 快速从 A 书切到 B 书、先发请求后返回 | A 书的正文、目录、引用、对照或任务刷新结果不能覆盖 B 书 |
+| 关闭阅读器后旧请求返回 | 不重新打开界面、不回填已清除的内容;原有请求取消和序号失效仍有效 |
+| 滚动加载与选区复制 | 前后窗口正常加载;拖动选区时不裁掉相关文本;页码锚点与 Unicode 码点区间不变,含非 BMP 字符 |
+| 深链/继续阅读/新窗口交接 | 会话形状不变;保留现有入口各自的恢复顺序,包括 `openReader` 的显式参数优先和独立窗口先尝试 URL 恢复;不另造一套恢复策略 |
+| 对照定位与人工复核 | 版本切换、跟随开关、链接高亮及保存/暂缓结果不变;过期定位结果不覆盖新目标 |
+| 同一窗口内阅读器与作品页同时认领任务 | 同一个 job 只轮询一份,保留最初发起方;结束事件广播一次,提示仍只由发起方给出 |
+| 对齐任务返回 `202`、成功、取消、`404` 或失败 | 延续现有等待/结束分类,不因换请求封装而丢失状态或重复刷新 |
+| 主窗口与独立阅读窗口启动 | 均从各自实际装配内容启动,服务不缺失也不重复初始化;请求注入和旧公共入口仍可用 |
+
+**验收**
+
+- `MEFinderReader` 公共面与行为不变;现有行为期望不降低。可调整因源码位置变化而失效的测试取材方式,不能删除相应行为覆盖。上述关键场景须有执行型测试,不能仅靠源码字符串存在判断。
+- `reader.js` 单文件消失或只剩兼容壳;单文件 ≤ 800 行。
+- D4 的字段归属清单与实际写入点一致;两个窗口装配测试、前端守卫、全量 unittest 和 Ruff 通过,前端指纹按实际产物更新。
+- 手测清单(浏览器 + 桌面壳各一次):打开搜索结果 → 滚动加载前后窗口 → 选区复制引用 → 打开对照 → 点击链接高亮 → 复核弹层 → 深链刷新恢复 → 新窗口打开 → 回主窗口。
+- 测试和手测使用隔离样本或库副本。没有实际执行的桌面壳/打包验证如实列为未完成,不以浏览器结果替代;完成计划补充不表示已完成上述重构或验收。
+
+---
+
+## 5. 风险与对策
+
+| 风险 | 对策 |
+|---|---|
+| 开外键后历史数据写入失败 | A1 先出 `foreign_key_check` 报告;有违例先迁移修复 |
+| 搬迁 SQL 时改变事务边界(`BEGIN IMMEDIATE` 位置) | 仓储函数接收连接而非自开连接;事务由调用方持有,保持原边界 |
+| HTTP 重构破坏 Windows 上传断连修复 / Range | 这些路径的测试断言不许改;B2 完成后做一次 Windows 打包冒烟 |
+| 前端改动频繁触发指纹/预算基线 | 每步末尾统一更新一次,提交正文注明 |
+| 与功能迭代冲突 | 阶段 A、B 独占窗口;阶段 C 按模块小批,避开正在开发的模块 |
+| 拆 `reader.js` 后测试仍读旧单文件、或断言落到错误片段 | D0 先把测试切到"装配后源码"辅助函数,再动代码 |
+| 阅读器模块间拼接顺序出错导致运行时未定义 | 注册与启动分开,最终入口接线;对两种窗口的真实装配执行启动测试,D3 每搬一个模块跑全量测试 + 桌面壳冒烟 |
+| GBK locale 下测试读 golden 失败 | Windows 本机跑门禁前 `$env:PYTHONUTF8="1"`(AGENTS.md §3.6) |
+
+---
+
+## 6. 基线复测命令(仓库根执行,Git Bash / macOS)
+
+```bash
+# persistence 外的 sqlite3.connect 调用点
+grep -rn --include='*.py' --exclude-dir=__pycache__ "sqlite3.connect" src/me_finder | grep -v "src/me_finder/persistence/"
+
+# persistence 外含 .execute( 的文件
+grep -rl --include='*.py' --exclude-dir=__pycache__ "\.execute(" src/me_finder | grep -v "/persistence/" | wc -l
+
+# web_http.py 内按路径分支
+grep -c "parsed.path" src/me_finder/web_http.py
+
+# 自起线程
+grep -rn --include='*.py' --exclude-dir=__pycache__ -E "threading.Thread\(|ThreadPoolExecutor" src/me_finder | cut -d: -f1 | sort | uniq -c
+
+# 前端 fetch / innerHTML / 内联事件
+grep -c "fetch(" src/me_finder/static/js/*.js | grep -v ":0$"
+grep -c "innerHTML" src/me_finder/static/js/*.js | grep -v ":0$"
+grep -oE "on(click|change|input)=" src/me_finder/templates/index.html | wc -l
+```
+
+全量测试与 lint 命令以 AGENTS.md §3.6 为准。

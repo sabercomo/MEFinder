@@ -180,6 +180,74 @@ class TranslationWorkOverviewTests(_ThreeVersionWork):
         self.assertIsNone(pair["stale_reason"])
 
 
+    def test_warm_up_precomputes_detected_bounds_for_the_overview(self) -> None:
+        """冷启动预热后，总览持锁期间不再逐版本重识别正文范围。"""
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+        self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 0)
+        with mock.patch.object(
+            translation_works, "alignment_body_bounds", side_effect=AssertionError("cold detection")
+        ):
+            pair = self._pair(
+                translation_works.alignment_overview(
+                    self.db, active_model_id=self._model_id(), include_statistics=False
+                ),
+                "pdf-de", "pdf-zh",
+            )
+        self.assertIsNone(pair["stale_reason"])
+
+    def test_warm_up_persists_bounds_per_build_and_redetects_after_a_rebuild(self) -> None:
+        """同一构建的下次启动直接读盘，不再逐版本识别；换了构建（识别代码可能变了）必须重算。"""
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        cache = self.db.with_name(translation_works.BODY_BOUNDS_CACHE_FILE)
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        with mock.patch.object(translation_works, "_detector_fingerprint", return_value="build-1"):
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+            self.assertTrue(cache.is_file())
+            translation_works._DETECTED_BOUNDS_CACHE.clear()  # next launch
+            with mock.patch.object(
+                translation_works, "alignment_body_bounds", side_effect=AssertionError("cold detection")
+            ):
+                self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 0)
+                pair = self._pair(
+                    translation_works.alignment_overview(
+                        self.db, active_model_id=self._model_id(), include_statistics=False
+                    ),
+                    "pdf-de", "pdf-zh",
+                )
+            self.assertIsNone(pair["stale_reason"])
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        with mock.patch.object(translation_works, "_detector_fingerprint", return_value="build-2"):
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+        self.assertIn("build-2", cache.read_text(encoding="utf-8"))
+
+    def test_source_checkout_never_writes_the_bounds_cache(self) -> None:
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        translation_works._DETECTED_BOUNDS_CACHE.clear()
+        with mock.patch.object(translation_works, "_detector_fingerprint", return_value=None):
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db), 2)
+        self.assertFalse(self.db.with_name(translation_works.BODY_BOUNDS_CACHE_FILE).exists())
+
+    def test_warm_up_tolerates_missing_database_and_tables(self) -> None:
+        self.assertEqual(translation_works.warm_detected_body_bounds(self.db.parent / "absent.sqlite3"), 0)
+        empty = self.db.parent / "empty.sqlite3"
+        sqlite3.connect(str(empty)).close()
+        self.assertEqual(translation_works.warm_detected_body_bounds(empty), 0)
+
+    def test_cancelled_warm_up_skips_detection(self) -> None:
+        import threading
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        cancel = threading.Event()
+        cancel.set()
+        with mock.patch.object(translation_works, "_detected_body_bounds") as detect:
+            self.assertEqual(translation_works.warm_detected_body_bounds(self.db, cancel), 0)
+        detect.assert_not_called()
+
+
 class TranslationWorkLinkWindowTests(_ThreeVersionWork):
     def test_window_returns_links_with_spans_on_both_sides(self) -> None:
         generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
@@ -440,6 +508,27 @@ class TranslationWorkStorageTests(_ThreeVersionWork):
         with self.assertRaises(InvalidAlignmentRequest):
             translation_works.dismiss_suggestion(self.db, ["pdf-de"])
 
+    def test_reading_position_write_failure_keeps_previous_position(self) -> None:
+        translation_works.save_reading_position(
+            self.db, "work-one", "pdf-zh", "pdf-de", 3, 17
+        )
+        write_row = translation_works.save_reading_position_row
+
+        def fail_after_write(*args):
+            write_row(*args)
+            raise RuntimeError("position write failed")
+
+        with mock.patch.object(
+            translation_works, "save_reading_position_row", side_effect=fail_after_write
+        ):
+            with self.assertRaisesRegex(RuntimeError, "position write failed"):
+                translation_works.save_reading_position(
+                    self.db, "work-one", "pdf-zh", None, 4, 0
+                )
+        position = translation_works.read_reading_position(self.db, "work-one")["position"]
+        self.assertEqual(position["right_source_file_id"], "pdf-de")
+        self.assertEqual(position["item_index"], 3)
+
 
 class MoveMembersTests(_ThreeVersionWork):
     def test_new_work_takes_first_as_base_and_empties_are_deleted(self) -> None:
@@ -517,7 +606,7 @@ class TranslationWorkMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "index.sqlite3"
             connection = sqlite3.connect(str(path))
-            connection.executescript(SCHEMA.replace("PRAGMA user_version = 7;", ""))
+            connection.executescript(SCHEMA.replace("PRAGMA user_version = 8;", ""))
             connection.execute("PRAGMA user_version = 6")
             connection.commit()
             connection.close()
@@ -531,7 +620,7 @@ class TranslationWorkMigrationTests(unittest.TestCase):
                     )
                 }
                 self.assertEqual(
-                    connection.execute("PRAGMA user_version").fetchone()[0], 7
+                    connection.execute("PRAGMA user_version").fetchone()[0], 8
                 )
             finally:
                 connection.close()

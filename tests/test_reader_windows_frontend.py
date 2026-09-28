@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import unittest
 
+from tests.reader_source import reader_runtime_source
+
 
 @unittest.skipUnless(shutil.which("node"), "Node unavailable")
 class ReaderWindowFrontendTests(unittest.TestCase):
@@ -25,6 +27,8 @@ const context = {
 };
 context.window=context;
 vm.createContext(context);
+// 独立阅读窗口在宿主脚本前装配 07-api.js。
+vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
 vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 (async()=>{
   await events.pywebviewready();
@@ -35,7 +39,8 @@ vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 '''
         result = subprocess.run(
             [shutil.which("node"), "-e", script,
-             str(root / "src/me_finder/static/reader-window.js")],
+             str(root / "src/me_finder/static/reader-window.js"),
+             str(root / "src/me_finder/static/js/07-api.js")],
             capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -59,7 +64,8 @@ const context = {document: {readyState: 'loading', documentElement: {dataset: {}
 };
 context.window=context;
 vm.createContext(context);
-vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
+// 16-reader-host.js 经 07-api.js 发请求:先装配统一请求出口。
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]),'07-api.js'),'utf8'),context); vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),context);
 let route;
 context.MEFinderReader={configure(options){route=options.openExternal;}};
 events.DOMContentLoaded[0]();
@@ -71,7 +77,7 @@ events.DOMContentLoaded[0]();
   await context.MEFinder.readerHost.setEnabled(true); // duplicate submit is suppressed
   resolveSave(); await saving;
   assert.equal(input.checked,true);
-  vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
+  vm.runInContext(fs.readFileSync(0,'utf8'),context);
   context.MEFinderReader.configure({openExternal:route});
   const spans=[{pdf_page_id:'PAGE-12',page_char_start:2,page_char_end:4}];
   await context.MEFinderReader.openForSearchResult({source_file_id:'book',source_type:'pdf',
@@ -94,8 +100,7 @@ events.DOMContentLoaded[0]();
 '''
         result = subprocess.run(
             [shutil.which("node"), "-e", script,
-             str(root / "src/me_finder/static/js/16-reader-host.js"),
-             str(root / "src/me_finder/static/reader.js")],
-            capture_output=True, text=True, timeout=15,
+             str(root / "src/me_finder/static/js/16-reader-host.js")],
+            input=reader_runtime_source(), capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -1,140 +1,61 @@
 """HTTP transport for the local MEFinder web application.
 
 The application composition root lives in :mod:`me_finder.web`.  This module
-owns request parsing, trust checks, response serialization and source streaming,
-and receives the already-built application services through one explicit
-context object.
+owns trust checks (Host / Origin / request target), the Content-Type gate,
+reading or draining request bodies, dispatch through the single
+``http_route_table.RouteTable``, source Range streaming and the shutdown 503.
+Every ``/api`` handler lives behind the route table; none is special-cased here.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import re
-import sqlite3
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .application import SearchRequest
 from .http_range import InvalidByteRange, parse_byte_range
+from .http_route_table import RawRequest
 
 
 MAX_JSON_REQUEST_BYTES = 1024 * 1024
 SOURCE_STREAM_CHUNK_BYTES = 1024 * 1024
-RAW_BODY_POST_PATHS = frozenset(
-    {
-        "/api/import",
-        "/api/import-upload/chunk",
-    }
-)
-DATA_ROOT_MUTATING_POST_PATHS = frozenset(
-    {
-        "/api/preferences",
-        "/api/mineru-accounts",
-        "/api/mineru-accounts/service",
-        "/api/mineru-config",
-        "/api/mineru-local",
-        "/api/mineru-local/component",
-        "/api/local-ocr",
-        "/api/local-ocr/component",
-        "/api/text-alignment/models",
-        "/api/vision-providers",
-        "/api/general-model",
-        "/api/import",
-        "/api/import-upload/start",
-        "/api/import-upload/chunk",
-        "/api/import-upload/cancel",
-        "/api/import-upload/finish",
-        "/api/mineru-reparse",
-        "/api/import-retry-mineru",
-        "/api/import-retry-mineru-local",
-        "/api/import-retry",
-        "/api/import-resume",
-        "/api/import-resume-dismiss",
-        "/api/bibliographic-metadata/batch-detect",
-        "/api/export-directory/choose",
-        "/api/backup/export",
-        "/api/document/export",
-        "/api/backup/import",
-        "/api/import-local",
-        "/api/calibration",
-        "/api/bibliographic-metadata/save",
-        "/api/auto-page-mapping/apply",
-        "/api/auto-page-mapping/accept",
-        "/api/documents/remove",
-        "/api/documents/remove-batch",
-        "/api/document-groups/create",
-        "/api/document-groups/rename",
-        "/api/document-groups/delete",
-        "/api/document-groups/add-member",
-        "/api/document-groups/remove-member",
-        "/api/document-groups/set-base",
-        "/api/document-groups/version-label",
-    }
-)
 
 
 @dataclass(frozen=True)
 class WebHTTPContext:
     """Application services and adapters used by the HTTP boundary."""
 
-    index_path: Path
     root: Path
     index_runtime: Any
     data_root_admission: Any
-    document_imports: Any
-    controller_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
-    controller_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
-    shell_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
-    shell_post_routes: Mapping[str, Callable[..., tuple[int, object]]]
+    # http_route_table.RouteTable: the single (method, path) -> Route registry.
+    routes: Any
     render_html: Callable[..., str]
     package_dir: Path
     read_preferences: Callable[[Path], Mapping[str, object]]
     resolve_preferences_path: Callable[[Path], Path]
-    load_import_config: Callable[[Path], Mapping[str, object]]
-    resolve_document_group_source_ids: Callable[[object, Path], list[str]]
-    validate_parse_options: Callable[[object, object], tuple[str, str | None]]
     data_root_admission_error: type[Exception]
-    document_group_not_found_error: type[Exception]
-    chunked_upload_error: type[Exception]
-    mineru_error: type[Exception]
-    vision_api_error: type[Exception]
 
 
 def make_http_handler(context: WebHTTPContext):
     """Build a request handler over an already-composed application runtime."""
 
-    index_path = context.index_path
     root = context.root
     index_runtime = context.index_runtime
     data_root_admission = context.data_root_admission
-    document_imports = context.document_imports
-    controller_get_routes = context.controller_get_routes
-    controller_post_routes = context.controller_post_routes
-    shell_get_routes = context.shell_get_routes
-    shell_post_routes = context.shell_post_routes
+    routes = context.routes
     render_html = context.render_html
     _PACKAGE_DIR = context.package_dir
     read_preferences = context.read_preferences
     resolve_preferences_path = context.resolve_preferences_path
-    load_import_config = context.load_import_config
-    resolve_document_group_source_ids = (
-        context.resolve_document_group_source_ids
-    )
-    validate_parse_options = context.validate_parse_options
     data_root_admission_error = context.data_root_admission_error
-    document_group_not_found_error = context.document_group_not_found_error
-    chunked_upload_error = context.chunked_upload_error
-    mineru_error = context.mineru_error
-    vision_api_error = context.vision_api_error
 
     class Handler(BaseHTTPRequestHandler):
-        _POST_ROUTE_TABLE = {
-            "/api/search": "_post_search",
-        }
+        route_table = routes
 
         def _send(
             self,
@@ -280,80 +201,17 @@ def make_http_handler(context: WebHTTPContext):
             )
             return True
 
-        def _post_search(self, payload: object) -> None:
-            try:
-                # Resolve a document_group_id scope to member source_file_ids at the
-                # transport boundary; SearchService / search.py never see DocumentGroups.
-                if isinstance(payload, dict) and str(
-                    payload.get("document_group_id") or ""
-                ).strip():
-                    if str(payload.get("source_file_id") or "").strip():
-                        raise ValueError(
-                            "source_file_id 与 document_group_id 不能同时指定。"
-                        )
-                    member_ids = resolve_document_group_source_ids(
-                        payload["document_group_id"], index_path
-                    )
-                    payload = dict(payload)
-                    payload.pop("document_group_id", None)
-                    payload["source_file_ids"] = member_ids
-                request = SearchRequest.from_payload(payload)
-            except document_group_not_found_error as exc:
-                self._send_json({"error": str(exc)}, status=404)
-                return
-            except ValueError as exc:
-                self._send_json({"error": str(exc)}, status=400)
-                return
-            try:
-                result = index_runtime.search(request)
-            except sqlite3.OperationalError as exc:
-                # A read that sat out the full busy_timeout on a concurrent
-                # writer's lock surfaces here as "database is locked" (or
-                # "busy"). Map that to a distinct, retriable 503 — never swallow
-                # it into an empty result that would falsely read as "no hits".
-                # Any other operational error is a real fault and must not be
-                # masked as a transient, so it propagates to the 500 handler.
-                message = str(exc).lower()
-                if "locked" in message or "busy" in message:
-                    self._send_json(
-                        {
-                            "error": "索引正忙（写入未在超时内完成），请稍候重试。",
-                            "retriable": True,
-                        },
-                        status=503,
-                    )
-                    return
-                # A non-lock operational error is a real fault: surface it as a
-                # logged 500, not a dropped connection and not an empty result.
-                logging.exception("search query failed")
-                self._send_json(
-                    {"error": "搜索失败，请查看 desktop.log。"}, status=500
-                )
-                return
-            if result is None:
-                self._send_json(
-                    {"error": "索引正在重建，请稍候再搜索。"},
-                    status=503,
-                )
-                return
-            self._send_json(result)
-
         def do_GET(self) -> None:
             if self._reject_untrusted_request():
                 return
             parsed = urlparse(self.path)
-            controller_route = controller_get_routes.get(parsed.path)
-            if controller_route is not None:
+            api_route = routes.get("GET", parsed.path)
+            if api_route is not None:
                 params = parse_qs(
                     parsed.query,
-                    keep_blank_values=(parsed.path == "/api/document/pages"),
+                    keep_blank_values=api_route.policy.keep_blank_query,
                 )
-                status, payload = controller_route(params)
-                self._send_json(payload, status=status)
-                return
-            shell_route = shell_get_routes.get(parsed.path)
-            if shell_route is not None:
-                status, payload = shell_route()
+                status, payload = api_route.handler(params)
                 self._send_json(payload, status=status)
                 return
             if parsed.path in {"/", "/index.html", "/reader", "/reader/", "/reader-window"}:
@@ -369,20 +227,6 @@ def make_http_handler(context: WebHTTPContext):
                     self._send(200, icon_path.read_bytes(), "image/svg+xml")
                 else:
                     self._send(404, b"not found", "text/plain; charset=utf-8")
-                return
-            if parsed.path == "/api/calibration":
-                config_path = root / "config" / "pdf_imports.json"
-                if not config_path.exists():
-                    self._send_json({"documents": []})
-                    return
-                config = load_import_config(config_path)
-                params = parse_qs(parsed.query)
-                sid = (params.get("source_id") or [None])[0]
-                if sid:
-                    doc = next((d for d in config.get("documents", []) if d.get("source_file_id") == sid), None)
-                    self._send_json(doc or {"error": "not found"})
-                else:
-                    self._send_json(config)
                 return
             if parsed.path.startswith("/source/"):
                 self._send_source(parsed.path)
@@ -409,9 +253,10 @@ def make_http_handler(context: WebHTTPContext):
             if self._reject_untrusted_request():
                 self._discard_small_request_body()
                 return
+            api_route = routes.get("POST", parsed.path)
             content_type = str(self.headers.get("Content-Type") or "")
             media_type = content_type.partition(";")[0].strip().casefold()
-            if parsed.path in RAW_BODY_POST_PATHS:
+            if api_route is not None and api_route.body == "raw":
                 invalid_content_type = media_type in {
                     "",
                     "text/plain",
@@ -429,87 +274,26 @@ def make_http_handler(context: WebHTTPContext):
                     status=415,
                 )
                 return
-            if parsed.path not in DATA_ROOT_MUTATING_POST_PATHS:
-                self._do_POST()
+            if api_route is None or not api_route.mutates_data_root:
+                self._do_POST(api_route)
                 return
             try:
                 with data_root_admission.operation():
-                    self._do_POST()
+                    self._do_POST(api_route)
             except data_root_admission_error as exc:
                 self._discard_small_request_body()
                 self._send_json({"error": str(exc)}, status=409)
 
-        def _do_POST(self) -> None:
-            parsed = urlparse(self.path)
+        def _do_POST(self, api_route) -> None:
             if index_runtime.closing:
                 self._discard_small_request_body()
                 self._send_json({"error": "应用正在关闭。"}, status=503)
                 return
-            if parsed.path == "/api/import":
-                filename = unquote(self.headers.get("X-File-Name", ""))
-                suffix = Path(filename).suffix.lower()
-                if suffix not in {".pdf", ".docx", ".epub"}:
-                    self._send_json(
-                        {"error": "只支持 PDF、DOCX 或 EPUB 文件。"},
-                        status=400,
-                    )
-                    return
-                try:
-                    pdf_parse_mode, vision_provider_id = validate_parse_options(
-                        self.headers.get("X-PDF-Parse-Mode", "auto"),
-                        self.headers.get("X-Vision-Provider-ID", ""),
-                    )
-                except (mineru_error, vision_api_error, ValueError) as exc:
-                    # Rejected before the upload body is consumed; drain it first
-                    # so the 400 reaches the client instead of a reset socket on
-                    # Windows (see _drain_request_body).
-                    self._drain_request_body()
-                    self._send_json({"error": str(exc)}, status=400)
-                    return
-                try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    result = document_imports.import_stream(
-                        filename,
-                        length,
-                        self.rfile,
-                        pdf_parse_mode=pdf_parse_mode,
-                        vision_provider_id=vision_provider_id,
-                    )
-                    self._send_json(result)
-                except (mineru_error, vision_api_error, ValueError) as exc:
-                    self._send_json({"error": str(exc)}, status=400)
-                except OSError:
-                    logging.exception("legacy import request failed")
-                    self._send_json(
-                        {"error": "导入失败，请查看 desktop.log。"},
-                        status=500,
-                    )
-                except Exception:
-                    logging.exception("legacy import request failed")
-                    self._send_json({"error": "导入失败，请查看 desktop.log。"}, status=500)
-                return
-            if parsed.path == "/api/import-upload/chunk":
-                try:
-                    upload_id = str(self.headers.get("X-Upload-ID", ""))
-                    offset = int(self.headers.get("X-Upload-Offset", "-1"))
-                    length = int(self.headers.get("Content-Length", "0"))
-                    progress = document_imports.append_chunk(
-                        upload_id,
-                        offset,
-                        length,
-                        self.rfile,
-                    )
-                    self._send_json(progress)
-                except chunked_upload_error as exc:
-                    self._send_json({"error": str(exc)}, status=exc.status)
-                except (TypeError, ValueError):
-                    self._send_json({"error": "上传分块请求无效。"}, status=400)
-                except Exception:
-                    logging.exception("chunked import request failed")
-                    self._send_json(
-                        {"error": "上传分块失败，请查看 desktop.log。"},
-                        status=500,
-                    )
+            if api_route is not None and api_route.body == "raw":
+                status, response = api_route.handler(
+                    RawRequest(self.headers, self.rfile, self._drain_request_body)
+                )
+                self._send_json(response, status=status)
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -522,166 +306,20 @@ def make_http_handler(context: WebHTTPContext):
             if length > MAX_JSON_REQUEST_BYTES:
                 self._send_json({"error": "JSON 请求内容过大。"}, status=413)
                 return
-            if parsed.path == "/api/document/citation" and length > 16 * 1024:
-                self._send_json({"error": "引文请求内容过大。"}, status=413)
-                return
-            if parsed.path == "/api/bibliographic-metadata/parse-cnki-citation" and length > 32 * 1024:
-                self.rfile.read(length)
-                self._send_json({"error": "知网引用文字过大，请只粘贴一条引文。"}, status=413)
-                return
-            if (
-                parsed.path
-                in {
-                    "/api/import-upload/start",
-                    "/api/import-upload/finish",
-                    "/api/import-upload/cancel",
-                }
-                and length > 64 * 1024
-            ):
-                self._send_json({"error": "上传控制请求过大。"}, status=413)
-                return
-            if (
-                parsed.path
-                in {
-                    "/api/bibliographic-metadata/lookup-cnki",
-                    "/api/bibliographic-metadata/cnki-candidate",
-                    "/api/bibliographic-metadata/open-cnki",
-                }
-                and length > 32 * 1024
-            ):
-                self._send_json({"error": "知网题录请求内容过大。"}, status=413)
+            policy = api_route.policy if api_route is not None else None
+            if policy is not None and policy.max_body_bytes is not None and length > policy.max_body_bytes:
+                if policy.drain_oversize:
+                    self.rfile.read(length)
+                self._send_json({"error": policy.oversize_error}, status=413)
                 return
             try:
                 payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             except (UnicodeDecodeError, json.JSONDecodeError):
                 self._send_json({"error": "请求格式无效。"}, status=400)
                 return
-            if parsed.path == "/api/import-upload/start":
-                if not isinstance(payload, dict):
-                    self._send_json({"error": "上传开始请求必须是 JSON 对象。"}, status=400)
-                    return
-                filename = str(payload.get("file_name") or payload.get("filename") or "")
-                try:
-                    total_size = int(payload.get("size") or 0)
-                    result = document_imports.start_chunked(
-                        filename,
-                        total_size,
-                        pdf_parse_mode=payload.get("parse_mode", "auto"),
-                        vision_provider_id=payload.get("provider_id", ""),
-                        import_kind=payload.get("import_kind", "document"),
-                    )
-                    self._send_json(result)
-                except chunked_upload_error as exc:
-                    self._send_json({"error": str(exc)}, status=exc.status)
-                except (mineru_error, ValueError, OSError) as exc:
-                    self._send_json({"error": str(exc)}, status=400)
-                except Exception:
-                    logging.exception("chunked import session start failed")
-                    self._send_json(
-                        {"error": "无法开始上传，请查看 desktop.log。"},
-                        status=500,
-                    )
-                return
-            if parsed.path == "/api/import-upload/cancel":
-                if not isinstance(payload, dict):
-                    self._send_json({"error": "上传取消请求必须是 JSON 对象。"}, status=400)
-                    return
-                try:
-                    result = document_imports.cancel_chunked(
-                        str(payload.get("upload_id") or "")
-                    )
-                    self._send_json(result)
-                except chunked_upload_error as exc:
-                    self._send_json({"error": str(exc)}, status=exc.status)
-                return
-            if parsed.path == "/api/import-upload/finish":
-                if not isinstance(payload, dict):
-                    self._send_json({"error": "上传完成请求必须是 JSON 对象。"}, status=400)
-                    return
-                upload_id = str(payload.get("upload_id") or "")
-                try:
-                    result = document_imports.finish_chunked(upload_id)
-                    self._send_json(result)
-                except chunked_upload_error as exc:
-                    self._send_json({"error": str(exc)}, status=exc.status)
-                except (mineru_error, vision_api_error, ValueError) as exc:
-                    self._send_json({"error": str(exc)}, status=400)
-                except OSError:
-                    logging.exception("chunked import finalization failed")
-                    self._send_json(
-                        {"error": "导入失败，请查看 desktop.log。"},
-                        status=500,
-                    )
-                except Exception:
-                    logging.exception("chunked import finalization failed")
-                    self._send_json(
-                        {"error": "导入失败，请查看 desktop.log。"},
-                        status=500,
-                    )
-                return
-            route_method = self._POST_ROUTE_TABLE.get(parsed.path)
-            if route_method is not None:
-                getattr(self, route_method)(payload)
-                return
-            controller_route = controller_post_routes.get(parsed.path)
-            if controller_route is not None:
-                status, response = controller_route(payload)
+            if api_route is not None:
+                status, response = api_route.handler(payload)
                 self._send_json(response, status=status)
-                return
-            shell_route = shell_post_routes.get(parsed.path)
-            if shell_route is not None:
-                status, response = shell_route(payload)
-                self._send_json(response, status=status)
-                return
-            if parsed.path == "/api/import-local":
-                if not isinstance(payload, dict):
-                    self._send_json(
-                        {"error": "本地导入请求必须是 JSON 对象。"},
-                        status=400,
-                    )
-                    return
-                raw_paths = payload.get("paths")
-                if not isinstance(raw_paths, list) or not raw_paths:
-                    self._send_json({"error": "没有选择要导入的文件。"}, status=400)
-                    return
-                if len(raw_paths) > 50:
-                    self._send_json(
-                        {"error": "一次最多批量导入 50 个文件，请分批选择。"},
-                        status=400,
-                    )
-                    return
-                try:
-                    pdf_parse_mode, vision_provider_id = (
-                        validate_parse_options(
-                            payload.get("pdf_parse_mode", "auto"),
-                            payload.get("vision_provider_id", ""),
-                        )
-                    )
-                except mineru_error as exc:
-                    self._send_json({"error": str(exc)}, status=400)
-                    return
-                try:
-                    preferences = read_preferences(
-                        resolve_preferences_path(root)
-                    )
-                    allowed_bases = [
-                        Path(item).resolve()
-                        for item in preferences.get("scan_directories") or []
-                    ]
-                    result = document_imports.import_local(
-                        raw_paths,
-                        allowed_bases,
-                        pdf_parse_mode=pdf_parse_mode,
-                        vision_provider_id=vision_provider_id,
-                    )
-                except OSError:
-                    logging.exception("local import request failed")
-                    self._send_json(
-                        {"error": "导入失败，请查看 desktop.log。"},
-                        status=500,
-                    )
-                    return
-                self._send_json(result)
                 return
             self._send(404, b"Not found", "text/plain; charset=utf-8")
 

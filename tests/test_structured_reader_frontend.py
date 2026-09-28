@@ -6,11 +6,11 @@ import subprocess
 import unittest
 from pathlib import Path
 
+from tests.reader_source import reader_js_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
-READER_JS = (ROOT / "src" / "me_finder" / "static" / "reader.js").read_text(
-    encoding="utf-8"
-)
+READER_JS = reader_js_source()
 READER_CSS = (ROOT / "src" / "me_finder" / "static" / "reader.css").read_text(
     encoding="utf-8"
 )
@@ -87,7 +87,7 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         self.assertIn("correctionDeferEndpoint: '/api/text-alignments/corrections/defer'", READER_JS)
         self.assertIn("reviewCandidatesEndpoint: '/api/text-alignments/review-candidates'", READER_JS)
         review = READER_JS[READER_JS.index("async function openReviewPopover(trigger)"):]
-        review = review[:review.index("function nearestTextOffset(")]
+        review = review[:review.index("\n  }\n") + len("\n  }\n")]
         for label in ("'保存校正'", "'译本无对应'", "'暂不处理'"):
             self.assertIn(label, review)
         self.assertIn("target_segment_ids: kind === 'none' ? [] : Array.from(checked)", review)
@@ -115,7 +115,7 @@ class StructuredReaderFrontendTests(unittest.TestCase):
         for field in ("sourceId:", "targetIndex:", "anchorId:", "groupId:", "compareWith:"):
             self.assertIn(field, session)
         close = READER_JS[READER_JS.index("function closeReader()"):]
-        self.assertIn("var savedPosition = saveReadingPositionNow();", close)
+        self.assertIn("var savedPosition = r.saveReadingPositionNow();", close)
         # 关闭时把刚写出的位置交回宿主，宿主不必再查一次、也不靠定时器等落库。
         self.assertIn("config.onOpenChange(false, savedPosition)", close)
 
@@ -199,11 +199,10 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("'对齐模型已更换，以下是旧结果'", notice)
         self.assertIn("function startComparisonAlignment(force)", READER_JS)
         self.assertIn("config.alignmentStartEndpoint", READER_JS)
-        self.assertIn("config.alignmentStatusEndpoint", READER_JS)
         applied = READER_JS[READER_JS.index("async function applyAlignmentJobEnd(event)"):]
         applied = applied[:applied.index("  /* ── 新窗口")]
-        self.assertIn("await loadAlignmentTargets(sourceId)", applied)
-        self.assertIn("await loadWorkContext(sourceId)", applied)
+        self.assertIn("await r.loadAlignmentTargets(sourceId)", applied)
+        self.assertIn("await r.loadWorkContext(sourceId)", applied)
         self.assertIn("state.elements.comparisonNotice.hidden = true", READER_JS)
         self.assertIn("state.alignmentGroupId = String(payload.document_group_id", READER_JS)
         # 两栏之间：直接对齐实线，间接关联虚线。
@@ -259,11 +258,11 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertNotIn("getBoundingClientRect", READER_JS)
         self.assertNotIn("scroll-behavior: smooth", READER_CSS)
         render_start = READER_JS.index("function renderWindow(")
-        render_end = READER_JS.index("function findAnchorNode(", render_start)
+        render_end = READER_JS.index("\n  }\n", render_start) + len("\n  }\n")
         render_body = READER_JS[render_start:render_end]
         self.assertLess(
-            render_body.index("positionSourceTarget(target)"),
-            render_body.index("state.boundaryObserver = createBoundaryObserver()"),
+            render_body.index("r.positionSourceTarget(target)"),
+            render_body.index("r.attachObservers(elements, beforeBoundary, afterBoundary)"),
         )
         self.assertNotIn("scrollIntoView", render_body)
 
@@ -277,9 +276,9 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertNotIn("scrollIntoView", position_body)
 
         self.assertIn("function visibleSourceHighlightRange()", READER_JS)
-        self.assertIn("state.resolvedHighlights.get(itemAnchor(item, index))", READER_JS)
+        self.assertIn("state.resolvedHighlights.get(r.itemAnchor(item, index))", READER_JS)
         locate_start = READER_JS.index("async function locateInAlignedVersion")
-        locate_end = READER_JS.index("function toggleCitationMenu", locate_start)
+        locate_end = READER_JS.index("\n  }\n", locate_start) + len("\n  }\n")
         locate_body = READER_JS[locate_start:locate_end]
         self.assertIn(
             "visibleSourceHighlightRange() || sourceCenterRange()",
@@ -311,13 +310,13 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         validation = READER_JS.index(
             "!responseContainsAnchor(items, responseStart, scrollAnchorId)"
         )
-        mutation = READER_JS.index("state.total = clampInteger(", validation)
+        mutation = READER_JS.index("state.total = r.clampInteger(", validation)
         self.assertLess(validation, mutation)
 
     def test_current_page_button_uses_backend_page_display_verbatim(self) -> None:
         self.assertIn("function backendPageDisplay(item)", READER_JS)
         self.assertIn("item.page_display.trim()", READER_JS)
-        self.assertIn("var pageLabel = backendPageDisplay(item)", READER_JS)
+        self.assertIn("var pageLabel = r.backendPageDisplay(item)", READER_JS)
         self.assertIn("state.elements.current.textContent = pageLabel", READER_JS)
         self.assertIn("dataset.readerAction = action", READER_JS)
         self.assertIn("'toggle-citation'", READER_JS)
@@ -370,7 +369,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("selectionBlocksWindowShift()", READER_JS)
         self.assertIn("选区端点必须都在当前已载入", READER_JS)
         self.assertIn(
-            "if (state.open && state.selectionDragging) scheduleSelectionCapture()",
+            "if (state.open && state.selectionDragging) r.scheduleSelectionCapture()",
             READER_JS,
         )
         self.assertIn("state.citationRange = null", READER_JS)
@@ -400,9 +399,13 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("function alignmentTargetDisplayLabel(target)", READER_JS)
         self.assertIn(".mef-reader-alignment-action", READER_CSS)
         self.assertIn("'/api/text-alignments/start'", APP_JS)
-        # 任务状态轮询只在 reader.js 里一份；作品页订阅它，不自己查询。
-        self.assertIn("config.alignmentStatusEndpoint + '?job_id='", READER_JS)
-        self.assertNotIn("/api/text-alignments/status", APP_JS)
+        # 任务状态轮询只在 15-alignment-jobs.js 里一份；阅读器与作品页都只订阅，不自己查询。
+        status_owners = sorted(
+            path.name for path in (ROOT / "src" / "me_finder" / "static" / "js").glob("*.js")
+            if "/api/text-alignments/status" in path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(status_owners, ["15-alignment-jobs.js"])
+        self.assertNotIn("/api/text-alignments/status", READER_JS)
         comparison_start = READER_JS.index("function renderComparisonWindow()")
         comparison_end = READER_JS.index("async function loadComparisonWindow", comparison_start)
         comparison_body = READER_JS[comparison_start:comparison_end]
@@ -498,7 +501,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("state.lastSession = Object.assign(currentReadingSession()", READER_JS)
         self.assertIn("function restoreReaderLocation()", READER_JS)
         self.assertIn("parseReaderDeepLink(global.location) || state.lastSession", READER_JS)
-        self.assertIn("restore: restoreReaderLocation", READER_JS)
+        self.assertIn("restore: r.restoreReaderLocation", READER_JS)
         self.assertIn("state.originalUrl || '/'", READER_JS)
 
     def test_each_item_has_an_independent_safe_dom_anchor(self) -> None:
@@ -570,7 +573,7 @@ assert.equal(choose('und',[zh,de],'zh'),'zh');
         self.assertIn("page_range: {verified: item.page_verified === true}", READER_JS)
         self.assertIn("prefetchCitationRange(captured)", READER_JS)
         copy_start = READER_JS.index("function copyCachedCitation(style)")
-        copy_end = READER_JS.index("function truncateCodePoints(", copy_start)
+        copy_end = READER_JS.index("\n  }\n", copy_start) + len("\n  }\n")
         self.assertNotIn("fetchFunction()", READER_JS[copy_start:copy_end])
         self.assertIn("writeClipboard(citation)", READER_JS[copy_start:copy_end])
         self.assertIn("formats.can_copy === true", READER_JS)

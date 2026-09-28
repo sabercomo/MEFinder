@@ -8,11 +8,13 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from src.me_finder import local_ocr_installer as installer_module
 from src.me_finder.local_ocr_installer import (
     LOCAL_OCR_MANIFEST_FILE,
     LocalOCRInstaller,
@@ -162,6 +164,20 @@ else:
             time.sleep(0.02)
         self.fail("installer operation did not finish")
 
+    def test_close_cancels_and_joins_active_worker(self) -> None:
+        installer = self._installer()
+        release = threading.Event()
+        state = installer._states["ndlocr-lite"]
+        state.operation = "install"
+        state.thread = threading.Thread(target=release.wait, daemon=True)
+        state.thread.start()
+        thread = state.thread
+        self.assertFalse(installer.close(timeout=0))
+        self.assertTrue(state.cancel_event.is_set())
+        release.set()
+        self.assertTrue(installer.close(timeout=1))
+        self.assertFalse(thread.is_alive())
+
     def test_release_manifest_freezes_all_four_platforms(self) -> None:
         for key, onnxruntime in (
             ("darwin-arm64", "onnxruntime==1.23.2"),
@@ -281,6 +297,74 @@ else:
         self.assertEqual(result["installed_tag"], "1.0")
         self.assertTrue(result["update_available"])
         self.assertIn("publish failed", result["error"])
+        self.assertFalse(list(installer.component_root.glob(".previous-*")))
+
+    def _installed_with_pending_update(self) -> LocalOCRInstaller:
+        manifest_path, _archive = self._asset()
+        installer = LocalOCRInstaller(
+            self.runtime_root,
+            self.config_path,
+            manifest_path=manifest_path,
+            platform_key="test-platform",
+            process_launcher=_test_process_launcher,
+        )
+        installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+        self._wait(installer)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["engines"]["ndlocr-lite"]["tag"] = "1.1"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        installer.refresh_manifest()
+        return installer
+
+    def test_update_retries_transient_lock_on_previous_runtime_rename(self) -> None:
+        installer = self._installed_with_pending_update()
+        original_replace = Path.replace
+        calls = []
+
+        def lock_once(source: Path, target: Path) -> Path:
+            if source.name == "ndlocr-lite" and target.name.startswith(".previous-"):
+                calls.append(source)
+                if len(calls) == 1:
+                    raise PermissionError(13, "Access is denied", str(source))
+            return original_replace(source, target)
+
+        with mock.patch.object(
+            installer_module, "_PUBLISH_REPLACE_INITIAL_DELAY_SECONDS", 0
+        ), mock.patch.object(Path, "replace", autospec=True, side_effect=lock_once):
+            installer.perform({"provider_id": "ndlocr-lite", "action": "update"})
+            result = self._wait(installer)
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result["state"], "installed")
+        self.assertFalse(result["error"])
+        self.assertEqual(result["installed_tag"], "1.1")
+        self.assertFalse(result["update_available"])
+        self.assertFalse(list(installer.component_root.glob(".previous-*")))
+        self.assertFalse(list(installer.component_root.glob(".staging-*")))
+
+    def test_update_persistent_publish_lock_is_bounded_and_restores(self) -> None:
+        installer = self._installed_with_pending_update()
+        original_replace = Path.replace
+        calls = []
+
+        def always_locked(source: Path, target: Path) -> Path:
+            if source.name.startswith(".staging-"):
+                calls.append(source)
+                raise PermissionError(13, "Access is denied", str(source))
+            return original_replace(source, target)
+
+        with mock.patch.object(
+            installer_module, "_PUBLISH_REPLACE_INITIAL_DELAY_SECONDS", 0
+        ), mock.patch.object(
+            installer_module, "_PUBLISH_REPLACE_MAX_DELAY_SECONDS", 0
+        ), mock.patch.object(Path, "replace", autospec=True, side_effect=always_locked):
+            installer.perform({"provider_id": "ndlocr-lite", "action": "update"})
+            result = self._wait(installer)
+
+        self.assertEqual(len(calls), installer_module._PUBLISH_REPLACE_ATTEMPTS)
+        self.assertEqual(result["state"], "installed")
+        self.assertEqual(result["installed_tag"], "1.0")
+        self.assertIn("Access is denied", result["error"])
         self.assertFalse(list(installer.component_root.glob(".previous-*")))
 
     def test_bad_digest_rolls_back_without_config_or_staging(self) -> None:

@@ -34,8 +34,14 @@ for %%F in (src\me_finder\static\js\*.js) do (
   node --check "%%F"
   if errorlevel 1 exit /b 1
 )
-node --check src\me_finder\static\reader.js
-if errorlevel 1 exit /b 1
+if not exist src\me_finder\static\reader\*.js (
+  echo static\reader contains no JavaScript files. 1>&2
+  exit /b 1
+)
+for %%F in (src\me_finder\static\reader\*.js) do (
+  node --check "%%F"
+  if errorlevel 1 exit /b 1
+)
 
 "%PYTHON%" -m PyInstaller "packaging\desktop.spec" --clean --noconfirm
 if errorlevel 1 exit /b 1

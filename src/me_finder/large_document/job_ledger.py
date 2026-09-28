@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional
 
+from ..persistence.connection import PROJECT_BUSY_TIMEOUT_MS, connect_index
 from .slicing import SliceDescriptor
 
 
@@ -260,10 +261,9 @@ class JobLedger:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(str(self.path), timeout=30)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA busy_timeout = 30000")
+        connection = connect_index(
+            self.path, write=True, busy_timeout_ms=PROJECT_BUSY_TIMEOUT_MS
+        )
         try:
             with connection:
                 yield connection
