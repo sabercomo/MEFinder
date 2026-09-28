@@ -60,3 +60,17 @@ Server instructions 的前 512 个字符已经完整包含以下约束：
 结构化结果对未校准页码返回空正式页和明确的 `uncalibrated` 状态，对无结果返回空候选，对重复结果保留全部候选。这样可以让最终回答逐项追溯到工具证据。
 
 本报告验证的是 MCP 契约、服务输出和模型可见 instructions。后续里程碑 5 已完成真实 Codex 客户端的自然语言复验，结果见 [`mcp-v1-codex-e2e-report.md`](mcp-v1-codex-e2e-report.md)。
+
+## 2026-09-29 补充：v0.5.8 只读结构查询
+
+新增 `list_sections`、`describe_page_mapping` 两个只读工具；`read_document_window` 增加可选 `section_index`，`list_documents` 增加 `work`（所属作品与已对齐版本），`verify_quotes` 的命中增加 `section`（章节标题路径）。工具总数 13 → 15。
+
+| 测量项（同一合成夹具，`tests/fixtures/mcp_v1_quality_baseline.json`） | 变更前 | 变更后 |
+|---|---|---|
+| 模型可见工具上下文（instructions + `tools/list`） | 41,385 字节 | 49,480 字节（+19.6%） |
+| Server instructions | 384 字符 | 457 字符（仍在 512 字符内） |
+| `list_documents` 按名称查询的结构化结果 | 214 字节 | 226 字节 |
+| `verify_quotes` 两条批量核对的结构化结果 | 1,164 字节 | 1,179 字节 |
+| `describe_page_mapping`（2 页 PDF） | — | 930 字节 |
+
+增量几乎都来自每次会话都会下发的工具定义；单次调用结果基本不变。换来的是：页码偏移不再需要用 `read_document_window` 逐页试探（一次调用代替多次试读），通读可以按章节切分。未新增写工具，更长语境仍通过命中的 `reader.start` 调 `read_document_window` 获取，没有给 `verify_quotes` 加上下文参数，以免批量核对结果膨胀。

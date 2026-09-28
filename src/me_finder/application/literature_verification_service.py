@@ -6,7 +6,7 @@ import difflib
 import re
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Callable, Iterator, Mapping, Sequence
 
 from ..runtime_location import runtime_root
 from .mcp_result_formatting import (
@@ -17,6 +17,9 @@ from .mcp_result_formatting import (
     _search_match,
 )
 from .search_service import SearchRequest, SearchService
+
+if TYPE_CHECKING:
+    from .quote_sections import QuoteSectionLocator
 
 
 RuntimeRootProvider = Callable[[], Path]
@@ -121,12 +124,44 @@ class LiteratureVerificationService:
             )
 
         total = len(documents)
+        page = documents[:validated_limit]
+        self._attach_works(page)
         return {
             "schema_version": SCHEMA_VERSION,
             "total": total,
             "has_more": total > validated_limit,
-            "documents": documents[:validated_limit],
+            "documents": page,
         }
+
+    def _attach_works(self, documents: list[dict[str, object]]) -> None:
+        """Add each document's work group and which fellow versions are aligned."""
+
+        from ..document_groups import read_group_memberships
+        from ..text_alignment import list_alignment_targets
+
+        index_path = self._existing_index_path()
+        memberships = read_group_memberships(index_path)
+        for document in documents:
+            source_id = str(document["source_file_id"])
+            group = memberships.get(source_id)
+            if group is None:
+                document["work"] = None
+                continue
+            aligned = {
+                str(target["source_file_id"])
+                for target in list_alignment_targets(index_path, source_id)["targets"]
+                if isinstance(target, Mapping)
+            }
+            document["work"] = {
+                "document_group_id": str(group["document_group_id"]),
+                "title": _first_text(group["title"]),
+                "is_base": source_id == group["base_source_file_id"],
+                "other_versions": [
+                    {**member, "aligned": member["source_file_id"] in aligned}
+                    for member in group["members"]
+                    if member["source_file_id"] != source_id
+                ],
+            }
 
     def locate_quote(
         self,
@@ -170,6 +205,9 @@ class LiteratureVerificationService:
             "matches_per_quote", matches_per_quote, minimum=1, maximum=5
         )
 
+        from .quote_sections import QuoteSectionLocator
+
+        sections = QuoteSectionLocator(self._existing_index_path())
         # Resolve source existence once so every quote reports the same error.
         with self._open_engine(validated_source_id) as engine:
             results = [
@@ -182,6 +220,7 @@ class LiteratureVerificationService:
                         source_file_id=validated_source_id,
                         source_type=source_type,
                         limit=validated_limit,
+                        section_locator=sections,
                     ),
                 )
                 for index, quote in enumerate(validated_quotes)
@@ -383,6 +422,7 @@ class LiteratureVerificationService:
         source_file_id: str | None,
         source_type: str,
         limit: int,
+        section_locator: QuoteSectionLocator | None = None,
     ) -> dict[str, object]:
         from ..structured_reader import SourceNotFound
 
@@ -408,24 +448,58 @@ class LiteratureVerificationService:
             "total_is_exact": bool(raw_result["total_is_exact"]),
             "has_more": bool(raw_result["has_more"]),
             "matches": [
-                _search_match(item)
+                _with_section(_search_match(item), item, section_locator)
                 for item in raw_result["results"]
                 if isinstance(item, Mapping)
             ],
+        }
+
+    def list_sections(self, source_file_id: str) -> dict[str, object]:
+        """List the reader outline as sections with natural-position ranges."""
+
+        from .document_sections import MAX_SECTIONS
+
+        validated_source_id = _validate_source_id(source_file_id)
+        source, total, sections = self._document_sections(validated_source_id)
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "source": source,
+            "unit": "pdf_page" if source["source_type"] == "pdf" else "word_paragraph",
+            "total": total,
+            "sections": sections[:MAX_SECTIONS],
+            "sections_truncated": len(sections) > MAX_SECTIONS,
         }
 
     def read_document_window(
         self,
         source_file_id: str,
         *,
-        start: int = 0,
+        start: int | None = None,
         count: int = 10,
+        section_index: int | None = None,
     ) -> dict[str, object]:
         from ..structured_reader import get_document_window
+        from .document_sections import section_by_index
 
         validated_source_id = _validate_source_id(source_file_id)
-        validated_start = _bounded_integer("start", start, minimum=0)
         validated_count = _bounded_integer("count", count, minimum=1, maximum=50)
+        section: Mapping[str, object] | None = None
+        if section_index is not None:
+            _, _, sections = self._document_sections(validated_source_id)
+            section = section_by_index(
+                sections,
+                _bounded_integer("section_index", section_index, minimum=0),
+            )
+            validated_start = _bounded_integer(
+                "start",
+                int(section["start"]) if start is None else start,
+                minimum=int(section["start"]),
+                maximum=int(section["end"]),
+            )
+        else:
+            validated_start = _bounded_integer(
+                "start", 0 if start is None else start, minimum=0
+            )
         raw_result = get_document_window(
             self._existing_index_path(),
             validated_source_id,
@@ -436,21 +510,10 @@ class LiteratureVerificationService:
         if not isinstance(source, Mapping):
             raise ValueError("结构化阅读器返回了无效的 source")
         source_type = str(source["source_type"])
-        return {
+        raw_items = [item for item in raw_result["items"] if isinstance(item, Mapping)]
+        result: dict[str, object] = {
             "schema_version": SCHEMA_VERSION,
-            "source": {
-                "source_file_id": str(source["source_file_id"]),
-                "source_type": source_type,
-                "title": _first_text(
-                    source.get("display_title"),
-                    source.get("document_title"),
-                    source.get("file_name"),
-                ),
-                "original_file_name": _first_text(
-                    source.get("original_file_name"),
-                    source.get("file_name"),
-                ),
-            },
+            "source": _reader_source(source),
             "start": int(raw_result["start"]),
             "count": int(raw_result["count"]),
             "total": int(raw_result["total"]),
@@ -458,11 +521,84 @@ class LiteratureVerificationService:
             "has_more": bool(raw_result["has_more"]),
             "previous_start": raw_result["previous_start"],
             "next_start": raw_result["next_start"],
-            "items": [
-                _reader_item(item, source_type)
-                for item in raw_result["items"]
-                if isinstance(item, Mapping)
-            ],
+            "items": [],
+        }
+        if section is not None:
+            section_end = int(section["end"])
+            position_key = "pdf_page_index" if source_type == "pdf" else "paragraph_index"
+            raw_items = [
+                item for item in raw_items if int(item[position_key]) <= section_end
+            ]
+            last_read = int(raw_items[-1][position_key]) if raw_items else section_end
+            result["section"] = {
+                **section,
+                "next_start": last_read + 1 if last_read < section_end else None,
+            }
+        result["items"] = [_reader_item(item, source_type) for item in raw_items]
+        return result
+
+    def _document_sections(
+        self, source_file_id: str
+    ) -> tuple[dict[str, object], int, list[dict[str, object]]]:
+        from ..document_outline import get_document_outline
+        from ..structured_reader import get_document_window
+        from .document_sections import build_sections
+
+        index_path = self._existing_index_path()
+        # A one-item window validates the source and yields its public record
+        # and unit total with the reader's own rules.
+        probe = get_document_window(index_path, source_file_id, start=0, count=1)
+        source = probe["source"]
+        if not isinstance(source, Mapping):
+            raise ValueError("结构化阅读器返回了无效的 source")
+        total = int(probe["total"])
+        outline = get_document_outline(index_path, source_file_id)
+        sections = build_sections(
+            outline["entries"],
+            total_units=total,
+            is_pdf=str(source["source_type"]) == "pdf",
+        )
+        return _reader_source(source), total, sections
+
+    def describe_page_mapping(self, source_file_id: str) -> dict[str, object]:
+        """Summarise stored page-mapping runs without running detection."""
+
+        from ..page_mapping_overview import describe_page_mapping
+
+        raw_result = describe_page_mapping(
+            self._existing_index_path(), _validate_source_id(source_file_id)
+        )
+        source = raw_result["source"]
+        payload = source["payload"]
+        file_name = _first_text(source.get("file_name"), payload.get("file_name"))
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "source": {
+                "source_file_id": str(source["source_file_id"]),
+                "source_type": str(source["source_type"]),
+                "title": _first_text(
+                    payload.get("display_title"),
+                    payload.get("document_title"),
+                    payload.get("title"),
+                    file_name,
+                ),
+                "original_file_name": _first_text(
+                    payload.get("original_file_name"), file_name
+                ),
+            },
+            "source_format": _source_format(source["source_type"], payload, file_name),
+            **{
+                key: raw_result[key]
+                for key in (
+                    "unit",
+                    "total_units",
+                    "calibrated_units",
+                    "coverage",
+                    "mapping_record",
+                    "segments",
+                    "segments_truncated",
+                )
+            },
         }
 
     def read_bibliographic_pages(
@@ -525,19 +661,7 @@ class LiteratureVerificationService:
 
         return {
             "schema_version": SCHEMA_VERSION,
-            "source": {
-                "source_file_id": str(source["source_file_id"]),
-                "source_type": source_type,
-                "title": _first_text(
-                    source.get("display_title"),
-                    source.get("document_title"),
-                    source.get("file_name"),
-                ),
-                "original_file_name": _first_text(
-                    source.get("original_file_name"),
-                    source.get("file_name"),
-                ),
-            },
+            "source": _reader_source(source),
             "total": total,
             "front": front_pages,
             "back": back_pages,
@@ -754,6 +878,46 @@ def _character_diff(
         and stats["changed_source"] == 0
     )
     return segments, stats, identical
+
+
+def _with_section(
+    match: dict[str, object],
+    fields: Mapping[str, object],
+    section_locator: QuoteSectionLocator | None,
+) -> dict[str, object]:
+    if section_locator is not None:
+        match["section"] = section_locator.section_for(fields)
+    return match
+
+
+def _reader_source(source: Mapping[str, object]) -> dict[str, object]:
+    return {
+        "source_file_id": str(source["source_file_id"]),
+        "source_type": str(source["source_type"]),
+        "title": _first_text(
+            source.get("display_title"),
+            source.get("document_title"),
+            source.get("file_name"),
+        ),
+        "original_file_name": _first_text(
+            source.get("original_file_name"),
+            source.get("file_name"),
+        ),
+    }
+
+
+def _source_format(
+    source_type: object, payload: Mapping[str, object], file_name: str | None
+) -> str | None:
+    if str(source_type) == "pdf":
+        return "pdf"
+    declared = str(
+        payload.get("source_format") or payload.get("file_format") or ""
+    ).lower()
+    if declared in {"docx", "epub"}:
+        return declared
+    suffix = Path(file_name or "").suffix.lower().lstrip(".")
+    return suffix if suffix in {"docx", "epub"} else None
 
 
 def _validate_source_type(source_type: object) -> None:

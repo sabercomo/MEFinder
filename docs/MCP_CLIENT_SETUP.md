@@ -178,12 +178,14 @@ claude mcp list
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下会列出十三个工具：
+正常情况下会列出十五个工具：
 
 ```text
 list_documents
 locate_quote
 read_document_window
+list_sections
+describe_page_mapping
 verify_quotes
 diff_quote
 search_passages
@@ -357,12 +359,14 @@ D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下应该能看到十三个工具：
+正常情况下应该能看到十五个工具：
 
 ```text
 list_documents
 locate_quote
 read_document_window
+list_sections
+describe_page_mapping
 verify_quotes
 diff_quote
 search_passages
@@ -464,7 +468,7 @@ Windows 路径中的反斜杠在 JSON 里必须写成两个。编辑器也接受
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-能列出十三个工具（清单见第九节）就说明接入成功；再用下面这句确认能读到自己的文献库：
+能列出十五个工具（清单见第九节）就说明接入成功；再用下面这句确认能读到自己的文献库：
 
 ```text
 请只使用 mefinder，列出当前已经导入的文献。
@@ -718,18 +722,20 @@ macOS 路径使用 `/`，不需要像 Windows 一样改成双反斜杠。
 
 #### 3. 保存并验证
 
-点击「保存」后**新开一个会话**（ZCode 在会话启动时连接 MCP，老会话不会自动接上），输入「请查看 mefinder MCP 提供了哪些工具」，能列出十三个工具就说明接入成功。
+点击「保存」后**新开一个会话**（ZCode 在会话启动时连接 MCP，老会话不会自动接上），输入「请查看 mefinder MCP 提供了哪些工具」，能列出十五个工具就说明接入成功。
 
 ## 九、配置成功后能做什么
 
-MEFinder MCP 提供十三个工具，分为两组。
+MEFinder MCP 提供十五个工具，分为两组。
 
-### 只读检索工具（10 个）
+### 只读检索工具（12 个）
 
-- `list_documents`：按题名、作者或文件名筛选已导入文献，返回后续工具使用的稳定文献 ID；
+- `list_documents`：按题名、作者或文件名筛选已导入文献，返回后续工具使用的稳定文献 ID，并标出所属作品及组内已对齐的其他版本；
 - `locate_quote`：在本地索引中定位原句，返回原文、上下文、匹配方式与页码状态；支持精确、忽略空格、忽略标点、模糊等多种模式；
-- `read_document_window`：从命中位置读取有界文本窗口，查看前后页或相邻段落的上下文；
-- `verify_quotes`：一次批量核对多条引文，逐条返回 verified（逐字命中）/ approximate（疑似错引）/ not_found（未找到）；
+- `read_document_window`：从命中位置读取有界文本窗口，查看前后页或相邻段落的上下文；传入章节序号时只读该章节；
+- `list_sections`：列出与阅读器目录同源的章节标题及其位置范围，方便按章通读；没有可识别标题时返回空列表；
+- `describe_page_mapping`：说明一篇文献哪些位置有可引用页码、页码来源，以及 PDF 页与印刷页的偏移（含书中换档），只读已有映射、不做自动检测；
+- `verify_quotes`：一次批量核对多条引文，逐条返回 verified（逐字命中）/ approximate（疑似错引）/ not_found（未找到），并给出每个命中所在的章节标题；
 - `diff_quote`：把疑似抄错的引文与索引中最接近的原句逐字符对齐，标注增（added）/ 漏（missing）/ 改（changed）；
 - `search_passages`：只记得大意或部分关键词时，按相关性召回可能相关的原文段落（相关性检索，非逐字命中；需要逐字核对时再用 `locate_quote`）；
 - `find_parallel_passages`：输入一句中文或任一译本文本，以作品组已有对齐为中心召回其他版本的多个候选和前后文；Agent 比较跨语言语义、专名、引文结构后才确认，无法唯一确定时列出歧义或明确说明证据不足；

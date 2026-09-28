@@ -7,9 +7,9 @@
     "advertised_context_scope": "server instructions plus tools/list Tool objects, excluding JSON-RPC framing"
   },
   "advertised_context": {
-    "instructions_characters": 384,
-    "instructions_utf8_bytes": 790,
-    "utf8_bytes": 41385,
+    "instructions_characters": 457,
+    "instructions_utf8_bytes": 927,
+    "utf8_bytes": 49480,
     "before_unreferenced_defs_trim_utf8_bytes": 175520
   },
   "responses": {
@@ -18,7 +18,7 @@
       "arguments": {
         "query": "MCP 合成 PDF 样例"
       },
-      "structured_content_utf8_bytes": 214,
+      "structured_content_utf8_bytes": 226,
       "content_utf8_bytes": 21
     },
     "exact_locate": {
@@ -97,7 +97,7 @@
         ],
         "mode": "exact"
       },
-      "structured_content_utf8_bytes": 1164,
+      "structured_content_utf8_bytes": 1179,
       "content_utf8_bytes": 81
     },
     "identical_diff": {
@@ -144,6 +144,22 @@
       },
       "structured_content_utf8_bytes": 1152,
       "content_utf8_bytes": 57
+    },
+    "page_mapping_overview": {
+      "tool": "describe_page_mapping",
+      "arguments": {
+        "source_file_id": "fixture-pdf"
+      },
+      "structured_content_utf8_bytes": 930,
+      "content_utf8_bytes": 58
+    },
+    "section_list": {
+      "tool": "list_sections",
+      "arguments": {
+        "source_file_id": "fixture-word"
+      },
+      "structured_content_utf8_bytes": 234,
+      "content_utf8_bytes": 88
     }
   },
   "workflows": {
@@ -160,7 +176,7 @@
         "exact_locate"
       ],
       "call_count": 2,
-      "result_utf8_bytes": 1210
+      "result_utf8_bytes": 1222
     },
     "quote_with_context_expansion": {
       "responses": [
@@ -175,7 +191,7 @@
         "batch_verify"
       ],
       "call_count": 1,
-      "result_utf8_bytes": 1245
+      "result_utf8_bytes": 1260
     },
     "misquote_review": {
       "responses": [
@@ -200,9 +216,18 @@
       "result_utf8_bytes": 2293
     },
     "metadata_gap_review": {
-      "responses": ["bibliographic_metadata"],
+      "responses": [
+        "bibliographic_metadata"
+      ],
       "call_count": 1,
       "result_utf8_bytes": 1209
+    },
+    "page_offset_lookup": {
+      "responses": [
+        "page_mapping_overview"
+      ],
+      "call_count": 1,
+      "result_utf8_bytes": 988
     }
   }
 }

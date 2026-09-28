@@ -107,7 +107,11 @@ class MCPServerProtocolTests(unittest.TestCase):
                             item["name"]: item for item in CONTRACT["tools"]
                         }
                         expected_defs = {
-                            "list_documents": {"document", "nullable_string"},
+                            "list_documents": {
+                                "document",
+                                "document_work",
+                                "nullable_string",
+                            },
                             "locate_quote": {
                                 "citation_page",
                                 "context_item",
@@ -116,16 +120,30 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "nullable_string",
                                 "page_mapping",
                                 "physical_page",
+                                "quote_section",
                                 "reader_cursor",
                             },
                             "read_document_window": {
                                 "citation_formats",
                                 "citation_page",
+                                "document_section",
                                 "nullable_nonnegative_integer",
                                 "nullable_string",
                                 "page_mapping",
                                 "physical_page",
                                 "reader_item",
+                                "reader_source",
+                            },
+                            "list_sections": {
+                                "document_section",
+                                "nullable_nonnegative_integer",
+                                "nullable_string",
+                                "reader_source",
+                            },
+                            "describe_page_mapping": {
+                                "nullable_string",
+                                "page_mapping_record",
+                                "page_mapping_segment",
                                 "reader_source",
                             },
                             "verify_quotes": {
@@ -136,6 +154,7 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "nullable_string",
                                 "page_mapping",
                                 "physical_page",
+                                "quote_section",
                                 "reader_cursor",
                                 "verify_result",
                             },
@@ -149,6 +168,7 @@ class MCPServerProtocolTests(unittest.TestCase):
                                 "nullable_string",
                                 "page_mapping",
                                 "physical_page",
+                                "quote_section",
                                 "reader_cursor",
                             },
                             "search_passages": {

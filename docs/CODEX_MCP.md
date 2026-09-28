@@ -6,12 +6,14 @@
 
 ## 当前可用范围
 
-MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十三个工具：前九个只读；最后四个用于对齐修正，其中三个为带确认门槛的写工具，只有用户在对话中明确同意后才会永久生效，其余读写路径不受影响。
+MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十五个工具：前十一个只读；最后四个用于对齐修正，其中三个为带确认门槛的写工具，只有用户在对话中明确同意后才会永久生效，其余读写路径不受影响。
 
-- `list_documents`：按题名、作者、文件名或类型查找已导入文献；
+- `list_documents`：按题名、作者、文件名或类型查找已导入文献，并标出所属作品与已对齐的其他版本；
 - `locate_quote`：定位原句、近似引文和多个候选；
-- `read_document_window`：从命中位置继续读取有界的 PDF 页或 Word 段落窗口；
-- `verify_quotes`：一次核对多条引文，逐条返回 `verified`/`approximate`/`not_found`；
+- `read_document_window`：从命中位置继续读取有界的 PDF 页或 Word 段落窗口；传 `section_index` 时只读该章节；
+- `list_sections`：列出与阅读器目录同源的一、二级章节及位置范围，没有可识别标题时返回空列表；
+- `describe_page_mapping`：按连续区间说明哪些位置有可引用页码、映射方法与 PDF 页→印刷页偏移，只读已入库映射；
+- `verify_quotes`：一次核对多条引文，逐条返回 `verified`/`approximate`/`not_found`，每个命中附所在章节路径；
 - `diff_quote`：把疑似抄错的引文与最接近的原句逐字符对齐，标注增、漏、改；
 - `search_passages`：按自然语言描述或关键词按相关性召回可能相关的原文段落（相关性检索，非逐字命中，`relevance.rank` 取用后可转 `locate_quote` 逐字核验）；
 - `find_parallel_passages`：输入任一版本的句子，以已生成的版本对齐为中心返回英文、原文或其他译本的多个附近候选、定位和前后文；Codex 必须重新比较语义与上下文，只在证据唯一时确认，否则报告 `ambiguous` 或 `unavailable`；
@@ -197,7 +199,7 @@ tool_timeout_sec = 60
 1. 运行 `codex mcp list`，应看到启用的 `mefinder`；
 2. 运行 `codex mcp get mefinder --json`，核对命令、参数和工作目录；
 3. 在 Codex TUI 或桌面端输入 `/mcp`，应看到服务器已连接；
-4. 工具列表应包含本页“当前可用范围”列出的十三个工具（九个只读 + 四个对齐修正）；
+4. 工具列表应包含本页“当前可用范围”列出的十五个工具（十一个只读 + 四个对齐修正）；
 5. 先在 MEFinder 中导入至少一篇文献，再询问：“只使用 MEFinder 核对这句话出自哪篇文献、哪一页。”
 
 建议继续检查以下自然语言任务：

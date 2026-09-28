@@ -161,6 +161,15 @@ def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
             f"题录字段 {present}/{len(result['fields'])} 已填，"
             f"缺失 {len(result['missing_fields'])} 项，存疑 {len(result['invalid_fields'])} 项。"
         )
+    if tool_name == "list_sections":
+        if not result["sections"]:
+            return "该文献没有可识别的章节标题，请用 read_document_window 按位置阅读。"
+        return f"共 {len(result['sections'])} 个章节，可按 section_index 读取。"
+    if tool_name == "describe_page_mapping":
+        return (
+            f"页码映射分 {len(result['segments'])} 段，"
+            f"{result['calibrated_units']}/{result['total_units']} 个位置有可引用页码。"
+        )
     if tool_name == "propose_alignment_correction":
         return (
             "已记录待确认的对齐修正提议，尚未生效。请向用户复核源句与目标段及判断依据，"
@@ -263,9 +272,16 @@ TOOL_HANDLERS: dict[
     "read_document_window": lambda service, arguments: (
         service.read_document_window(
             arguments["source_file_id"],
-            start=arguments.get("start", 0),
+            start=arguments.get("start"),
             count=arguments.get("count", 10),
+            section_index=arguments.get("section_index"),
         )
+    ),
+    "list_sections": lambda service, arguments: (
+        service.list_sections(arguments["source_file_id"])
+    ),
+    "describe_page_mapping": lambda service, arguments: (
+        service.describe_page_mapping(arguments["source_file_id"])
     ),
     "propose_alignment_correction": lambda service, arguments: (
         service.propose_alignment_correction(

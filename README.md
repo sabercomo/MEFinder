@@ -210,16 +210,17 @@ brew install --cask mefinder
 
 ### MCP 文献核对（0.5.1，可选集成）
 
-提供十三个 MCP 工具，让支持 MCP 的 AI 助手直接访问你的文献库，覆盖定位、跨译本对照、核对、检索、题录，以及人工对齐修正：
+提供十五个 MCP 工具，让支持 MCP 的 AI 助手直接访问你的文献库，覆盖定位、阅读结构、页码映射、跨译本对照、核对、检索、题录，以及人工对齐修正：
 
-- **定位与阅读**：`list_documents` 列出已导入文献并返回稳定 ID，`locate_quote` 定位引文原文、上下文与页码状态，`read_document_window` 按物理页或段落读取有界文本窗口。
-- **引文核对**：`verify_quotes` 一次批量核对多条引文是否逐字命中（verified / approximate / not_found），`diff_quote` 把疑似错引与最接近的原句逐字符对齐，标注增、漏、改的差异。
+- **定位与阅读**：`list_documents` 列出已导入文献并返回稳定 ID，同时标出所属作品及组内哪些版本已完成对齐；`locate_quote` 定位引文原文、上下文与页码状态；`list_sections` 列出与阅读器目录同源的章节及其位置范围；`read_document_window` 按物理页或段落读取有界文本窗口，也可按章节逐节读取。
+- **页码映射**：`describe_page_mapping` 按连续区间说明一篇文献哪些位置有可引用页码、映射方法，以及 PDF 页与印刷页的偏移（含书中换档），只读已入库映射，不运行自动检测，未校准的区间如实标为 `uncalibrated`。
+- **引文核对**：`verify_quotes` 一次批量核对多条引文是否逐字命中（verified / approximate / not_found），并给出每个命中所在的章节标题路径，便于核对语境，`diff_quote` 把疑似错引与最接近的原句逐字符对齐，标注增、漏、改的差异。
 - **主题检索**：`search_passages` 按自然语言描述或关键词按相关性召回相关段落，适合只记得大意、无法逐字引用时找回原文（是相关性检索，命中不代表逐字一致）。
 - **译本 / 原文对照**：`find_parallel_passages` 接收一句中文或任一版本的句子，以作品组已生成的对齐为中心返回英文、原文或其他译本的多个附近候选、定位及前后文；调用它的 Agent 再依据跨语言语义、专名、引文结构和上下文校准。只有唯一候选证据充分时才确认，仍有歧义或证据不足时必须明确说明；可按目标语言或具体版本收窄，不现场机器翻译，也不改写已有对齐。
 - **题录**：`read_bibliographic_pages` 读取版权页 / CIP 页等候选文本供提取题录，`read_bibliographic_metadata` 列出现有题录字段并标注已填 / 存疑 / 缺失。
 - **人工对齐修正**：`list_alignment_corrections` 列出已记录的人工修正供复核；当 `find_parallel_passages` 的自动对齐指向错误译文段时，AI 可用 `propose_alignment_correction` 提议修正，经你明确确认后调用 `confirm_alignment_correction` 生效；`revoke_alignment_correction` 可随时撤销已有修正并恢复自动对齐。提议不改变任何查询结果，必须由你确认后才会生效。
 
-十三个工具中有十个只读，三个（propose / confirm / revoke）为写操作，仅用于人工对齐修正且须经用户确认。工具本身不提供问答、总结或翻译等生成功能。Windows 安装版、绿色版和 macOS 发布包都包含独立 `MEFinderMCP` sidecar，不用装 Python；源码模式也可单独接入。桌面窗口无需保持开启，MCP 进程本身不联网。
+十五个工具中有十二个只读，三个（propose / confirm / revoke）为写操作，仅用于人工对齐修正且须经用户确认。工具本身不提供问答、总结或翻译等生成功能。Windows 安装版、绿色版和 macOS 发布包都包含独立 `MEFinderMCP` sidecar，不用装 Python；源码模式也可单独接入。桌面窗口无需保持开启，MCP 进程本身不联网。
 
 需要选择的是 `MEFinderMCP.exe`，不是桌面主程序。Windows 安装版通常位于：
 

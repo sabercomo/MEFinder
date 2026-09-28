@@ -20,7 +20,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .document_group_metadata import canonical_version_label, member_display_name
-from .connection import connect_index, open_writable_index, table_exists
+from .connection import (
+    connect_index,
+    open_readonly_index,
+    open_writable_index,
+    table_exists,
+)
 from .schema_installers import install_document_group_schema
 from .index_schema import DEFAULT_DATABASE_PATH
 
@@ -900,6 +905,59 @@ def resolve_document_group_source_ids(
         return [row[0] for row in rows]
     finally:
         connection.close()
+
+
+def read_group_memberships(db_path: Path) -> Dict[str, Dict[str, object]]:
+    """Map each grouped SourceFile to its group and fellow members, read-only.
+
+    Unlike ``list_document_groups`` this never installs the schema, so a
+    read-only consumer (the MCP sidecar) cannot write to the index.
+    """
+
+    path = Path(db_path)
+    if not path.exists():
+        return {}
+    connection = open_readonly_index(path)
+    try:
+        if not table_exists(connection, "document_groups") or not table_exists(
+            connection, "document_group_members"
+        ):
+            return {}
+        rows = connection.execute(
+            "SELECT g.document_group_id AS document_group_id, g.title AS title, "
+            "g.base_source_file_id AS base_source_file_id, "
+            "m.source_file_id AS source_file_id, m.version_label AS version_label, "
+            "s.file_name AS file_name, s.payload_json AS payload_json "
+            "FROM document_group_members m "
+            "JOIN document_groups g ON g.document_group_id = m.document_group_id "
+            "JOIN source_files s ON s.source_file_id = m.source_file_id "
+            "ORDER BY g.document_group_id, m.member_order, m.source_file_id"
+        ).fetchall()
+    finally:
+        connection.close()
+    groups: Dict[str, Dict[str, object]] = {}
+    memberships: Dict[str, Dict[str, object]] = {}
+    for row in rows:
+        group = groups.setdefault(
+            row["document_group_id"],
+            {
+                "document_group_id": row["document_group_id"],
+                "title": row["title"],
+                "base_source_file_id": row["base_source_file_id"],
+                "members": [],
+            },
+        )
+        group["members"].append(
+            {
+                "source_file_id": row["source_file_id"],
+                "display_name": member_display_name(
+                    row["version_label"], _member_source_payload(row)
+                ),
+                "is_base": row["source_file_id"] == row["base_source_file_id"],
+            }
+        )
+        memberships[row["source_file_id"]] = group
+    return memberships
 
 
 def document_group_for_source(

@@ -122,6 +122,7 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
                 "title": "MCP 合成 Word 样例",
                 "author": "测试作者乙",
                 "original_file_name": "mcp-fixture.docx",
+                "work": None,
             },
         )
         pdf_only = self.service.list_documents(source_type="pdf", limit=1)
@@ -507,7 +508,13 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(result["results"][2]["matches"], [])
         self.assertEqual(result["results"][2]["total"], 0)
         verified_match = result["results"][0]["matches"][0]
-        self.assert_required_keys(verified_match, self.contract["$defs"]["match"])
+        # verify_quotes adds the optional section path; the fixture PDF has no
+        # outline, so it is present but null rather than guessed.
+        self.assertEqual(
+            set(verified_match),
+            set(self.contract["$defs"]["match"]["required"]) | {"section"},
+        )
+        self.assertIsNone(verified_match["section"])
         self.assertEqual(verified_match["matched_text"], CALIBRATED_QUOTE)
 
     def test_verify_quotes_scopes_to_a_single_source(self) -> None:
