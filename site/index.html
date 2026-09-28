@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>文献原句定位器 MEFinder — 找回原句，也核对引文</title>
-<meta name="description" content="文献原句定位器（MEFinder）：本地优先的 PDF / Word / EPUB 文献原句检索、页码定位与引文辅助工具。把记得的片段交给它，它在你自己的文献库里找回原句，带你回到上下文和出版方页码。">
+<title>文献原句定位器 MEFinder — 找到原句，给你书内实际页码</title>
+<meta name="description" content="文献原句定位器（MEFinder）：本地优先的 PDF / Word / EPUB 文献原句检索、页码定位与引文辅助工具。把记得的片段交给它，它在你自己的文献库里找回原句，给出书内实际页码而不是 PDF 物理页码。">
 <link rel="icon" href="assets/app_icon_256.png">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="site.css">
@@ -15,6 +15,7 @@
 <header class="top">
   <a class="top-mark" href="./"><img src="assets/app_icon_256.png" width="28" height="28" alt="">文献原句定位器<span class="top-ver">MEFinder v<span data-rel="current">0.5.7</span></span></a>
   <nav class="top-nav" aria-label="页内导航">
+    <a href="#pages">页码</a>
     <a href="#features">功能</a>
     <a href="#mcp">MCP</a>
     <a href="#looks">外观</a>
@@ -28,10 +29,10 @@
 
   <section class="hero" id="try" aria-labelledby="hero-h">
     <div class="hero-copy">
-      <p class="eyebrow">PDF · Word · EPUB 本地文献原句检索</p>
-      <h1 class="hero-h1" id="hero-h">记得那句话，<br><span class="hl">想不起在哪本书</span>。</h1>
-      <p class="band-def">文献原句定位器（MEFinder）是一款本地优先的文献原句检索、页码定位与引文辅助工具。</p>
-      <p class="lede">完整句子、残缺片段、带着错字的记忆都可以交给它。它在你自己的文献库里找回原文，附上上下文和出版方页码，再把出处排成你要的格式。</p>
+      <p class="eyebrow">PDF · Word · EPUB 本地文献原句与页码定位</p>
+      <h1 class="hero-h1" id="hero-h">找到原句，<br><span class="nobr">给你<span class="hl">书内实际页码</span>。</span></h1>
+      <p class="band-def">不是 PDF 物理页码。PDF 第 69 页，书上印的是序言第 16 页。</p>
+      <p class="lede">文献原句定位器（MEFinder）是一款本地优先的文献原句检索、页码定位与引文辅助工具。完整句子、残缺片段、带着错字的记忆都可以交给它：它在你自己的文献库里找回原文，标出书内实际页码，再把出处排成你要的格式。</p>
       <div class="hero-actions">
         <a class="btn btn-primary btn-lg" id="cta-dl" href="https://github.com/sabercomo/MEFinder/releases/latest">下载 MEFinder</a>
         <a class="btn btn-quiet btn-lg" href="https://github.com/sabercomo/MEFinder"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.15.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.05-.13-.36-.99.08-2.07 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.08.13 1.94.08 2.07.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>源码</a>
@@ -54,8 +55,36 @@
         <button type="button" class="chip" data-mode="fuzzy">模糊</button>
       </div>
       <div class="demo-out" id="demo-out" aria-live="polite"></div>
-      <p class="demo-foot">书里印的是「密纳发」。换个译名、记错两个字，模糊模式照样把它找回来，并给出引用页码。真实软件检索的是你整个文献库，不是这四段。</p>
+      <p class="demo-foot">书里印的是「密纳发」。换个译名、记错两个字，模糊模式照样把它找回来，给的是书内实际页码，不是 PDF 第几页。真实软件检索的是你整个文献库，不是这四段。</p>
     </figure>
+  </section>
+
+  <!-- ============ 页码 · 软件核心 ============ -->
+  <section class="pages" id="pages" aria-labelledby="pages-h">
+    <header class="sec-head">
+      <p class="eyebrow">页码</p>
+      <h2 class="sec-h2" id="pages-h">引用的是书内实际页码，不是 PDF 物理页码</h2>
+      <p class="sec-p">PDF 阅读器显示的页数从封面算起，序言、目录、插页都占页数，和书上印的页码对不上。MEFinder 的每条检索结果都带着书内实际页码。</p>
+    </header>
+    <div class="pages-grid">
+      <ul class="pages-points">
+        <li><b>自动映射。</b>读取页边印着的页码序列，把每个 PDF 物理页对应到书内页码；序言用罗马数字、正文用阿拉伯数字这样的分段也能分开认。</li>
+        <li><b>人工分段校准。</b>自动映射不准的书，按段指定「PDF 第几页是书内第几页」，之后整段跟着改。</li>
+        <li><b>EPUB 只用出版方页码。</b>读取出版方提供的 page-list / pagebreak，绝不按屏幕排版生成页码。</li>
+        <li><b>没有就说没有。</b>找不到书内页码时如实标「页码尚未解析」，不推算、不补数。</li>
+      </ul>
+      <div>
+        <table class="spec">
+          <caption class="visually-hidden">同一本《法哲学原理》PDF 里，物理页码与书内实际页码的对照</caption>
+          <thead><tr><th scope="col">《法哲学原理》里的一句话</th><th scope="col">PDF 物理页码</th><th scope="col">书内实际页码</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">密纳发的猫头鹰要等黄昏到来，才会起飞。</th><td class="page-phys">第 69 页</td><td class="page-cite">序言第 16 页</td></tr>
+            <tr><th scope="row">婚姻作为直接伦理关系首先包括自然生活的环节。</th><td class="page-phys">第 272 页</td><td class="page-cite">第 201 页</td></tr>
+          </tbody>
+        </table>
+        <p class="pages-note">数据取自 MEFinder 对同一份 PDF（黑格尔著，范扬、张企泰译）的实际定位结果。两处相差 53 和 71 页，差值还不固定，靠「减去一个数」换算不出来。</p>
+      </div>
+    </div>
   </section>
 
   <!-- ============ 六个功能 ============ -->
@@ -130,7 +159,7 @@
         <h3>出处与引文</h3>
         <div class="plate-text">
           <p>识别并补全书目信息，把出处一次排成中文脚注、GB/T 7714、APA、MLA 或 Chicago。已配对的脚注随正文带出。</p>
-          <p class="note">页码区分 PDF 物理页与书内引用页，自动映射之外还能人工分段校准。</p>
+          <p class="note">出处里的页码就是书内实际页码，和上面「页码」一节是同一套数据。</p>
         </div>
       </div>
       <figure class="plate-media"><div class="frame"><img src="assets/60-cite.png" width="2880" height="1800" loading="lazy" alt="引文格式设置页，中文脚注、GB/T 7714 已勾选，Chicago、APA、MLA 未启用"></div><figcaption>引文格式：状态用文字说明，不只靠颜色区分。</figcaption></figure>

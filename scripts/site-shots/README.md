@@ -39,7 +39,7 @@ PYTHONPATH=<仓库>/src python -m me_finder serve --host 127.0.0.1 --port 8766
 
 | 资源 | 命令 |
 |---|---|
-| `30-search.png` | `node scripts/site-shots/shoot.mjs http://127.0.0.1:8766/ site/assets/30-search.png 1500 scripts/site-shots/act_search.js` |
+| `30-search.png` | `node scripts/site-shots/shoot.mjs http://127.0.0.1:8766/ site/assets/30-search.png 1500 scripts/site-shots/act_search.js`（动作脚本自动选中「序言第15—16页」那条并把高亮句滚到中间） |
 | `50-compare.png` | `node scripts/site-shots/shoot.mjs http://127.0.0.1:8766/ site/assets/50-compare.png 1500 scripts/site-shots/act_compare.js` |
 | `60-cite.png` | `node scripts/site-shots/shoot.mjs http://127.0.0.1:8766/ site/assets/60-cite.png 1000 scripts/site-shots/act_settings.js 引文格式` |
 | `70-settings.png` | `node scripts/site-shots/shoot.mjs http://127.0.0.1:8766/ site/assets/70-settings.png 1000 scripts/site-shots/act_settings.js Zotero` |

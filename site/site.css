@@ -179,6 +179,7 @@ h1, h2, h3 { overflow-wrap: anywhere; min-width: 0; }
   padding-inline: 0.04em;
 }
 
+.nobr { white-space: nowrap; }
 .band-def { font-size: var(--text-xl); font-weight: 650; line-height: 1.6; margin: 0 0 var(--space-xs); }
 .lede { font-size: var(--text-md); line-height: 1.85; color: var(--color-ink-2); margin: 0 0 var(--space-lg); }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-xs); margin-bottom: var(--space-md); }
@@ -263,6 +264,7 @@ h1, h2, h3 { overflow-wrap: anywhere; min-width: 0; }
   border-radius: var(--radius-pill); padding: 0.05em 0.7em;
 }
 .hit-page.is-none { color: var(--color-hit-ink); font-weight: 600; border-color: var(--color-hit-rule); }
+.hit-phys { font-size: var(--text-xs); color: var(--color-ink-3); white-space: nowrap; }
 .hit-body { margin: 0; font-size: var(--text-sm); line-height: 1.8; color: var(--color-ink); }
 .hit mark {
   background: var(--color-hit-inline); color: var(--color-hit-ink);
@@ -277,6 +279,22 @@ h1, h2, h3 { overflow-wrap: anywhere; min-width: 0; }
   padding: var(--space-xs) var(--space-md);
   border-top: 1px dashed var(--color-rule-2);
 }
+
+/* ───────────── pages · 书内实际页码 ───────────── */
+
+.pages { padding-block: var(--space-2xl) var(--space-xl); border-bottom: 1px solid var(--color-rule-2); }
+.pages-grid { display: grid; gap: var(--space-xl); align-items: start; }
+@media (min-width: 960px) { .pages-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); } }
+.pages-points { display: grid; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; max-width: var(--measure); }
+.pages-points li { line-height: var(--leading-prose); color: var(--color-ink-2); padding-left: var(--space-sm); border-left: 2px solid var(--color-rule-2); }
+.pages-points b { color: var(--color-ink); }
+.pages .spec tbody th { white-space: normal; width: auto; font-weight: 400; color: var(--color-ink-2); }
+.pages .spec tbody td:first-of-type { width: auto; }
+.pages .spec tbody td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pages .spec tbody td.page-cite { font-weight: 700; }
+.pages .spec tbody td.page-phys { color: var(--color-ink-3); }
+.pages .spec thead th:last-child, .pages .spec tbody td.page-cite { color: var(--color-accent-text); }
+.pages-note { font-size: var(--text-sm); line-height: 1.75; color: var(--color-ink-3); margin: var(--space-sm) 0 0; }
 
 /* ───────────── features · numbered plates ───────────── */
 
