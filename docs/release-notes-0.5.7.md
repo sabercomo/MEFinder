@@ -1,4 +1,4 @@
-2026-09-28:Windows x64 验收包已按最新整合代码重打，自动化门禁通过；完整人工验收待完成，v0.5.7 尚未正式发布。
+2026-09-28:Windows x64 验收包已重打并上传至 GitHub Draft Release，自动化门禁通过；完整人工验收待完成，v0.5.7 尚未正式发布。
 
 # v0.5.7 迭代说明
 
@@ -46,3 +46,5 @@
 | `release/MEFinder-v0.5.7-windows-portable.zip` | 94,568,203 | `6b2d84549fa09ffacca1483c8a5f0ec2845f7930eff7365648b82d163af581f8` |
 
 两份产物各附同名 `.sha256.txt`。此前按 `5449593` 构建的一对已留备份。阅读器对照链接与复核的冻结应用完整人工验收仍待进行。
+
+2026-09-28 创建 [GitHub Draft Release](https://github.com/sabercomo/MEFinder/releases/tag/untagged-96d4d219fa1c2015b6e4)（`v0.5.7`，目标源码 `ef0008b`），先上传 Windows 安装包、便携包及各自的 `.sha256.txt`，共四个文件；GitHub 返回的两个二进制文件大小与 SHA-256 均与本地一致。草稿正文按 Zotero 来源同步、其他更新、技术与架构、修复顺序编排。Draft 保持未发布，macOS 产物与完整人工验收后续补齐。
