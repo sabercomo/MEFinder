@@ -1,0 +1,4 @@
+# Dev-only: real-browser regressions (tests/test_browser_regression.py).
+# Uses the installed Google Chrome via channel="chrome"; no browser download.
+# Never bundled into the desktop app.
+playwright==1.63.0
