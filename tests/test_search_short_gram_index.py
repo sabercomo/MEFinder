@@ -105,7 +105,7 @@ def _drain_all(path: Path) -> None:
 
 
 def _pending(path: Path) -> int:
-    with sqlite3.connect(path) as connection:
+    with contextlib.closing(sqlite3.connect(path)) as connection, connection:
         return connection.execute(f"SELECT COUNT(*) FROM {sgi.PENDING_TABLE}").fetchone()[0]
 
 
@@ -186,7 +186,7 @@ class ShortGramEquivalenceTests(_Base):
 
     def test_writes_after_drain_stay_visible_through_pending(self) -> None:
         _drain_all(self.path)
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             row = connection.execute("SELECT * FROM paragraphs WHERE paragraph_id = 'P-0000'").fetchone()
             columns = [d[0] for d in connection.execute("SELECT * FROM paragraphs LIMIT 0").description]
             fresh = dict(zip(columns, row))
@@ -223,7 +223,7 @@ class ShortGramEquivalenceTests(_Base):
 
 class ShortGramLifecycleTests(_Base):
     def _grams_for(self, text: str) -> set[int]:
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             return {
                 row[0] for row in connection.execute(
                     f"SELECT rowid FROM {sgi.GRAMS_TABLE} WHERE {sgi.GRAMS_TABLE} MATCH ?",
@@ -232,7 +232,7 @@ class ShortGramLifecycleTests(_Base):
             }
 
     def test_build_queues_every_paragraph_and_drain_empties_the_queue(self) -> None:
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             total = connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
             self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 10)
         self.assertEqual(_pending(self.path), total)
@@ -243,7 +243,7 @@ class ShortGramLifecycleTests(_Base):
     def test_delete_and_update_drop_stale_grams(self) -> None:
         _drain_all(self.path)
         target = self._grams_for("麒麟")
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute("DELETE FROM paragraphs WHERE text_raw LIKE '麒麟%'")
             connection.execute(
                 "UPDATE paragraphs SET plain_text = '已改' WHERE text_raw LIKE '驃騎%'"
@@ -253,7 +253,7 @@ class ShortGramLifecycleTests(_Base):
         self.assertEqual(_pending(self.path), 1)
 
     def test_large_backlog_falls_back_to_the_plain_scan(self) -> None:
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             self.assertTrue(sgi.short_gram_prefilter_ready(connection))
             with patch.object(sgi, "PENDING_PREFILTER_LIMIT", 3):
                 self.assertFalse(sgi.short_gram_prefilter_ready(connection))
@@ -261,7 +261,7 @@ class ShortGramLifecycleTests(_Base):
     def test_whole_library_prefiltered_scan_keeps_rowid_early_stop(self) -> None:
         _drain_all(self.path)
         clause, args = sgi.short_gram_prefilter(["社会", "社会"])
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             plan = " | ".join(str(row[-1]) for row in connection.execute(
                 "EXPLAIN QUERY PLAN SELECT p.rowid FROM paragraphs p WHERE +p.eligible_for_search = 1"
                 + clause + " AND instr(p.text_raw, ?) > 0 ORDER BY p.rowid LIMIT 65",
@@ -287,7 +287,7 @@ class ShortGramLifecycleTests(_Base):
                     raise sqlite3.OperationalError("unknown option")
                 return self._connection.execute(sql, *args)
 
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute(f"DROP TABLE {sgi.GRAMS_TABLE}")
             connection.execute(f"DROP TABLE {sgi.PENDING_TABLE}")
             for name in ("ai", "ad", "au"):
@@ -303,7 +303,7 @@ class ShortGramLifecycleTests(_Base):
             engine.close()
 
     def test_v9_database_migrates_once_and_queues_everything(self) -> None:
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute(f"DROP TABLE {sgi.GRAMS_TABLE}")
             connection.execute(f"DROP TABLE {sgi.PENDING_TABLE}")
             for name in ("ai", "ad", "au"):
@@ -312,7 +312,7 @@ class ShortGramLifecycleTests(_Base):
             connection.execute("PRAGMA user_version = 9")
             total = connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
         self.assertTrue(migrate_index_database(self.path))
-        with sqlite3.connect(self.path) as connection:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 10)
             self.assertTrue(sgi.short_gram_prefilter_ready(connection))
         self.assertEqual(_pending(self.path), total)
