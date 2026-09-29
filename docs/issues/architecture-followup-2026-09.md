@@ -54,3 +54,13 @@
 - 架构边界棘轮 `SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE` 删去这两个文件（18→16），以后再在其中写 SQL 会让门禁失败。
 - 验收：第 0 步快照（阅读器 34 例、译本对照 19 例）逐字节不变。变异检查：把作品成员排序改为倒序，`overview/*` 失败；把“上一段”查询的 `<` 改为 `<=`，`window/epub-*` 失败；还原后通过。
 - 门禁：macOS 全量通过（33 跳过），浏览器回归 5 项通过，Ruff 零告警。
+
+## 第 3 步结果（事实，2026-09-29，分支 `feat/works-split`）
+
+- 新增 `static/js/34-works-queue.js`（108 行）：批量重新对齐队列的状态只在该模块内写入，只暴露 `MEFinder.workQueue` 一个命名 API（`active` / `snapshot` / `isQueued` / `start` / `stop` / `onJobEnd` / `recordStartError` / `configure`）。`snapshot()` 返回副本，渲染改它不影响队列。
+- `35-works.js` 删去 `works.queue` 与 6 个队列函数，改为经 `workQueue` 读取和驱动；启动单个任务、刷新视图、提示、确认框由 `configure(host)` 注入。“哪些对需要重跑”（`staleDirectPairs` / `staleQueueItems`）仍在作品页，因为它读的是作品页的数据。文件 1639→1587 行。
+- 弹窗、版本管理、阅读器联动本步不拆。
+- 测试：原节点测试改为装配新模块后驱动；新增“队列状态单一写入方”断言（作品页不再出现 `works.queue`，works 状态对象不含 queue）；浏览器回归新增第 6 个场景：两组因换模型而过期的对齐，点“全部重新对齐”→确认→依次显示 1/2、2/2，运行中所有“生成对齐”禁用、不出现单作品“重新对齐 N 组”按钮，结束只汇总提示一次。
+- 变异检查：队列结束一项后不前进 → 浏览器与节点测试失败；去掉结束汇总提示 → 浏览器测试失败；`snapshot()` 改为共享原数组 → 节点测试失败；还原后通过。
+- 过程发现：`host.confirm(` 撞上既有守卫（前端禁止 `confirm(`/`alert(`/`prompt(`，防 Windows WebView 黑色系统对话框），宿主能力改名 `askConfirm`。
+- 门禁：前端装配指纹与全局命令预算（新增 `34-works-queue.js`: 1）已同步；macOS 全量通过（34 跳过），浏览器回归 6 项本机连跑 4 轮通过，Ruff 零告警。

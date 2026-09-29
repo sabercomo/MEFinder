@@ -10,6 +10,8 @@
     pt: '葡萄牙文', la: '拉丁文', grc: '古希腊文', el: '希腊文', nl: '荷兰文'
   };
   var DELETE_UNDO_MS = 6000;
+  // 批量重新对齐队列的状态只归 34-works-queue.js；本文件只读它、驱动它。
+  var workQueue = global.MEFinder.workQueue;
 
   var works = {
     groups: [],
@@ -19,7 +21,6 @@
     dismissals: [],
     suggestionsHidden: false,
     currentId: '',
-    queue: null,
     query: '',
     positions: {},
     running: null,
@@ -155,7 +156,7 @@
         pairKey(running.pivot_source_file_id, running.target_source_file_id) === pairKey(a, b)) {
       return {status: 'running'};
     }
-    if (queuedPair(groupId, a, b)) return {status: 'queued'};
+    if (workQueue.isQueued(groupId, a, b)) return {status: 'queued'};
     var pairs = works.pairsByGroup[groupId] || {};
     return pairs[pairKey(a, b)] || {status: 'none'};
   }
@@ -481,7 +482,7 @@
 
   // 全库一处：换模型或算法升级后，旧对齐集中在这里一键重跑，不必逐部作品点。
   function realignNotice() {
-    var queue = works.queue;
+    var queue = workQueue.snapshot();
     if (queue) {
       var item = queue.items[queue.index];
       var group = item ? groupById(item.groupId) : null;
@@ -490,7 +491,7 @@
           el('b', {text: queue.stopped ? '正在停止' : '正在重新对齐 ' + Math.min(queue.index + 1, queue.items.length) + '/' + queue.items.length}),
           group ? el('span', {className: 'tw-notice-sub', text: '《' + group.title + '》' + memberName(group, item.pivot) + ' 与 ' + memberName(group, item.target)}) : null
         ]),
-        queue.stopped ? null : button('停止', 'link muted', stopRealignQueue)
+        queue.stopped ? null : button('停止', 'link muted', workQueue.stop)
       ]);
     }
     var items = staleQueueItems(visibleGroups());
@@ -507,7 +508,7 @@
         el('span', {className: 'tw-notice-sub', text: sub})
       ]),
       canGenerate()
-        ? button('全部重新对齐', 'link', function () { realignPairs(items, '全部作品'); }, {disabled: !!works.running})
+        ? button('全部重新对齐', 'link', function () { workQueue.start(items, '全部作品'); }, {disabled: !!works.running})
         : button(works.availability.state === 'model_missing' ? '去设置' : '重新安装', 'link', openAlignmentSettings)
     ]);
   }
@@ -687,9 +688,9 @@
       return section;
     }
     var stale = staleQueueItems([group]);
-    if (stale.length > 1 && canGenerate() && !works.queue) {
+    if (stale.length > 1 && canGenerate() && !workQueue.active()) {
       head.appendChild(button('重新对齐 ' + stale.length + ' 组', 'sm', function () {
-        realignPairs(stale, '《' + group.title + '》');
+        workQueue.start(stale, '《' + group.title + '》');
       }, {disabled: !!works.running}));
     }
     var list = el('div', {className: 'tw-pairs', role: 'list'});
@@ -778,11 +779,11 @@
     var blocked = !canGenerate();
     function generate(label, force, style) {
       actions.push(button(label, 'sm ' + style, function () { startAlignment(group, a, b, force); }, {
-        disabled: blocked || !!works.running || !!works.queue, title: blocked ? generateBlockedReason() : null
+        disabled: blocked || !!works.running || workQueue.active(), title: blocked ? generateBlockedReason() : null
       }));
     }
     if (status.status === 'running') {
-      actions.push(button(works.queue ? '停止' : '取消', 'sm quiet', works.queue ? stopRealignQueue : cancelAlignment));
+      actions.push(button(workQueue.active() ? '停止' : '取消', 'sm quiet', workQueue.active() ? workQueue.stop : cancelAlignment));
       return actions;
     }
     if (status.status === 'queued') return actions;
@@ -793,7 +794,7 @@
     // 对齐质量先看正文范围找对没有：从这一对直接进入检查与修改。
     // 查看与修改范围只读已入库文本，不需要计算组件；缺组件时只挡住提交那一步。
     actions.push(button('正文范围', 'sm quiet', function () { openBodyRangeDialog(group, a, b); }, {
-      disabled: !!works.running || !!works.queue
+      disabled: !!works.running || workQueue.active()
     }));
     if (readable) {
       actions.push(button('对照阅读', 'sm', function () {
@@ -838,8 +839,8 @@
       watchAlignmentJob(data.job_id, 'works', group.document_group_id, pivotId, targetId);
       return true;
     } catch (error) {
-      if (!works.queue) showToast(error.message || '生成对齐失败', 'danger');
-      else works.queue.lastError = error.message || '生成对齐失败';
+      if (!workQueue.active()) showToast(error.message || '生成对齐失败', 'danger');
+      else workQueue.recordStartError(error.message || '生成对齐失败');
       return false;
     }
   }
@@ -860,8 +861,8 @@
     works.running = null;
     // 阅读器里生成的对齐同样改变逐对状态与统计：无论谁发起都重读一次。
     if (works.loaded) await loadGroupsAndOverview().catch(function () {});
-    if (works.queue) {
-      advanceRealignQueue(event.outcome, event.error);
+    if (workQueue.active()) {
+      workQueue.onJobEnd(event.outcome, event.error);
       return;
     }
     // 提示只由发起方给出；阅读器发起的由阅读器报告结果。
@@ -930,71 +931,18 @@
     return items;
   }
 
-  function queuedPair(groupId, a, b) {
-    var queue = works.queue;
-    if (!queue) return false;
-    return queue.items.slice(queue.index + 1).some(function (item) {
-      return item.groupId === groupId && pairKey(item.pivot, item.target) === pairKey(a, b);
-    });
-  }
-
-  async function realignPairs(items, scope) {
-    if (!items.length || works.queue || works.running) return;
-    if (!canGenerate()) { showToast(generateBlockedReason(), 'warning'); return; }
-    if (!await showAppConfirm(
-      '将用当前模型依次重新计算 ' + items.length + ' 组对齐，耗时取决于书籍长度，可随时停止',
-      {title: '重新对齐' + scope + '？', confirmText: '开始重新对齐'}
-    )) return;
-    works.queue = {items: items.slice(), index: 0, completed: 0, failures: [], stopped: false, lastError: ''};
-    runRealignQueue();
-  }
-
-  async function runRealignQueue() {
-    var queue = works.queue;
-    while (queue && !queue.stopped && queue.index < queue.items.length) {
-      var item = queue.items[queue.index];
-      var group = groupById(item.groupId);
-      if (group) {
-        refreshViews();
-        if (await startJob(group, item.pivot, item.target, true)) return;
-        queue.failures.push(queue.lastError || '生成对齐失败');
-      }
-      queue.index += 1;
-    }
-    finishRealignQueue();
-  }
-
-  function advanceRealignQueue(outcome, error) {
-    var queue = works.queue;
-    if (outcome === 'ok') queue.completed += 1;
-    else if (outcome === 'cancelled') queue.stopped = true;
-    else if (outcome === 'failed') queue.failures.push(error || '生成对齐失败');
-    queue.index += 1;
-    runRealignQueue();
-  }
-
-  function finishRealignQueue() {
-    var queue = works.queue;
-    works.queue = null;
-    refreshViews();
-    if (!queue) return;
-    var total = queue.items.length;
-    if (queue.stopped) {
-      showToast('已停止重新对齐，完成 ' + queue.completed + '/' + total + ' 组', 'info');
-    } else if (queue.failures.length) {
-      showToast('重新对齐完成 ' + queue.completed + '/' + total + ' 组，' + queue.failures.length + ' 组失败：' + queue.failures[0], 'danger');
-    } else {
-      showToast('已重新对齐 ' + queue.completed + ' 组', 'success');
-    }
-  }
-
-  function stopRealignQueue() {
-    if (!works.queue) return;
-    works.queue.stopped = true;
-    refreshViews();
-    if (works.running) cancelAlignment();
-    else finishRealignQueue();
-  }
+  workQueue.configure({
+    pairKey: pairKey,
+    isRunning: function () { return !!works.running; },
+    canGenerate: canGenerate,
+    generateBlockedReason: generateBlockedReason,
+    groupById: groupById,
+    startJob: startJob,
+    refreshViews: refreshViews,
+    cancelAlignment: cancelAlignment,
+    toast: function (message, tone) { showToast(message, tone); },
+    askConfirm: function (message, options) { return showAppConfirm(message, options); }
+  });
 
   function refreshViews() {
     renderSidebarEntry();
