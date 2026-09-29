@@ -69,6 +69,25 @@ jobs:
           python -m pip uninstall -y opencc-python-reimplemented
           python -m unittest tests.test_script_conversion tests.test_script_search
 
+  browser-regression:
+    # Trial job: real Chrome against the real backend on a disposable DB
+    # (tests/test_browser_regression.py). Non-blocking until it has proven
+    # stable across runs; see docs/issues/architecture-followup-2026-09.md.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      MEFINDER_BROWSER_TESTS_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0" "opencc-python-reimplemented==0.1.7" -r requirements-browser-tests.txt
+      - name: Run real-browser regressions
+        run: python -m unittest -v tests.test_browser_regression
+
   lint:
     # Ruff pyflakes ("F") rules are at zero and block regressions.
     runs-on: ubuntu-24.04

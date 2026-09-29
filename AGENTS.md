@@ -144,6 +144,12 @@ EPUB 与 DOCX 共用文本语料通道(`corpus/raw_docx/`),不经 MinerU / PDF �
 .venv-windows/Scripts/python.exe -m unittest tests.test_alignment_anchor_gates.ClassName.test_method
 ```
 
+**真实浏览器回归(可选,试运行中):** 需先 `pip install -r requirements-browser-tests.txt`,并装有 Google Chrome;默认跳过,`MEFINDER_BROWSER_TESTS=1` 开启:
+
+```bash
+MEFINDER_BROWSER_TESTS=1 .venv-windows/Scripts/python.exe -m unittest tests.test_browser_regression
+```
+
 **Lint(pyflakes,门禁):** CI 用 `pipx run ruff check .`。venv 内默认未装 ruff/pipx;本机跑需先 `.venv-windows/Scripts/python.exe -m pip install ruff` 后 `.venv-windows/Scripts/python.exe -m ruff check .`,或直接依赖 CI 的 lint job。规则集仅 `["F"]`,须零新增告警。
 
 **启动无头 Web 服务(浏览器里看真实数据):**

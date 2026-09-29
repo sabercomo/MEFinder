@@ -31,3 +31,18 @@
 - 变异检查：把阅读器的 `epub_pagebreak` 页首判定改坏，`window/epub-break` 失败；把 `model_changed` 改名，`overview/model-changed` 失败；还原后通过。
 - 门禁：macOS 全量 2661 项通过（28 跳过），Ruff 零告警。
 - 重新生成（仅在有意改变产品契约时）：`.venv-macos312-arm64/bin/python -m tests.test_reader_translation_characterization --regen`。
+
+## 第 1 步结果（事实，2026-09-29，分支 `feat/browser-regression`）
+
+- 新增 `tests/test_browser_regression.py`：Playwright 驱动本机已安装的 Google Chrome（`channel="chrome"`，不下载浏览器），连接真实后端与一次性测试库（复用 `TextAlignmentTests` 夹具：德文、贺麟译本、English EPUB 三版本，预先生成德—中对齐）。依赖只写在 `requirements-browser-tests.txt`，不进安装包。
+- 默认跳过；`MEFINDER_BROWSER_TESTS=1` 本机开启。CI 新增 `browser-regression` 任务，`continue-on-error: true` 试跑，并设 `MEFINDER_BROWSER_TESTS_REQUIRED=1`，缺 playwright 或 Chrome 时报错而非静默跳过。
+- 5 个场景：
+  1. 五个主视图中带 `hidden` 的元素确实不占屏幕（计算样式非 `none` 且有布局框即失败），其余场景在关键状态也做同一检查；
+  2. 切换对齐模型：只有一项选中、写入偏好；保存被拒（模拟 500）时恢复原选项；
+  3. 偏好尚在读取时点另一模型：控制器拒绝，界面仍只选中原模型（Vue 试点曾出现“两项都未选中”）；
+  4. 对齐进行中：发起的那一对显示“取消”，其他对的“生成对齐”“正文范围”禁用；任务结束后恢复可用（模型就绪、启动与状态接口由浏览器拦截模拟，其余走真实后端）；
+  5. 阅读器换书：左栏版本从德文切到 English EPUB 后只显示英文正文、标题与版本名随之更新；返回作品页再打开中译本，不残留前一本书的正文。
+- 变异检查（改坏后失败、还原后通过）：给 `.sidebar-item-tag` 加 `display: inline-flex` 覆盖 `[hidden]` → 场景 1 失败；去掉 `pairActions` 中 `works.running` 的禁用条件 → 场景 4 失败；去掉 Vue 视图 `pick` 后按 store 回写单选框 → 场景 3 失败；阅读器渲染由替换改为追加 → 场景 5 失败。
+- 过程发现：场景 3 初版在进入设置页时才拦截偏好读取，但偏好只在启动时读取一次，测试没走到拒绝路径；改为重新加载前拦截后才有效。这是测试写法问题，不是产品缺陷。
+- 本机稳定性：连跑 5 轮全部通过，单轮约 12 秒。CI 上的稳定性待多次运行后再决定是否纳入门禁。
+- 门禁：macOS 全量 2666 项通过（33 跳过，含本文件 5 项默认跳过），Ruff 零告警。
