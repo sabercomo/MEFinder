@@ -154,6 +154,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "persistence/source_replace.py": 380,
             "persistence/paragraph_payload.py": 100,
             "persistence/short_gram_index.py": 245,
+            # SQLite 能力探测与只登记待补的触发器拆为叶模块（旧 SQLite 兼容）。
+            "persistence/short_gram_schema.py": 100,
             "database_backup.py": 220,
             "index_identity.py": 240,
             # MCP 用例层：0.5.0 一轮加了 5 个工具就从 431 涨到 951 行，

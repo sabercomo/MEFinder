@@ -353,7 +353,7 @@ class QueueSchemaTests(unittest.TestCase):
             connection = sqlite3.connect(index_path)
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             connection.close()
-            self.assertEqual(version, 10)
+            self.assertEqual(version, 11)
 
             service = LiteratureVerificationService(lambda: Path(temp))
             service.propose_bibliographic_update(

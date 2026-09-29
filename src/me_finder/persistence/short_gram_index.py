@@ -9,11 +9,10 @@ the paragraphs that can contain it. Recall still verifies every candidate with
 budgets and ordering are unchanged -- the index only skips paragraphs that
 cannot match.
 
-Correctness never depends on a writer knowing about this index: SQL triggers
-drop a paragraph's grams and queue its rowid as *pending* on every insert,
-delete and text update. The prefilter always admits pending rowids, and a
-background drain tokenizes them in short write transactions. SQLite builds
-without FTS5 ``contentless_delete`` (< 3.43) simply keep the full scan.
+Correctness never depends on a writer knowing about this index: triggers
+(see :mod:`short_gram_schema`) queue every inserted, deleted or edited rowid as
+*pending*; the prefilter always admits pending rowids and a background drain
+replaces their grams in short write transactions.
 """
 
 from __future__ import annotations
@@ -25,11 +24,18 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 from .connection import connect_index
+from .short_gram_schema import (
+    GRAMS_TABLE,
+    PENDING_TABLE,
+    TEXT_COLUMNS as _TEXT_COLUMNS,
+    install_short_gram_triggers,
+    objects_present as _objects_present,
+    short_gram_supported,
+    upgrade_short_gram_triggers,
+)
 
 SHORT_GRAM_INDEX_VERSION = 1
 SHORT_GRAM_METADATA_KEY = "paragraph_short_gram_version"
-GRAMS_TABLE = "paragraph_short_grams"
-PENDING_TABLE = "paragraph_short_gram_pending"
 # Above this backlog the prefilter would admit most of the library anyway and
 # lose the rowid-ordered early stop; recall keeps the plain scan until drained.
 PENDING_PREFILTER_LIMIT = 4096
@@ -43,7 +49,6 @@ PREFILTER_SQL = (
     f" AND p.rowid IN (SELECT rowid FROM {GRAMS_TABLE} WHERE {GRAMS_TABLE} MATCH ?"
     f" UNION ALL SELECT paragraph_rowid FROM {PENDING_TABLE})"
 )
-_TEXT_COLUMNS = ("text_raw", "normalized_text", "compact_text", "plain_text")
 _BASE36 = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 
@@ -93,11 +98,15 @@ def install_short_gram_index(
 ) -> bool:
     """Create the index, triggers and marker; queue every paragraph when new.
 
-    Returns whether anything changed. An unsupported SQLite build rolls the
-    savepoint back and returns False; searches then keep the plain scan.
+    Returns whether anything changed. An unsupported SQLite build returns
+    False without creating anything; searches then keep the plain scan.
     """
 
     if not rebuild and _objects_present(connection) and _marker_current(connection):
+        return False
+    if not short_gram_supported():
+        # Keep another machine's index writable here; it stays unread.
+        upgrade_short_gram_triggers(connection)
         return False
     connection.execute("SAVEPOINT install_short_grams")
     try:
@@ -111,24 +120,7 @@ def install_short_gram_index(
             f"CREATE TABLE IF NOT EXISTS {PENDING_TABLE} "
             "(paragraph_rowid INTEGER PRIMARY KEY)"
         )
-        text_columns = ", ".join(_TEXT_COLUMNS)
-        for statement in (
-            f"""CREATE TRIGGER IF NOT EXISTS paragraph_short_grams_ai
-                AFTER INSERT ON paragraphs BEGIN
-                    INSERT OR IGNORE INTO {PENDING_TABLE} VALUES (new.rowid);
-                END""",
-            f"""CREATE TRIGGER IF NOT EXISTS paragraph_short_grams_ad
-                AFTER DELETE ON paragraphs BEGIN
-                    DELETE FROM {GRAMS_TABLE} WHERE rowid = old.rowid;
-                    DELETE FROM {PENDING_TABLE} WHERE paragraph_rowid = old.rowid;
-                END""",
-            f"""CREATE TRIGGER IF NOT EXISTS paragraph_short_grams_au
-                AFTER UPDATE OF {text_columns} ON paragraphs BEGIN
-                    DELETE FROM {GRAMS_TABLE} WHERE rowid = old.rowid;
-                    INSERT OR IGNORE INTO {PENDING_TABLE} VALUES (new.rowid);
-                END""",
-        ):
-            connection.execute(statement)
+        install_short_gram_triggers(connection)
         connection.execute(f"DELETE FROM {PENDING_TABLE}")
         connection.execute(f"INSERT INTO {PENDING_TABLE} SELECT rowid FROM paragraphs")
         connection.execute(
@@ -146,6 +138,8 @@ def install_short_gram_index(
 def short_gram_prefilter_ready(connection: sqlite3.Connection) -> bool:
     """Whether recall may add :data:`PREFILTER_SQL` right now."""
 
+    if not short_gram_supported():
+        return False
     try:
         if not _objects_present(connection) or not _marker_current(connection):
             return False
@@ -166,9 +160,12 @@ def short_gram_prefilter(strings: Sequence[str]) -> Tuple[str, List[object]]:
 
 
 def drain_short_gram_backlog(connection: sqlite3.Connection) -> int:
-    """Index one bounded batch of pending paragraphs in one write transaction."""
+    """Index one bounded batch of pending paragraphs in one write transaction.
 
-    if not _objects_present(connection):
+    A pending rowid whose paragraph is gone only loses its stale grams.
+    """
+
+    if not short_gram_supported() or not _objects_present(connection):
         return 0
     connection.execute("BEGIN IMMEDIATE")
     try:
@@ -222,17 +219,6 @@ def drain_short_gram_backlog_at(db_path: Path) -> int:
         raise
     finally:
         connection.close()
-
-
-def _objects_present(connection: sqlite3.Connection) -> bool:
-    names = {
-        str(row[0])
-        for row in connection.execute(
-            "SELECT name FROM sqlite_master WHERE name IN (?, ?)",
-            (GRAMS_TABLE, PENDING_TABLE),
-        )
-    }
-    return names == {GRAMS_TABLE, PENDING_TABLE}
 
 
 def _marker_current(connection: sqlite3.Connection) -> bool:

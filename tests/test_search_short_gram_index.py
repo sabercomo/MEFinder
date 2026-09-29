@@ -25,6 +25,7 @@ from src.me_finder.application.search_service import SearchRequest
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.persistence import short_gram_index as sgi
+from src.me_finder.persistence import short_gram_schema as sgs
 from src.me_finder.persistence.migrations import migrate_index_database
 from src.me_finder.search import SearchEngine
 from src.me_finder.tasks.short_gram_backfill import run_short_gram_backfill
@@ -201,7 +202,7 @@ class ShortGramEquivalenceTests(_Base):
                 "compact_text = '改成驃騎', plain_text = '改成驃騎' WHERE paragraph_id = 'P-0001'"
             )
             connection.execute("DELETE FROM paragraphs WHERE paragraph_id = 'P-0003'")
-        self.assertEqual(_pending(self.path), 2)
+        self.assertEqual(_pending(self.path), 3)
         self.assertSameAsPlainScan()
         engine = SearchEngine(self.path)
         try:
@@ -234,23 +235,37 @@ class ShortGramLifecycleTests(_Base):
     def test_build_queues_every_paragraph_and_drain_empties_the_queue(self) -> None:
         with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             total = connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 10)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 11)
         self.assertEqual(_pending(self.path), total)
         _drain_all(self.path)
         self.assertEqual(_pending(self.path), 0)
         self.assertTrue(self._grams_for("麒麟"))
 
-    def test_delete_and_update_drop_stale_grams(self) -> None:
+    def test_delete_and_update_queue_rows_and_drain_drops_stale_grams(self) -> None:
         _drain_all(self.path)
         target = self._grams_for("麒麟")
         with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             connection.execute("DELETE FROM paragraphs WHERE text_raw LIKE '麒麟%'")
             connection.execute(
-                "UPDATE paragraphs SET plain_text = '已改' WHERE text_raw LIKE '驃騎%'"
+                "UPDATE paragraphs SET text_raw = '已改', normalized_text = '已改', "
+                "compact_text = '已改', plain_text = '已改' WHERE text_raw LIKE '驃騎%'"
             )
+        self.assertEqual(_pending(self.path), 2)
+        _drain_all(self.path)
         self.assertEqual(self._grams_for("麒麟") & target, set())
         self.assertEqual(self._grams_for("驃騎"), set())
-        self.assertEqual(_pending(self.path), 1)
+        self.assertEqual(_pending(self.path), 0)
+
+    def test_triggers_only_touch_the_ordinary_pending_table(self) -> None:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection:
+            triggers = dict(connection.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name IN (?, ?, ?)",
+                sgs.TRIGGER_NAMES,
+            ).fetchall())
+        self.assertEqual(set(triggers), set(sgs.TRIGGER_NAMES))
+        for name, sql in triggers.items():
+            self.assertNotIn(sgi.GRAMS_TABLE + " ", sql + " ", name)
+            self.assertIn(sgi.PENDING_TABLE, sql, name)
 
     def test_large_backlog_falls_back_to_the_plain_scan(self) -> None:
         with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
@@ -313,12 +328,173 @@ class ShortGramLifecycleTests(_Base):
             total = connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
         self.assertTrue(migrate_index_database(self.path))
         with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 10)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 11)
             self.assertTrue(sgi.short_gram_prefilter_ready(connection))
         self.assertEqual(_pending(self.path), total)
         _drain_all(self.path)
         migrate_index_database(self.path)
         self.assertEqual(_pending(self.path), 0, "an up-to-date index must not be re-queued")
+
+
+# The v10 triggers deleted from the grams table on every paragraph write.
+_LEGACY_V10_TRIGGERS = (
+    f"""CREATE TRIGGER paragraph_short_grams_ad AFTER DELETE ON paragraphs BEGIN
+        DELETE FROM {sgi.GRAMS_TABLE} WHERE rowid = old.rowid;
+        DELETE FROM {sgi.PENDING_TABLE} WHERE paragraph_rowid = old.rowid;
+    END""",
+    f"""CREATE TRIGGER paragraph_short_grams_au AFTER UPDATE OF
+        text_raw, normalized_text, compact_text, plain_text ON paragraphs BEGIN
+        DELETE FROM {sgi.GRAMS_TABLE} WHERE rowid = old.rowid;
+        INSERT OR IGNORE INTO {sgi.PENDING_TABLE} VALUES (new.rowid);
+    END""",
+)
+
+
+class OlderSqliteOnBuiltIndexTests(_Base):
+    """A library indexed on SQLite 3.43+ and then opened by an older build.
+
+    An older FTS5 rejects ``contentless_delete`` whenever it touches the grams
+    table ("unrecognized option"). Rewriting the stored declaration with an
+    option no build knows reproduces exactly that failure on this SQLite, and
+    patching :func:`short_gram_supported` reproduces the capability probe.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        _drain_all(self.path)
+        self.expected = self.responses(prefilter=False)
+
+    def _set_grams_declaration(self, old: str, new: str) -> None:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection:
+            connection.execute("PRAGMA writable_schema = ON")
+            with connection:
+                connection.execute(
+                    "UPDATE sqlite_master SET sql = replace(sql, ?, ?) WHERE name = ?",
+                    (old, new, sgi.GRAMS_TABLE),
+                )
+            connection.execute("PRAGMA writable_schema = OFF")
+
+    @contextlib.contextmanager
+    def older_sqlite(self):
+        self._set_grams_declaration("contentless_delete=1", "not_in_this_build=1")
+        try:
+            with patch.object(sgi, "short_gram_supported", return_value=False):
+                yield
+        finally:
+            self._set_grams_declaration("not_in_this_build=1", "contentless_delete=1")
+
+    def _write_paragraphs(self) -> None:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
+            connection.execute(
+                "UPDATE paragraphs SET text_raw = '改成驃騎', normalized_text = '改成驃騎', "
+                "compact_text = '改成驃騎', plain_text = '改成驃騎' WHERE paragraph_id = 'P-0001'"
+            )
+            connection.execute("DELETE FROM paragraphs WHERE paragraph_id = 'P-0003'")
+
+    def test_emulation_really_breaks_the_grams_table(self) -> None:
+        with self.older_sqlite():
+            with contextlib.closing(sqlite3.connect(self.path)) as connection:
+                with self.assertRaisesRegex(sqlite3.OperationalError, "not_in_this_build"):
+                    connection.execute(f"SELECT rowid FROM {sgi.GRAMS_TABLE} LIMIT 1").fetchall()
+
+    def test_older_build_searches_writes_and_leaves_the_backlog(self) -> None:
+        with self.older_sqlite():
+            self.assertEqual(self.responses(prefilter=True), self.expected)
+            with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
+                self.assertFalse(sgi.short_gram_prefilter_ready(connection))
+                self.assertFalse(sgi.install_short_gram_index(connection, rebuild=True))
+            self._write_paragraphs()
+            self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), 0)
+            self.assertEqual(_pending(self.path), 2)
+            engine = SearchEngine(self.path)
+            try:
+                ids = {hit["paragraph_id"] for hit in engine.search("驃騎", limit="all")["results"]}
+            finally:
+                engine.close()
+            self.assertIn("P-0001", ids)
+        # Back on a capable build the queued writes drain and nothing is stale.
+        _drain_all(self.path)
+        self.assertEqual(_pending(self.path), 0)
+        self.assertSameAsPlainScan()
+
+    def test_v11_migration_replaces_legacy_triggers_on_an_older_build(self) -> None:
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
+            for statement in _LEGACY_V10_TRIGGERS:
+                name = statement.split()[2]
+                connection.execute(f"DROP TRIGGER {name}")
+                connection.execute(statement)
+            connection.execute("PRAGMA user_version = 10")
+        with self.older_sqlite():
+            with self.assertRaisesRegex(sqlite3.OperationalError, "not_in_this_build"):
+                self._write_paragraphs()
+            self.assertTrue(migrate_index_database(self.path))
+            self._write_paragraphs()
+            self.assertEqual(_pending(self.path), 2)
+            with contextlib.closing(sqlite3.connect(self.path)) as connection:
+                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 11)
+        _drain_all(self.path)
+        self.assertSameAsPlainScan()
+
+
+class PackagedSqliteFloorTests(unittest.TestCase):
+    def test_every_build_script_refuses_a_runtime_without_the_grams_table(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        for name in ("build_macos.sh", "build_windows_installer.ps1", "build_portable_release.ps1"):
+            source = (root / name).read_text(encoding="utf-8")
+            self.assertIn(sgi.GRAMS_TABLE, source, name)
+            self.assertIn("3.43", source, name)
+        self.assertEqual(sgs.MIN_SQLITE_VERSION, (3, 43, 0))
+
+
+class FuzzyTieOrderTests(unittest.TestCase):
+    """More same-overlap candidates than the rescore cut, stored out of order."""
+
+    TIED = 100
+
+    def setUp(self) -> None:
+        if not sqlite3.sqlite_version_info >= (3, 43, 0):
+            self.skipTest("FTS5 contentless_delete needs SQLite 3.43+")
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.path = Path(temporary.name) / "index.sqlite3"
+        corpus = _corpus()
+        tied = [
+            _paragraph(1000 + index, f"麒麟在第{index}处出现", "pdf-a", "pdf")
+            for index in range(self.TIED)
+        ]
+        # Physical (rowid) order is the reverse of reading order.
+        corpus["paragraphs"] = list(reversed(tied)) + corpus["paragraphs"]
+        build_database(corpus, self.path)
+        _drain_all(self.path)
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
+            order = [row[0] for row in connection.execute(
+                "SELECT paragraph_index FROM paragraphs WHERE paragraph_index >= 1000 ORDER BY rowid"
+            )]
+            connection.execute("ANALYZE")
+        self.assertEqual(order, sorted(order, reverse=True), "fixture must store out of order")
+
+    def _fuzzy(self, *, prefilter: bool, **scope) -> list:
+        engine = SearchEngine(self.path)
+        try:
+            disabled = patch("src.me_finder.search.short_gram_prefilter_ready", return_value=False)
+            with contextlib.nullcontext() if prefilter else disabled:
+                response = engine.search("麒麟", mode="fuzzy", limit="all", **scope)
+        finally:
+            engine.close()
+        return [hit["paragraph_id"] for hit in response["results"]]
+
+    def test_rescore_cut_keeps_reading_order_whatever_the_plan(self) -> None:
+        from src.me_finder.search_contract import FUZZY_RESCORE_LIMIT
+
+        self.assertGreater(self.TIED, FUZZY_RESCORE_LIMIT)
+        for scope in ({"source_file_id": "pdf-a"}, {}):
+            with_index = self._fuzzy(prefilter=True, **scope)
+            plain = self._fuzzy(prefilter=False, **scope)
+            self.assertEqual(with_index, plain, scope)
+            tied = sorted(pid for pid in with_index if int(pid[2:]) >= 1000)
+            expected = [f"P-{1000 + index:04d}" for index in range(len(tied))]
+            self.assertEqual(tied, expected, scope)
+            self.assertLess(len(tied), self.TIED, scope)
 
 
 class ShortGramBackfillLoopTests(_Base):

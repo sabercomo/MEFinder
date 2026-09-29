@@ -371,27 +371,25 @@ class CandidateRecall(InMemoryRecallPasses):
 
         query_grams = self._ngrams_set(q_plain)
         # Paragraphs sharing no query gram score zero overlap and are dropped
-        # below anyway; the prefilter keeps the driving index, so tie order holds.
+        # below anyway, so the prefilter never changes which rows can rank.
         gram_clause, gram_args = self._short_gram_clause(sorted(query_grams))
         rows = self.db().execute(
             f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
             "WHERE p.eligible_for_search = 1" + source_clause + gram_clause,
             [*source_args, *gram_args],
         )
-        ranked: List[Tuple[int, str, Dict[str, object]]] = []
+        ranked: List[Tuple[tuple, Dict[str, object]]] = []
         for row in rows:
             plain = str(row["plain_text"] or "")
             overlap = len(query_grams.intersection(self._ngrams_set(plain)))
             if overlap:
-                ranked.append(
-                    (
-                        overlap,
-                        str(row["paragraph_id"]),
-                        paragraph_from_database_row(row),
-                    )
-                )
-        ranked.sort(key=lambda item: item[0], reverse=True)
-        for _, _, paragraph in ranked[:FUZZY_RESCORE_LIMIT]:
+                # Ties before the rescore cut follow reading order, never the
+                # query plan's row order (which the prefilter or ANALYZE shift).
+                position = (str(row["source_file_id"] or ""), int(row["paragraph_index"] or 0))
+                key = (-overlap, *position, str(row["paragraph_id"]))
+                ranked.append((key, paragraph_from_database_row(row)))
+        ranked.sort(key=lambda item: item[0])
+        for _, paragraph in ranked[:FUZZY_RESCORE_LIMIT]:
             plain = str(paragraph.get("plain_text") or "")
             ratio = self._score_fuzzy_window(q_plain, paragraph, plain)
             if ratio is None:

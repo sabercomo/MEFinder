@@ -18,6 +18,7 @@ from .schema_installers import (
     install_zotero_sync_schema,
 )
 from .short_gram_index import install_short_gram_index
+from .short_gram_schema import upgrade_short_gram_triggers
 
 
 MigrationStep = Callable[[sqlite3.Connection], bool]
@@ -61,7 +62,7 @@ def _install_text_segment_paragraph_spans(
 
 # v1 -> v2 changed paragraph payload/search storage and is still performed by
 # database.ensure_database_search_index because it publishes a replacement
-# file atomically. v3 through v10 are pure additive DDL and belong here.
+# file atomically. v3 through v11 are pure additive DDL and belong here.
 INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=3, apply=install_document_group_schema),
     Migration(target_version=4, apply=install_text_alignment_schema),
@@ -71,6 +72,7 @@ INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=8, apply=install_zotero_sync_schema),
     Migration(target_version=9, apply=install_bibliographic_update_schema),
     Migration(target_version=10, apply=install_short_gram_index),
+    Migration(target_version=11, apply=upgrade_short_gram_triggers),
 )
 
 

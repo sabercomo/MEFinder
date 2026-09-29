@@ -97,6 +97,15 @@ try:
         raise SystemExit(
             "Build failed: this Python/SQLite runtime has no FTS5 trigram support."
         )
+    # Short-query index needs FTS5 contentless_delete (SQLite 3.43+).
+    grams = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE name = 'paragraph_short_grams'"
+    ).fetchone()
+    if grams is None:
+        raise SystemExit(
+            "Build failed: SQLite %s lacks FTS5 contentless_delete (need 3.43+)."
+            % sqlite3.sqlite_version
+        )
 finally:
     connection.close()
 PY

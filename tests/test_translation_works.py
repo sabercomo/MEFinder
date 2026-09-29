@@ -606,7 +606,7 @@ class TranslationWorkMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "index.sqlite3"
             connection = sqlite3.connect(str(path))
-            connection.executescript(SCHEMA.replace("PRAGMA user_version = 10;", ""))
+            connection.executescript(SCHEMA.replace("PRAGMA user_version = 11;", ""))
             connection.execute("PRAGMA user_version = 6")
             connection.commit()
             connection.close()
@@ -620,7 +620,7 @@ class TranslationWorkMigrationTests(unittest.TestCase):
                     )
                 }
                 self.assertEqual(
-                    connection.execute("PRAGMA user_version").fetchone()[0], 10
+                    connection.execute("PRAGMA user_version").fetchone()[0], 11
                 )
             finally:
                 connection.close()

@@ -176,6 +176,11 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed: this Python/SQLite runtime has no FTS5 trigram support."
     }
+    # Short-query index needs FTS5 contentless_delete (SQLite 3.43+).
+    & $pythonCommand @pythonLauncherArgs -c "import sqlite3, sys; connection = sqlite3.connect(sys.argv[1]); table = connection.execute('SELECT 1 FROM sqlite_master WHERE name = ?', ('paragraph_short_grams',)).fetchone(); connection.close(); raise SystemExit(0 if table is not None else 1)" $blankIndexPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed: this Python/SQLite runtime lacks FTS5 contentless_delete (need SQLite 3.43+)."
+    }
     & $packagerPythonCommand @packagerPythonArgs -m tools.smoke_mcp_sidecar (Join-Path $DistPath "MEFinderMCP.exe") $DistPath
     if ($LASTEXITCODE -ne 0) { throw "Packaged MCP sidecar smoke test failed." }
 
