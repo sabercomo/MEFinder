@@ -1,0 +1,2329 @@
+{
+ "reader": {
+  "citation/epub-break/no-work-membership": {
+   "error": "InvalidCitationRange",
+   "message": "所选范围缺少可靠的文献条目归属，不能生成跨段引文。"
+  },
+  "citation/epub-break/single": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": true,
+     "chinese": "测试作者：《快照样书》，测试出版社，2026年，第2页。",
+     "chinese_missing_fields": [],
+     "chinese_status": "complete",
+     "gb": "测试作者. 快照样书[M]. 北京: 测试出版社, 2026: 2.",
+     "gb_missing_fields": [],
+     "gb_status": "complete",
+     "page_verified": true
+    },
+    "end_anchor_id": "epub-break-P000001",
+    "end_index": 1,
+    "page_range": {
+     "citation_page_end": "2",
+     "citation_page_start": "2",
+     "note": "EPUB 出版方分页标记",
+     "status": "verified",
+     "verified": true
+    },
+    "selected_item_count": 1,
+    "selection_reversed": false,
+    "source": {
+     "display_title": "break.epub",
+     "document_title": null,
+     "file_format": "epub",
+     "file_name": "break.epub",
+     "original_file_name": "break.epub",
+     "parser_label": null,
+     "source_file_id": "epub-break",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "source_id": "epub-break",
+    "source_type": "word",
+    "start_anchor_id": "epub-break-P000001",
+    "start_index": 1
+   }
+  },
+  "citation/epub-list/cross-page": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": true,
+     "chinese": "测试作者：《页码表样书》，测试出版社，2026年，第27—28页。",
+     "chinese_missing_fields": [],
+     "chinese_status": "complete",
+     "gb": "测试作者. 页码表样书[M]. 北京: 测试出版社, 2026: 27-28.",
+     "gb_missing_fields": [],
+     "gb_status": "complete",
+     "page_verified": true
+    },
+    "end_anchor_id": "epub-list-P000002",
+    "end_index": 2,
+    "page_range": {
+     "citation_page_end": "28",
+     "citation_page_start": "27",
+     "note": "EPUB 出版方页码表",
+     "status": "verified",
+     "verified": true
+    },
+    "selected_item_count": 3,
+    "selection_reversed": false,
+    "source": {
+     "display_title": "页码表样书",
+     "document_title": null,
+     "file_format": "epub",
+     "file_name": "list.epub",
+     "original_file_name": "list.epub",
+     "parser_label": null,
+     "source_file_id": "epub-list",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "source_id": "epub-list",
+    "source_type": "word",
+    "start_anchor_id": "epub-list-P000000",
+    "start_index": 0
+   }
+  },
+  "citation/epub-none/uncalibrated": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": false,
+     "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+     "chinese_missing_fields": [
+      "citation_page"
+     ],
+     "chinese_status": "metadata_incomplete",
+     "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+     "gb_missing_fields": [
+      "citation_page"
+     ],
+     "gb_status": "metadata_incomplete",
+     "page_verified": false
+    },
+    "end_anchor_id": "epub-none-P000000",
+    "end_index": 0,
+    "page_range": {
+     "citation_page_end": null,
+     "citation_page_start": null,
+     "note": "所选范围包含尚未验证的页码，不能生成带页码引文。",
+     "status": "page_unverified",
+     "verified": false
+    },
+    "selected_item_count": 1,
+    "selection_reversed": false,
+    "source": {
+     "display_title": "none.epub",
+     "document_title": null,
+     "file_format": "epub",
+     "file_name": "none.epub",
+     "original_file_name": "none.epub",
+     "parser_label": null,
+     "source_file_id": "epub-none",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "source_id": "epub-none",
+    "source_type": "word",
+    "start_anchor_id": "epub-none-P000000",
+    "start_index": 0
+   }
+  },
+  "citation/pdf/crosses-uncalibrated": {
+   "error": "InvalidCitationRange",
+   "message": "所选范围的页码映射来源不一致。"
+  },
+  "citation/pdf/single-page": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": true,
+     "chinese": "测试作者：《PDF 快照》，测试出版社，2026年，第39页。",
+     "chinese_missing_fields": [],
+     "chinese_status": "complete",
+     "gb": "测试作者. PDF 快照[M]. 北京: 测试出版社, 2026: 39.",
+     "gb_missing_fields": [],
+     "gb_status": "complete",
+     "page_verified": true
+    },
+    "end_anchor_id": "pdf-snap-PAGE-000001",
+    "end_index": 1,
+    "page_range": {
+     "citation_page_end": "39",
+     "citation_page_start": "39",
+     "note": "PDF 页码来自人工分段映射",
+     "status": "verified",
+     "verified": true
+    },
+    "selected_item_count": 1,
+    "selection_reversed": false,
+    "source": {
+     "display_title": "PDF 快照",
+     "document_title": null,
+     "file_format": "pdf",
+     "file_name": "snap.pdf",
+     "original_file_name": "snap.pdf",
+     "parser_label": null,
+     "source_file_id": "pdf-snap",
+     "source_type": "pdf",
+     "volume_number": null
+    },
+    "source_id": "pdf-snap",
+    "source_type": "pdf",
+    "start_anchor_id": "pdf-snap-PAGE-000001",
+    "start_index": 1
+   }
+  },
+  "citation/pdf/verified-cross-page": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": true,
+     "chinese": "测试作者：《PDF 快照》，测试出版社，2026年，第38—39页。",
+     "chinese_missing_fields": [],
+     "chinese_status": "complete",
+     "gb": "测试作者. PDF 快照[M]. 北京: 测试出版社, 2026: 38-39.",
+     "gb_missing_fields": [],
+     "gb_status": "complete",
+     "page_verified": true
+    },
+    "end_anchor_id": "pdf-snap-PAGE-000001",
+    "end_index": 1,
+    "page_range": {
+     "citation_page_end": "39",
+     "citation_page_start": "38",
+     "note": "PDF 页码来自人工分段映射",
+     "status": "verified",
+     "verified": true
+    },
+    "selected_item_count": 2,
+    "selection_reversed": false,
+    "source": {
+     "display_title": "PDF 快照",
+     "document_title": null,
+     "file_format": "pdf",
+     "file_name": "snap.pdf",
+     "original_file_name": "snap.pdf",
+     "parser_label": null,
+     "source_file_id": "pdf-snap",
+     "source_type": "pdf",
+     "volume_number": null
+    },
+    "source_id": "pdf-snap",
+    "source_type": "pdf",
+    "start_anchor_id": "pdf-snap-PAGE-000000",
+    "start_index": 0
+   }
+  },
+  "citation/reversed": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": true,
+     "chinese": "《马克思恩格斯文集》第1卷，北京：人民出版社，2009年，第3页。",
+     "chinese_missing_fields": [],
+     "chinese_status": "complete",
+     "gb": "马克思恩格斯文集:第1卷[M].北京:人民出版社,2009,3.",
+     "gb_missing_fields": [],
+     "gb_status": "complete",
+     "page_verified": true
+    },
+    "end_anchor_id": "word-me-P000001",
+    "end_index": 1,
+    "page_range": {
+     "citation_page_end": "3",
+     "citation_page_start": "3",
+     "note": "分节页码，已验证",
+     "status": "verified",
+     "verified": true
+    },
+    "selected_item_count": 2,
+    "selection_reversed": true,
+    "source": {
+     "display_title": "《马克思恩格斯文集》第1卷",
+     "document_title": null,
+     "file_format": "docx",
+     "file_name": "马克思恩格斯文集第1卷.docx",
+     "original_file_name": "马克思恩格斯文集第1卷.docx",
+     "parser_label": null,
+     "source_file_id": "word-me",
+     "source_type": "word",
+     "volume_number": 1
+    },
+    "source_id": "word-me",
+    "source_type": "word",
+    "start_anchor_id": "word-me-P000000",
+    "start_index": 0
+   }
+  },
+  "citation/word-me/cross-work": {
+   "error": "InvalidCitationRange",
+   "message": "不能跨越不同文献条目生成同一条引文。"
+  },
+  "citation/word-me/one-work": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": true,
+     "chinese": "《马克思恩格斯文集》第1卷，北京：人民出版社，2009年，第3页。",
+     "chinese_missing_fields": [],
+     "chinese_status": "complete",
+     "gb": "马克思恩格斯文集:第1卷[M].北京:人民出版社,2009,3.",
+     "gb_missing_fields": [],
+     "gb_status": "complete",
+     "page_verified": true
+    },
+    "end_anchor_id": "word-me-P000001",
+    "end_index": 1,
+    "page_range": {
+     "citation_page_end": "3",
+     "citation_page_start": "3",
+     "note": "分节页码，已验证",
+     "status": "verified",
+     "verified": true
+    },
+    "selected_item_count": 2,
+    "selection_reversed": false,
+    "source": {
+     "display_title": "《马克思恩格斯文集》第1卷",
+     "document_title": null,
+     "file_format": "docx",
+     "file_name": "马克思恩格斯文集第1卷.docx",
+     "original_file_name": "马克思恩格斯文集第1卷.docx",
+     "parser_label": null,
+     "source_file_id": "word-me",
+     "source_type": "word",
+     "volume_number": 1
+    },
+    "source_id": "word-me",
+    "source_type": "word",
+    "start_anchor_id": "word-me-P000000",
+    "start_index": 0
+   }
+  },
+  "citation/word-states/inferred": {
+   "ok": {
+    "citation_formats": {
+     "can_copy": false,
+     "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+     "chinese_missing_fields": [
+      "citation_page"
+     ],
+     "chinese_status": "metadata_incomplete",
+     "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+     "gb_missing_fields": [
+      "citation_page"
+     ],
+     "gb_status": "metadata_incomplete",
+     "page_verified": false
+    },
+    "end_anchor_id": "word-states-P000000",
+    "end_index": 0,
+    "page_range": {
+     "citation_page_end": null,
+     "citation_page_start": null,
+     "note": "所选范围包含尚未验证的页码，不能生成带页码引文。",
+     "status": "page_unverified",
+     "verified": false
+    },
+    "selected_item_count": 1,
+    "selection_reversed": false,
+    "source": {
+     "display_title": "states.docx",
+     "document_title": null,
+     "file_format": "docx",
+     "file_name": "states.docx",
+     "original_file_name": "states.docx",
+     "parser_label": null,
+     "source_file_id": "word-states",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "source_id": "word-states",
+    "source_type": "word",
+    "start_anchor_id": "word-states-P000000",
+    "start_index": 0
+   }
+  },
+  "outline/epub-break": {
+   "ok": {
+    "entries": [],
+    "offset_unit": "unicode_codepoint",
+    "source_file_id": "epub-break"
+   }
+  },
+  "outline/epub-list": {
+   "ok": {
+    "entries": [],
+    "offset_unit": "unicode_codepoint",
+    "source_file_id": "epub-list"
+   }
+  },
+  "outline/epub-none": {
+   "ok": {
+    "entries": [],
+    "offset_unit": "unicode_codepoint",
+    "source_file_id": "epub-none"
+   }
+  },
+  "outline/pdf-snap": {
+   "ok": {
+    "entries": [],
+    "offset_unit": "unicode_codepoint",
+    "source_file_id": "pdf-snap"
+   }
+  },
+  "outline/word-me": {
+   "ok": {
+    "entries": [],
+    "offset_unit": "unicode_codepoint",
+    "source_file_id": "word-me"
+   }
+  },
+  "outline/word-states": {
+   "ok": {
+    "entries": [],
+    "offset_unit": "unicode_codepoint",
+    "source_file_id": "word-states"
+   }
+  },
+  "page_mapping/epub-break": {
+   "ok": {
+    "calibrated_units": 2,
+    "coverage": "full",
+    "mapping_record": null,
+    "segments": [
+     {
+      "citation_page_end": "2",
+      "citation_page_start": "1",
+      "end": 1,
+      "method": "epub_pagebreak",
+      "method_note": "EPUB 出版方分页标记",
+      "number_style": "arabic",
+      "offset": null,
+      "start": 0,
+      "status": "verified"
+     }
+    ],
+    "segments_truncated": false,
+    "source": {
+     "file_name": "break.epub",
+     "payload": {
+      "bibliographic_metadata": {
+       "author": "测试作者",
+       "document_type": "book",
+       "publish_place": "北京",
+       "publish_year": "2026",
+       "publisher": "测试出版社",
+       "title": "快照样书"
+      },
+      "file_format": "epub",
+      "file_name": "break.epub",
+      "source_file_id": "epub-break",
+      "source_format": "epub",
+      "source_type": "word"
+     },
+     "source_file_id": "epub-break",
+     "source_type": "word"
+    },
+    "total_units": 2,
+    "unit": "word_paragraph"
+   }
+  },
+  "page_mapping/epub-list": {
+   "ok": {
+    "calibrated_units": 3,
+    "coverage": "full",
+    "mapping_record": null,
+    "segments": [
+     {
+      "citation_page_end": "28",
+      "citation_page_start": "27",
+      "end": 2,
+      "method": "epub_page_list",
+      "method_note": "EPUB 出版方页码表",
+      "number_style": "arabic",
+      "offset": null,
+      "start": 0,
+      "status": "verified"
+     }
+    ],
+    "segments_truncated": false,
+    "source": {
+     "file_name": "list.epub",
+     "payload": {
+      "bibliographic_metadata": {
+       "author": "测试作者",
+       "document_type": "book",
+       "publish_place": "北京",
+       "publish_year": "2026",
+       "publisher": "测试出版社",
+       "title": "快照样书"
+      },
+      "file_format": "epub",
+      "file_name": "list.epub",
+      "source_file_id": "epub-list",
+      "source_format": "epub",
+      "source_type": "word"
+     },
+     "source_file_id": "epub-list",
+     "source_type": "word"
+    },
+    "total_units": 3,
+    "unit": "word_paragraph"
+   }
+  },
+  "page_mapping/epub-none": {
+   "ok": {
+    "calibrated_units": 0,
+    "coverage": "none",
+    "mapping_record": null,
+    "segments": [
+     {
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "end": 1,
+      "method": "unknown",
+      "method_note": "页码尚未解析",
+      "number_style": null,
+      "offset": null,
+      "start": 0,
+      "status": "unavailable"
+     }
+    ],
+    "segments_truncated": false,
+    "source": {
+     "file_name": "none.epub",
+     "payload": {
+      "bibliographic_metadata": {
+       "author": "测试作者",
+       "document_type": "book",
+       "publish_place": "北京",
+       "publish_year": "2026",
+       "publisher": "测试出版社",
+       "title": "快照样书"
+      },
+      "file_format": "epub",
+      "file_name": "none.epub",
+      "source_file_id": "epub-none",
+      "source_format": "epub",
+      "source_type": "word"
+     },
+     "source_file_id": "epub-none",
+     "source_type": "word"
+    },
+    "total_units": 2,
+    "unit": "word_paragraph"
+   }
+  },
+  "page_mapping/pdf-snap": {
+   "ok": {
+    "calibrated_units": 2,
+    "coverage": "partial",
+    "mapping_record": null,
+    "segments": [
+     {
+      "citation_page_end": "39",
+      "citation_page_start": "38",
+      "end": 1,
+      "method": "manual_segment",
+      "method_note": "PDF 页码来自人工分段映射",
+      "number_style": "arabic",
+      "offset": 37,
+      "start": 0,
+      "status": "calibrated"
+     },
+     {
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "end": 3,
+      "method": "uncalibrated",
+      "method_note": "PDF 引用页码尚未校准",
+      "number_style": null,
+      "offset": null,
+      "start": 2,
+      "status": "uncalibrated"
+     }
+    ],
+    "segments_truncated": false,
+    "source": {
+     "file_name": "snap.pdf",
+     "payload": {
+      "bibliographic_metadata": {
+       "author": "测试作者",
+       "document_type": "book",
+       "publish_place": "北京",
+       "publish_year": "2026",
+       "publisher": "测试出版社",
+       "title": "快照样书"
+      },
+      "display_title": "PDF 快照",
+      "file_format": "pdf",
+      "file_name": "snap.pdf",
+      "source_file_id": "pdf-snap",
+      "source_type": "pdf"
+     },
+     "source_file_id": "pdf-snap",
+     "source_type": "pdf"
+    },
+    "total_units": 4,
+    "unit": "pdf_page"
+   }
+  },
+  "page_mapping/word-me": {
+   "ok": {
+    "calibrated_units": 3,
+    "coverage": "full",
+    "mapping_record": null,
+    "segments": [
+     {
+      "citation_page_end": "4",
+      "citation_page_start": "3",
+      "end": 2,
+      "method": "section_break_verified",
+      "method_note": "分节页码，已验证",
+      "number_style": "arabic",
+      "offset": null,
+      "start": 0,
+      "status": "verified"
+     }
+    ],
+    "segments_truncated": false,
+    "source": {
+     "file_name": "马克思恩格斯文集第1卷.docx",
+     "payload": {
+      "file_format": "docx",
+      "file_name": "马克思恩格斯文集第1卷.docx",
+      "source_file_id": "word-me",
+      "source_type": "word",
+      "volume_number": 1
+     },
+     "source_file_id": "word-me",
+     "source_type": "word"
+    },
+    "total_units": 3,
+    "unit": "word_paragraph"
+   }
+  },
+  "page_mapping/word-states": {
+   "ok": {
+    "calibrated_units": 0,
+    "coverage": "none",
+    "mapping_record": null,
+    "segments": [
+     {
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "end": 1,
+      "method": "section_break_inferred",
+      "method_note": "分节推断页码，尚未人工验证",
+      "number_style": null,
+      "offset": null,
+      "start": 0,
+      "status": "unavailable"
+     },
+     {
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "end": 2,
+      "method": "toc_range_bound",
+      "method_note": "目录页码范围，非段落级精确页码",
+      "number_style": null,
+      "offset": null,
+      "start": 2,
+      "status": "unavailable"
+     },
+     {
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "end": 3,
+      "method": "unknown",
+      "method_note": "页码尚未解析",
+      "number_style": null,
+      "offset": null,
+      "start": 3,
+      "status": "unavailable"
+     }
+    ],
+    "segments_truncated": false,
+    "source": {
+     "file_name": "states.docx",
+     "payload": {
+      "bibliographic_metadata": {
+       "author": "测试作者",
+       "document_type": "book",
+       "publish_place": "北京",
+       "publish_year": "2026",
+       "publisher": "测试出版社",
+       "title": "快照样书"
+      },
+      "file_format": "docx",
+      "file_name": "states.docx",
+      "source_file_id": "word-states",
+      "source_type": "word"
+     },
+     "source_file_id": "word-states",
+     "source_type": "word"
+    },
+    "total_units": 4,
+    "unit": "word_paragraph"
+   }
+  },
+  "window/bad-count": {
+   "error": "InvalidPagination",
+   "message": "count 不能小于 1"
+  },
+  "window/epub-break": {
+   "ok": {
+    "count": 10,
+    "has_more": false,
+    "items": [
+     {
+      "anchor_id": "epub-break-P000000",
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《快照样书》，测试出版社，2026年，第1页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. 快照样书[M]. 北京: 测试出版社, 2026: 1.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "1",
+      "citation_page_start": "1",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 1 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "epub_pagebreak",
+      "page_note": "EPUB 出版方分页标记",
+      "page_source_type": "epub_pagebreak",
+      "page_text_hash": "311c81e176735eb4",
+      "page_verified": true,
+      "paragraph_id": "epub-break-P000000",
+      "paragraph_index": 0,
+      "text_raw": "分页标记第1页。"
+     },
+     {
+      "anchor_id": "epub-break-P000001",
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《快照样书》，测试出版社，2026年，第2页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. 快照样书[M]. 北京: 测试出版社, 2026: 2.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "2",
+      "citation_page_start": "2",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 2 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "epub_pagebreak",
+      "page_note": "EPUB 出版方分页标记",
+      "page_source_type": "epub_pagebreak",
+      "page_text_hash": "f01c00f3634c0e75",
+      "page_verified": true,
+      "paragraph_id": "epub-break-P000001",
+      "paragraph_index": 1,
+      "text_raw": "分页标记第2页。"
+     }
+    ],
+    "last_position": 1,
+    "next_start": 2,
+    "previous_start": null,
+    "source": {
+     "display_title": "break.epub",
+     "document_title": null,
+     "file_format": "epub",
+     "file_name": "break.epub",
+     "original_file_name": "break.epub",
+     "parser_label": null,
+     "source_file_id": "epub-break",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "start": 0,
+    "total": 2
+   }
+  },
+  "window/epub-list": {
+   "ok": {
+    "count": 10,
+    "has_more": false,
+    "items": [
+     {
+      "anchor_id": "epub-list-P000000",
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《页码表样书》，测试出版社，2026年，第27页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. 页码表样书[M]. 北京: 测试出版社, 2026: 27.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "27",
+      "citation_page_start": "27",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 27 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "epub_page_list",
+      "page_note": "EPUB 出版方页码表",
+      "page_source_type": "epub_page_list",
+      "page_text_hash": "3eddac3231bf5735",
+      "page_verified": true,
+      "paragraph_id": "epub-list-P000000",
+      "paragraph_index": 0,
+      "text_raw": "页码表第27页首段。"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《页码表样书》，测试出版社，2026年，第27页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. 页码表样书[M]. 北京: 测试出版社, 2026: 27.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "27",
+      "citation_page_start": "27",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 27 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "epub_page_list",
+      "page_note": "EPUB 出版方页码表",
+      "page_source_type": "epub_page_list",
+      "page_text_hash": "477cf2887ea82ec0",
+      "page_verified": true,
+      "paragraph_id": "epub-list-P000001",
+      "paragraph_index": 1,
+      "text_raw": "页码表第27页次段。"
+     },
+     {
+      "anchor_id": "epub-list-P000002",
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《页码表样书》，测试出版社，2026年，第28页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. 页码表样书[M]. 北京: 测试出版社, 2026: 28.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "28",
+      "citation_page_start": "28",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 28 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "epub_page_list",
+      "page_note": "EPUB 出版方页码表",
+      "page_source_type": "epub_page_list",
+      "page_text_hash": "b5102d3f7ee7b45c",
+      "page_verified": true,
+      "paragraph_id": "epub-list-P000002",
+      "paragraph_index": 2,
+      "text_raw": "页码表第28页。"
+     }
+    ],
+    "last_position": 2,
+    "next_start": 3,
+    "previous_start": null,
+    "source": {
+     "display_title": "页码表样书",
+     "document_title": null,
+     "file_format": "epub",
+     "file_name": "list.epub",
+     "original_file_name": "list.epub",
+     "parser_label": null,
+     "source_file_id": "epub-list",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "start": 0,
+    "total": 3
+   }
+  },
+  "window/epub-list/past-end": {
+   "ok": {
+    "count": 2,
+    "has_more": false,
+    "items": [],
+    "last_position": 2,
+    "next_start": null,
+    "previous_start": 1,
+    "source": {
+     "display_title": "页码表样书",
+     "document_title": null,
+     "file_format": "epub",
+     "file_name": "list.epub",
+     "original_file_name": "list.epub",
+     "parser_label": null,
+     "source_file_id": "epub-list",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "start": 9,
+    "total": 3
+   }
+  },
+  "window/epub-none": {
+   "ok": {
+    "count": 10,
+    "has_more": false,
+    "items": [
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "页码尚未解析",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "unknown",
+      "page_note": "页码尚未解析",
+      "page_source_type": "unknown",
+      "page_text_hash": "c9934ebbcafd8ad7",
+      "page_verified": false,
+      "paragraph_id": "epub-none-P000000",
+      "paragraph_index": 0,
+      "text_raw": "没有出版方页码的正文。"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "页码尚未解析",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "unknown",
+      "page_note": "页码尚未解析",
+      "page_source_type": "unknown",
+      "page_text_hash": "4140b4993a44564d",
+      "page_verified": false,
+      "paragraph_id": "epub-none-P000001",
+      "paragraph_index": 1,
+      "text_raw": "第二段。"
+     }
+    ],
+    "last_position": 1,
+    "next_start": 2,
+    "previous_start": null,
+    "source": {
+     "display_title": "none.epub",
+     "document_title": null,
+     "file_format": "epub",
+     "file_name": "none.epub",
+     "original_file_name": "none.epub",
+     "parser_label": null,
+     "source_file_id": "epub-none",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "start": 0,
+    "total": 2
+   }
+  },
+  "window/missing": {
+   "error": "SourceNotFound",
+   "message": "未找到文献：no-such-source"
+  },
+  "window/pdf-snap": {
+   "ok": {
+    "count": 10,
+    "has_more": false,
+    "items": [
+     {
+      "anchor_id": "pdf-snap-PAGE-000000",
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《PDF 快照》，测试出版社，2026年，第38页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. PDF 快照[M]. 北京: 测试出版社, 2026: 38.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "38",
+      "citation_page_start": "38",
+      "decoration_spans": [],
+      "is_empty": false,
+      "item_type": "pdf_page",
+      "mapping_confidence_level": null,
+      "page_display": "引用页码：38",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "manual_segment",
+      "page_marker": {
+       "physical_page": null,
+       "printed_page": "38"
+      },
+      "page_note": "PDF 页码来自人工分段映射",
+      "page_source_type": "manual_segment",
+      "page_text_hash": "3faf630ae8d5ce6c",
+      "page_verified": true,
+      "pdf_page_id": "pdf-snap-PAGE-000000",
+      "pdf_page_index": 0,
+      "pdf_page_label": null,
+      "pdf_page_number_1based": 1,
+      "text_raw": "第一页正文，跨页引文从这里开始。"
+     },
+     {
+      "anchor_id": "pdf-snap-PAGE-000001",
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《PDF 快照》，测试出版社，2026年，第39页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. PDF 快照[M]. 北京: 测试出版社, 2026: 39.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "39",
+      "citation_page_start": "39",
+      "decoration_spans": [],
+      "is_empty": false,
+      "item_type": "pdf_page",
+      "mapping_confidence_level": null,
+      "page_display": "引用页码：39",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "manual_segment",
+      "page_marker": {
+       "physical_page": null,
+       "printed_page": "39"
+      },
+      "page_note": "PDF 页码来自人工分段映射",
+      "page_source_type": "manual_segment",
+      "page_text_hash": "1f34e005742d974d",
+      "page_verified": true,
+      "pdf_page_id": "pdf-snap-PAGE-000001",
+      "pdf_page_index": 1,
+      "pdf_page_label": null,
+      "pdf_page_number_1based": 2,
+      "text_raw": "第二页正文，跨页引文在这里结束。"
+     },
+     {
+      "anchor_id": "pdf-snap-PAGE-000002",
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "decoration_spans": [],
+      "is_empty": false,
+      "item_type": "pdf_page",
+      "mapping_confidence_level": null,
+      "page_display": "PDF 标签页：vii，引用页码尚未校准",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "uncalibrated",
+      "page_marker": null,
+      "page_note": "PDF Page Label 尚未验证，不能作为引用页码",
+      "page_source_type": "uncalibrated",
+      "page_text_hash": "774b2f6c70066781",
+      "page_verified": false,
+      "pdf_page_id": "pdf-snap-PAGE-000002",
+      "pdf_page_index": 2,
+      "pdf_page_label": "vii",
+      "pdf_page_number_1based": 3,
+      "text_raw": "标签页正文"
+     },
+     {
+      "anchor_id": "pdf-snap-PAGE-000003",
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "decoration_spans": [],
+      "is_empty": true,
+      "item_type": "pdf_page",
+      "mapping_confidence_level": null,
+      "page_display": "PDF 第 4 页，引用页码尚未校准",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "uncalibrated",
+      "page_marker": null,
+      "page_note": "PDF 引用页码尚未校准",
+      "page_source_type": "uncalibrated",
+      "page_text_hash": "e16f1596201850fd",
+      "page_verified": false,
+      "pdf_page_id": "pdf-snap-PAGE-000003",
+      "pdf_page_index": 3,
+      "pdf_page_label": null,
+      "pdf_page_number_1based": 4,
+      "text_raw": " \n"
+     }
+    ],
+    "last_position": 3,
+    "next_start": 4,
+    "previous_start": null,
+    "source": {
+     "display_title": "PDF 快照",
+     "document_title": null,
+     "file_format": "pdf",
+     "file_name": "snap.pdf",
+     "original_file_name": "snap.pdf",
+     "parser_label": null,
+     "source_file_id": "pdf-snap",
+     "source_type": "pdf",
+     "volume_number": null
+    },
+    "start": 0,
+    "total": 4
+   }
+  },
+  "window/pdf-snap/page": {
+   "ok": {
+    "count": 2,
+    "has_more": true,
+    "items": [
+     {
+      "anchor_id": "pdf-snap-PAGE-000001",
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "测试作者：《PDF 快照》，测试出版社，2026年，第39页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "测试作者. PDF 快照[M]. 北京: 测试出版社, 2026: 39.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "39",
+      "citation_page_start": "39",
+      "decoration_spans": [],
+      "is_empty": false,
+      "item_type": "pdf_page",
+      "mapping_confidence_level": null,
+      "page_display": "引用页码：39",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "manual_segment",
+      "page_marker": {
+       "physical_page": null,
+       "printed_page": "39"
+      },
+      "page_note": "PDF 页码来自人工分段映射",
+      "page_source_type": "manual_segment",
+      "page_text_hash": "1f34e005742d974d",
+      "page_verified": true,
+      "pdf_page_id": "pdf-snap-PAGE-000001",
+      "pdf_page_index": 1,
+      "pdf_page_label": null,
+      "pdf_page_number_1based": 2,
+      "text_raw": "第二页正文，跨页引文在这里结束。"
+     },
+     {
+      "anchor_id": "pdf-snap-PAGE-000002",
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "decoration_spans": [],
+      "is_empty": false,
+      "item_type": "pdf_page",
+      "mapping_confidence_level": null,
+      "page_display": "PDF 标签页：vii，引用页码尚未校准",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "uncalibrated",
+      "page_marker": null,
+      "page_note": "PDF Page Label 尚未验证，不能作为引用页码",
+      "page_source_type": "uncalibrated",
+      "page_text_hash": "774b2f6c70066781",
+      "page_verified": false,
+      "pdf_page_id": "pdf-snap-PAGE-000002",
+      "pdf_page_index": 2,
+      "pdf_page_label": "vii",
+      "pdf_page_number_1based": 3,
+      "text_raw": "标签页正文"
+     }
+    ],
+    "last_position": 3,
+    "next_start": 3,
+    "previous_start": 0,
+    "source": {
+     "display_title": "PDF 快照",
+     "document_title": null,
+     "file_format": "pdf",
+     "file_name": "snap.pdf",
+     "original_file_name": "snap.pdf",
+     "parser_label": null,
+     "source_file_id": "pdf-snap",
+     "source_type": "pdf",
+     "volume_number": null
+    },
+    "start": 1,
+    "total": 4
+   }
+  },
+  "window/word-me": {
+   "ok": {
+    "count": 10,
+    "has_more": false,
+    "items": [
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "《马克思恩格斯文集》第1卷，北京：人民出版社，2009年，第3页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "马克思恩格斯文集:第1卷[M].北京:人民出版社,2009,3.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "3",
+      "citation_page_start": "3",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 3 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "section_break_verified",
+      "page_note": "分节页码，已验证",
+      "page_source_type": "section_break_verified",
+      "page_text_hash": "473be160103b53ef",
+      "page_verified": true,
+      "paragraph_id": "word-me-P000000",
+      "paragraph_index": 0,
+      "text_raw": "第一篇首段。"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "《马克思恩格斯文集》第1卷，北京：人民出版社，2009年，第3页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "马克思恩格斯文集:第1卷[M].北京:人民出版社,2009,3.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "3",
+      "citation_page_start": "3",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 3 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "section_break_verified",
+      "page_note": "分节页码，已验证",
+      "page_source_type": "section_break_verified",
+      "page_text_hash": "64aa772327df2c54",
+      "page_verified": true,
+      "paragraph_id": "word-me-P000001",
+      "paragraph_index": 1,
+      "text_raw": "第一篇次段。"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": true,
+       "chinese": "《马克思恩格斯文集》第1卷，北京：人民出版社，2009年，第4页。",
+       "chinese_missing_fields": [],
+       "chinese_status": "complete",
+       "gb": "马克思恩格斯文集:第1卷[M].北京:人民出版社,2009,4.",
+       "gb_missing_fields": [],
+       "gb_status": "complete",
+       "page_verified": true
+      },
+      "citation_page_end": "4",
+      "citation_page_start": "4",
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 4 页",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "section_break_verified",
+      "page_note": "分节页码，已验证",
+      "page_source_type": "section_break_verified",
+      "page_text_hash": "e2453a3deb07a1fe",
+      "page_verified": true,
+      "paragraph_id": "word-me-P000002",
+      "paragraph_index": 2,
+      "text_raw": "第二篇首段。"
+     }
+    ],
+    "last_position": 2,
+    "next_start": 3,
+    "previous_start": null,
+    "source": {
+     "display_title": "《马克思恩格斯文集》第1卷",
+     "document_title": null,
+     "file_format": "docx",
+     "file_name": "马克思恩格斯文集第1卷.docx",
+     "original_file_name": "马克思恩格斯文集第1卷.docx",
+     "parser_label": null,
+     "source_file_id": "word-me",
+     "source_type": "word",
+     "volume_number": 1
+    },
+    "start": 0,
+    "total": 3
+   }
+  },
+  "window/word-states": {
+   "ok": {
+    "count": 10,
+    "has_more": false,
+    "items": [
+     {
+      "anchor_id": "word-states-P000000",
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 39 页（分节推断，未验证）",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "section_break_inferred",
+      "page_note": "分节推断页码，尚未人工验证",
+      "page_source_type": "section_break_inferred",
+      "page_text_hash": "f12835d35d47d975",
+      "page_verified": false,
+      "paragraph_id": "word-states-P000000",
+      "paragraph_index": 0,
+      "text_raw": "分节推断正文"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 39 页（分节推断，未验证）",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "section_break_inferred",
+      "page_note": "分节推断页码，尚未人工验证",
+      "page_source_type": "section_break_inferred",
+      "page_text_hash": "ca09195b5f1dbb74",
+      "page_verified": false,
+      "paragraph_id": "word-states-P000001",
+      "paragraph_index": 1,
+      "text_raw": "分节推断同页"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": "目录范围 40–45（非段落精确页码）",
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "目录范围 40–45（非段落精确页码）",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "toc_range_bound",
+      "page_note": "目录页码范围，非段落级精确页码",
+      "page_source_type": "toc_range_bound",
+      "page_text_hash": "2b810b76e3beef2c",
+      "page_verified": false,
+      "paragraph_id": "word-states-P000002",
+      "paragraph_index": 2,
+      "text_raw": "目录范围正文"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "页码尚未解析",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "unknown",
+      "page_note": "页码尚未解析",
+      "page_source_type": "unknown",
+      "page_text_hash": "fe46d1a9c91dbff6",
+      "page_verified": false,
+      "paragraph_id": "word-states-P000003",
+      "paragraph_index": 3,
+      "text_raw": "未知正文"
+     }
+    ],
+    "last_position": 3,
+    "next_start": 4,
+    "previous_start": null,
+    "source": {
+     "display_title": "states.docx",
+     "document_title": null,
+     "file_format": "docx",
+     "file_name": "states.docx",
+     "original_file_name": "states.docx",
+     "parser_label": null,
+     "source_file_id": "word-states",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "start": 0,
+    "total": 4
+   }
+  },
+  "window/word-states/middle": {
+   "ok": {
+    "count": 2,
+    "has_more": true,
+    "items": [
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": null,
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "第 39 页（分节推断，未验证）",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "section_break_inferred",
+      "page_note": "分节推断页码，尚未人工验证",
+      "page_source_type": "section_break_inferred",
+      "page_text_hash": "ca09195b5f1dbb74",
+      "page_verified": false,
+      "paragraph_id": "word-states-P000001",
+      "paragraph_index": 1,
+      "text_raw": "分节推断同页"
+     },
+     {
+      "anchor_id": null,
+      "citation_formats": {
+       "can_copy": false,
+       "chinese": "该文献页码尚未校准，不能生成可靠脚注。",
+       "chinese_missing_fields": [
+        "citation_page"
+       ],
+       "chinese_status": "metadata_incomplete",
+       "gb": "该文献页码尚未校准，不能生成 GB/T 引文。",
+       "gb_missing_fields": [
+        "citation_page"
+       ],
+       "gb_status": "metadata_incomplete",
+       "page_verified": false
+      },
+      "citation_page_end": null,
+      "citation_page_start": null,
+      "document_page_range": "目录范围 40–45（非段落精确页码）",
+      "item_type": "word_paragraph",
+      "mapping_confidence_level": null,
+      "page_display": "目录范围 40–45（非段落精确页码）",
+      "page_mapping_confidence": null,
+      "page_mapping_method": "toc_range_bound",
+      "page_note": "目录页码范围，非段落级精确页码",
+      "page_source_type": "toc_range_bound",
+      "page_text_hash": "2b810b76e3beef2c",
+      "page_verified": false,
+      "paragraph_id": "word-states-P000002",
+      "paragraph_index": 2,
+      "text_raw": "目录范围正文"
+     }
+    ],
+    "last_position": 3,
+    "next_start": 3,
+    "previous_start": 0,
+    "source": {
+     "display_title": "states.docx",
+     "document_title": null,
+     "file_format": "docx",
+     "file_name": "states.docx",
+     "original_file_name": "states.docx",
+     "parser_label": null,
+     "source_file_id": "word-states",
+     "source_type": "word",
+     "volume_number": null
+    },
+    "start": 1,
+    "total": 4
+   }
+  }
+ },
+ "translation": {
+  "dismissals": {
+   "dismissals": [
+    [
+     "pdf-de",
+     "pdf-zh"
+    ]
+   ]
+  },
+  "link_window/corrected": {
+   "end_index": 0,
+   "links": [
+    {
+     "confidence": 1.0,
+     "deferred": false,
+     "manual": "no_counterpart",
+     "needs_review": false,
+     "order_index": 0,
+     "review_status": "automatic",
+     "source_segment_ids": [
+      "segment-7b789d0b74832e81cb0fe3ac"
+     ],
+     "source_spans": [
+      {
+       "char_end": 23,
+       "char_start": 0,
+       "item_index": 0
+      }
+     ],
+     "target_segment_ids": [],
+     "target_spans": []
+    },
+    {
+     "confidence": 1.0,
+     "deferred": false,
+     "manual": null,
+     "needs_review": false,
+     "order_index": 1,
+     "review_status": "automatic",
+     "source_segment_ids": [
+      "segment-b14ae22d9218207ba0ef24a3"
+     ],
+     "source_spans": [
+      {
+       "char_end": 51,
+       "char_start": 24,
+       "item_index": 0
+      }
+     ],
+     "target_segment_ids": [
+      "segment-c8b360a7979b312819488267"
+     ],
+     "target_spans": [
+      {
+       "char_end": 13,
+       "char_start": 7,
+       "item_index": 0
+      }
+     ]
+    }
+   ],
+   "source_file_id": "pdf-de",
+   "source_item_type": "pdf_page",
+   "start_index": 0,
+   "target_item_type": "pdf_page",
+   "target_source_file_id": "pdf-zh",
+   "via_source_file_id": null
+  },
+  "link_window/deferred": {
+   "end_index": 0,
+   "links": [
+    {
+     "confidence": 1.0,
+     "deferred": true,
+     "manual": null,
+     "needs_review": false,
+     "order_index": 0,
+     "review_status": "automatic",
+     "source_segment_ids": [
+      "segment-7b789d0b74832e81cb0fe3ac"
+     ],
+     "source_spans": [
+      {
+       "char_end": 23,
+       "char_start": 0,
+       "item_index": 0
+      }
+     ],
+     "target_segment_ids": [
+      "segment-4fb537ebf27670a958eee8b2"
+     ],
+     "target_spans": [
+      {
+       "char_end": 7,
+       "char_start": 0,
+       "item_index": 0
+      }
+     ]
+    },
+    {
+     "confidence": 1.0,
+     "deferred": false,
+     "manual": null,
+     "needs_review": false,
+     "order_index": 1,
+     "review_status": "automatic",
+     "source_segment_ids": [
+      "segment-b14ae22d9218207ba0ef24a3"
+     ],
+     "source_spans": [
+      {
+       "char_end": 51,
+       "char_start": 24,
+       "item_index": 0
+      }
+     ],
+     "target_segment_ids": [
+      "segment-c8b360a7979b312819488267"
+     ],
+     "target_spans": [
+      {
+       "char_end": 13,
+       "char_start": 7,
+       "item_index": 0
+      }
+     ]
+    }
+   ],
+   "source_file_id": "pdf-de",
+   "source_item_type": "pdf_page",
+   "start_index": 0,
+   "target_item_type": "pdf_page",
+   "target_source_file_id": "pdf-zh",
+   "via_source_file_id": null
+  },
+  "link_window/direct": {
+   "end_index": 0,
+   "links": [
+    {
+     "confidence": 1.0,
+     "deferred": false,
+     "manual": null,
+     "needs_review": false,
+     "order_index": 0,
+     "review_status": "automatic",
+     "source_segment_ids": [
+      "segment-7b789d0b74832e81cb0fe3ac"
+     ],
+     "source_spans": [
+      {
+       "char_end": 23,
+       "char_start": 0,
+       "item_index": 0
+      }
+     ],
+     "target_segment_ids": [
+      "segment-4fb537ebf27670a958eee8b2"
+     ],
+     "target_spans": [
+      {
+       "char_end": 7,
+       "char_start": 0,
+       "item_index": 0
+      }
+     ]
+    },
+    {
+     "confidence": 1.0,
+     "deferred": false,
+     "manual": null,
+     "needs_review": false,
+     "order_index": 1,
+     "review_status": "automatic",
+     "source_segment_ids": [
+      "segment-b14ae22d9218207ba0ef24a3"
+     ],
+     "source_spans": [
+      {
+       "char_end": 51,
+       "char_start": 24,
+       "item_index": 0
+      }
+     ],
+     "target_segment_ids": [
+      "segment-c8b360a7979b312819488267"
+     ],
+     "target_spans": [
+      {
+       "char_end": 13,
+       "char_start": 7,
+       "item_index": 0
+      }
+     ]
+    }
+   ],
+   "source_file_id": "pdf-de",
+   "source_item_type": "pdf_page",
+   "start_index": 0,
+   "target_item_type": "pdf_page",
+   "target_source_file_id": "pdf-zh",
+   "via_source_file_id": null
+  },
+  "link_window/indirect": {
+   "ok": {
+    "end_index": 0,
+    "links": [
+     {
+      "confidence": 0.0,
+      "deferred": false,
+      "manual": null,
+      "needs_review": true,
+      "order_index": 0,
+      "review_status": "rejected",
+      "source_segment_ids": [
+       "segment-4fb537ebf27670a958eee8b2"
+      ],
+      "source_spans": [
+       {
+        "char_end": 7,
+        "char_start": 0,
+        "item_index": 0
+       }
+      ],
+      "target_segment_ids": [
+       "segment-06dce8300cf0af66845cba79",
+       "segment-4daead53ccef20764e44337f"
+      ],
+      "target_spans": [
+       {
+        "char_end": 21,
+        "char_start": 0,
+        "item_index": 0
+       },
+       {
+        "char_end": 44,
+        "char_start": 22,
+        "item_index": 0
+       }
+      ]
+     },
+     {
+      "confidence": 0.0,
+      "deferred": false,
+      "manual": null,
+      "needs_review": true,
+      "order_index": 1,
+      "review_status": "rejected",
+      "source_segment_ids": [
+       "segment-c8b360a7979b312819488267"
+      ],
+      "source_spans": [
+       {
+        "char_end": 13,
+        "char_start": 7,
+        "item_index": 0
+       }
+      ],
+      "target_segment_ids": [
+       "segment-06dce8300cf0af66845cba79",
+       "segment-4daead53ccef20764e44337f"
+      ],
+      "target_spans": [
+       {
+        "char_end": 21,
+        "char_start": 0,
+        "item_index": 0
+       },
+       {
+        "char_end": 44,
+        "char_start": 22,
+        "item_index": 0
+       }
+      ]
+     }
+    ],
+    "source_file_id": "pdf-zh",
+    "source_item_type": "pdf_page",
+    "start_index": 0,
+    "target_item_type": "pdf_page",
+    "target_source_file_id": "pdf-en",
+    "via_source_file_id": "pdf-de"
+   }
+  },
+  "link_window/reversed": {
+   "error": "InvalidAlignmentRequest",
+   "message": "end_index 不能小于 start_index。"
+  },
+  "overview/active-model": {
+   "active_model_id": "minilm-l12-v2",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {
+      "pdf-de": "de",
+      "pdf-zh": "zh-Hans"
+     },
+     "pairs": [
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": 1.0,
+       "review_count": 0,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-zh"
+       ],
+       "stale_reason": null,
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      }
+     ]
+    }
+   ]
+  },
+  "overview/after-correction": {
+   "active_model_id": "",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {
+      "pdf-de": "de",
+      "pdf-en": "en",
+      "pdf-zh": "zh-Hans"
+     },
+     "pairs": [
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": 1.0,
+       "review_count": 0,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-zh"
+       ],
+       "stale_reason": null,
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": 0.0,
+       "review_count": 1,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "indirect",
+       "via_source_file_id": "pdf-de"
+      }
+     ]
+    }
+   ]
+  },
+  "overview/direct": {
+   "active_model_id": "",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {
+      "pdf-de": "de",
+      "pdf-zh": "zh-Hans"
+     },
+     "pairs": [
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": 1.0,
+       "review_count": 0,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-zh"
+       ],
+       "stale_reason": null,
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      }
+     ]
+    }
+   ]
+  },
+  "overview/indirect": {
+   "active_model_id": "",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {
+      "pdf-de": "de",
+      "pdf-en": "en",
+      "pdf-zh": "zh-Hans"
+     },
+     "pairs": [
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": 1.0,
+       "review_count": 0,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-zh"
+       ],
+       "stale_reason": null,
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": 0.0,
+       "review_count": 1,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "indirect",
+       "via_source_file_id": "pdf-de"
+      }
+     ]
+    }
+   ]
+  },
+  "overview/light": {
+   "active_model_id": "",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {
+      "pdf-de": "de",
+      "pdf-zh": "zh-Hans"
+     },
+     "pairs": [
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-zh"
+       ],
+       "stale_reason": null,
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      }
+     ]
+    }
+   ]
+  },
+  "overview/model-changed": {
+   "active_model_id": "another-model",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {
+      "pdf-de": "de",
+      "pdf-zh": "zh-Hans"
+     },
+     "pairs": [
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": 1.0,
+       "review_count": 0,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-zh"
+       ],
+       "stale_reason": "model_changed",
+       "status": "direct",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      }
+     ]
+    }
+   ]
+  },
+  "overview/none": {
+   "active_model_id": "",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {},
+     "pairs": [
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-zh"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-de",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      },
+      {
+       "completed_at": null,
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "none",
+       "via_source_file_id": null
+      }
+     ]
+    }
+   ]
+  },
+  "overview/scoped": {
+   "active_model_id": "",
+   "works": [
+    {
+     "document_group_id": "work-one",
+     "languages": {
+      "pdf-de": "de",
+      "pdf-en": "en",
+      "pdf-zh": "zh-Hans"
+     },
+     "pairs": [
+      {
+       "completed_at": "<timestamp>",
+       "matched_segment_ratio": null,
+       "review_count": null,
+       "source_file_ids": [
+        "pdf-zh",
+        "pdf-en"
+       ],
+       "stale_reason": null,
+       "status": "indirect",
+       "via_source_file_id": "pdf-de"
+      }
+     ]
+    }
+   ]
+  },
+  "overview/ungrouped": {
+   "active_model_id": "",
+   "works": []
+  },
+  "position/empty": {
+   "document_group_id": "work-one",
+   "position": null
+  },
+  "position/saved": {
+   "document_group_id": "work-one",
+   "position": {
+    "char_offset": 17,
+    "item_index": 3,
+    "left_source_file_id": "pdf-zh",
+    "right_source_file_id": "pdf-de",
+    "updated_at": "<timestamp>"
+   }
+  },
+  "review_candidates": {
+   "candidates": [
+    {
+     "anchor_distance": 0,
+     "context_after": [
+      {
+       "segment_id": "segment-c8b360a7979b312819488267",
+       "text": "真理是全体。"
+      }
+     ],
+     "context_before": [],
+     "order_index": 0,
+     "page_match_spans": [
+      {
+       "match_quote": "精神是现实的。",
+       "page_char_end": 7,
+       "page_char_start": 0,
+       "page_text_hash": "cbcaf72344d721dc",
+       "pdf_page_id": "pdf-zh-PAGE-000000",
+       "pdf_page_index": 0
+      }
+     ],
+     "segment_id": "segment-4fb537ebf27670a958eee8b2",
+     "text": "精神是现实的。"
+    },
+    {
+     "anchor_distance": 1,
+     "context_after": [],
+     "context_before": [
+      {
+       "segment_id": "segment-4fb537ebf27670a958eee8b2",
+       "text": "精神是现实的。"
+      }
+     ],
+     "order_index": 1,
+     "page_match_spans": [
+      {
+       "match_quote": "真理是全体。",
+       "page_char_end": 13,
+       "page_char_start": 7,
+       "page_text_hash": "cbcaf72344d721dc",
+       "pdf_page_id": "pdf-zh-PAGE-000000",
+       "pdf_page_index": 0
+      }
+     ],
+     "segment_id": "segment-c8b360a7979b312819488267",
+     "text": "真理是全体。"
+    }
+   ],
+   "source_file_id": "pdf-de",
+   "source_segments": [
+    {
+     "segment_id": "segment-7b789d0b74832e81cb0fe3ac",
+     "text": "Der Geist ist wirklich."
+    }
+   ],
+   "target_source_file_id": "pdf-zh"
+  },
+  "save_correction": {
+   "manual": "no_counterpart",
+   "override_id": "<override_id-0>",
+   "status": "confirmed"
+  }
+ }
+}
