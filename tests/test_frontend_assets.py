@@ -439,6 +439,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             # 0.5.5 译本对照改版：作品组管理弹窗、范围下拉与「加入作品组」下拉移出文献库，
             # 相关 27 个直接命令删除；作品管理迁入 35-works.js 的 MEFinder.works 命名 API（净 21）。
             "static/js/30-library.js": 13,
+            # 批量重新对齐队列只经 MEFinder.workQueue 命名 API 暴露。
+            "static/js/34-works-queue.js": 1,
             # 译本对照页只经 MEFinder.works 命名 API 暴露，不新增直接全局命令。
             "static/js/35-works.js": 1,
             "static/js/36-works-range.js": 1,
@@ -686,9 +688,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # Zotero 设置分栏与顶部同步摘要；设置目录内联 Lucide 图标。
     # 设置导航与内容区滚动条改为悬停才显示，导航收紧上下留白以免多余滚动。
     BASELINE_SHA256 = (
-        "2a1351f287884267c928eb63db8205376652873311eb1367c167db6d89389a24"
+        "4df10eba9121339874a281e137e0e41330eea794ab1d3b65b5643e176594432f"
     )
-    BASELINE_BYTES = 1510203
+    BASELINE_BYTES = 1512399
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

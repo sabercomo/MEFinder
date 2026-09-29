@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "me_finder" / "static"
 WORKS_JS = (STATIC / "js" / "35-works.js").read_text(encoding="utf-8")
 RANGE_JS = (STATIC / "js" / "36-works-range.js").read_text(encoding="utf-8")
+QUEUE_JS = (STATIC / "js" / "34-works-queue.js").read_text(encoding="utf-8")
 WORKS_CSS = (STATIC / "css" / "45-works.css").read_text(encoding="utf-8")
 LIBRARY_JS = (STATIC / "js" / "30-library.js").read_text(encoding="utf-8")
 INIT_JS = (STATIC / "js" / "90-init.js").read_text(encoding="utf-8")
@@ -108,12 +109,12 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         # 沿用原对齐方向重跑，并强制重算。
         items = _function_body(WORKS_JS, "function staleQueueItems(groups)")
         self.assertIn("run.pivot_source_file_id, run.target_source_file_id", items)
-        self.assertIn("startJob(group, item.pivot, item.target, true)",
-                      _function_body(WORKS_JS, "async function runRealignQueue()"))
-        self.assertIn("showAppConfirm", _function_body(WORKS_JS, "async function realignPairs(items, scope)"))
+        self.assertIn("host.startJob(group, item.pivot, item.target, true)",
+                      _function_body(QUEUE_JS, "async function run()"))
+        self.assertIn("host.askConfirm(", _function_body(QUEUE_JS, "async function start(items, scope)"))
         # 队列中逐个任务不弹提示，结束时汇总一次。
         watch = _function_body(WORKS_JS, "async function onAlignmentJobEnd(event)")
-        self.assertLess(watch.index("advanceRealignQueue(event.outcome"), watch.index("对齐已生成"))
+        self.assertLess(watch.index("workQueue.onJobEnd(event.outcome"), watch.index("对齐已生成"))
         # 任务监听只有一份（15-alignment-jobs.js），作品页只认领并订阅，不再自己轮询。
         self.assertNotIn("/api/text-alignments/status", WORKS_JS)
         self.assertIn("global.MEFinderAlignmentJobs.subscribe(", WORKS_JS)
@@ -129,36 +130,51 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         settings = (STATIC / "js" / "64-settings-model.js").read_text(encoding="utf-8")
         self.assertIn("global.MEFinder.works.invalidate();", settings)
 
+    def test_realign_queue_state_has_a_single_writer(self) -> None:
+        # 队列状态只归 34-works-queue.js：作品页不再持有、也不直接改写队列对象。
+        self.assertNotIn("works.queue", WORKS_JS)
+        self.assertNotIn("queue:", WORKS_JS[WORKS_JS.index("var works = {"):WORKS_JS.index("};", WORKS_JS.index("var works = {"))])
+        self.assertIn("var workQueue = global.MEFinder.workQueue;", WORKS_JS)
+        self.assertIn("workQueue.configure({", WORKS_JS)
+        self.assertIn("global.MEFinder.workQueue = Object.freeze({", QUEUE_JS)
+        # 渲染只拿只读副本。
+        self.assertIn("items: queue.items.slice()", _function_body(QUEUE_JS, "function snapshot()"))
+
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_realign_queue_runs_pairs_in_order_and_stops_on_cancel(self) -> None:
         start = WORKS_JS.index("  function staleDirectPairs(group) {")
-        end = WORKS_JS.index("  function refreshViews() {", start)
+        end = WORKS_JS.index("  workQueue.configure({", start)
         script = r"""
 const assert=require('assert/strict');
 const pairKey=(a,b)=>[a,b].sort().join('|');
 const groups={G:{document_group_id:'G',title:'W',members:[],alignments:[{pivot_source_file_id:'B',target_source_file_id:'A'}]}};
-const works={queue:null,running:null,pairsByGroup:{G:{'A|B':{source_file_ids:['A','B'],status:'direct',stale_reason:'model_changed'},
+const works={running:null,pairsByGroup:{G:{'A|B':{source_file_ids:['A','B'],status:'direct',stale_reason:'model_changed'},
  'A|C':{source_file_ids:['A','C'],status:'direct',stale_reason:null},'B|C':{source_file_ids:['B','C'],status:'indirect',stale_reason:'model_changed'}}}};
-const groupById=id=>groups[id], pivotFor=(g,a,b)=>[a,b], canGenerate=()=>true, refreshViews=()=>{};
+const pivotFor=(g,a,b)=>[a,b];
 const toasts=[], started=[];
-const showToast=m=>toasts.push(m), showAppConfirm=async()=>true, cancelAlignment=()=>{};
-const startJob=async(g,p,t,force)=>{started.push([p,t,force]);works.running={};return true;};
+const queue=globalThis.MEFinder.workQueue;
+queue.configure({pairKey, isRunning:()=>!!works.running, canGenerate:()=>true, generateBlockedReason:()=>'',
+ groupById:id=>groups[id], refreshViews:()=>{}, cancelAlignment:()=>{}, toast:m=>toasts.push(m), askConfirm:async()=>true,
+ startJob:async(g,p,t,force)=>{started.push([p,t,force]);works.running={};return true;}});
 (async()=>{
  const items=staleQueueItems([groups.G]);
  assert.deepEqual(items.map(i=>[i.pivot,i.target]),[['B','A']],'only stale direct pairs, original direction');
- await realignPairs(items.concat([{groupId:'G',pivot:'A',target:'C'}]),'x');
+ await queue.start(items.concat([{groupId:'G',pivot:'A',target:'C'}]),'x');
  assert.deepEqual(started,[['B','A',true]]);
- assert.equal(queuedPair('G','C','A'),true);
- works.running=null;advanceRealignQueue('ok');await new Promise(r=>setImmediate(r));
+ assert.equal(queue.isQueued('G','C','A'),true);
+ const view=queue.snapshot(); view.items.length=0; view.index=99;
+ assert.equal(queue.snapshot().items.length,2,'snapshot is a copy');
+ works.running=null;queue.onJobEnd('ok');await new Promise(r=>setImmediate(r));
  assert.deepEqual(started[1],['A','C',true]);
- works.running=null;advanceRealignQueue('cancelled');await new Promise(r=>setImmediate(r));
- assert.equal(works.queue,null);
+ works.running=null;queue.onJobEnd('cancelled');await new Promise(r=>setImmediate(r));
+ assert.equal(queue.active(),false);
+ assert.equal(queue.snapshot(),null);
  assert.equal(started.length,2);
  assert.match(toasts[0],/已停止重新对齐，完成 1\/2 组/);
 })().catch(e=>{console.error(e);process.exitCode=1;});
 """
         result = subprocess.run(
-            [shutil.which("node"), "-e", WORKS_JS[start:end] + script],
+            [shutil.which("node"), "-e", QUEUE_JS + WORKS_JS[start:end] + script],
             capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

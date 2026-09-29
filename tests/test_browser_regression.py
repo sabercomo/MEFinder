@@ -241,8 +241,14 @@ class BrowserRegressionTests(unittest.TestCase):
         self.assertEqual(self.saved_model(), "minilm-l12-v2")
         self.assertEqual(self.checked_models(), ["minilm-l12-v2"])
 
-    def test_running_alignment_disables_other_generate_actions_until_it_ends(self) -> None:
-        job = {"done": False}
+    def fake_alignment_jobs(self) -> dict:
+        """Report the default model as installed and fake the job endpoints.
+
+        Returns the controller dict: set ``done`` to finish the current job;
+        ``started`` counts start requests.  Everything else hits the real backend.
+        """
+
+        job = {"done": False, "started": 0}
 
         def ready_models(route: Route) -> None:
             if route.request.method != "GET":
@@ -256,7 +262,9 @@ class BrowserRegressionTests(unittest.TestCase):
             route.fulfill(json=payload)
 
         def start(route: Route) -> None:
-            route.fulfill(json={"ok": True, "job_id": "browser-job"})
+            job["started"] += 1
+            job["done"] = False
+            route.fulfill(json={"ok": True, "job_id": f"browser-job-{job['started']}"})
 
         def status(route: Route) -> None:
             if job["done"]:
@@ -270,6 +278,10 @@ class BrowserRegressionTests(unittest.TestCase):
         self.page.reload()
         self.page.wait_for_load_state("networkidle")
         self.navigate("译本对照")
+        return job
+
+    def test_running_alignment_disables_other_generate_actions_until_it_ends(self) -> None:
+        job = self.fake_alignment_jobs()
 
         english_german = self.pair_line(r"^English EPUB.*德文")
         chinese_english = self.pair_line(r"^贺麟译本.*English EPUB")
@@ -291,6 +303,35 @@ class BrowserRegressionTests(unittest.TestCase):
                         "generate stays disabled after the job ended")
         self.assertTrue(chinese_english.get_by_role("button", name="正文范围").is_enabled())
         self.assert_hidden_really_hidden("alignment finished")
+
+    def test_batch_realign_runs_stale_pairs_one_by_one_and_reports_once(self) -> None:
+        # Alignments computed with another model are stale for the active one.
+        for target in ("pdf-zh", "epub-en"):
+            generate_alignment(self.fixture.db, "work-one", "pdf-de", target,
+                               embedding_model_id="multilingual-e5-large")
+        job = self.fake_alignment_jobs()
+        notice = self.page.locator(".tw-notice")
+        notice.filter(has_text="2 组对齐需重新生成").wait_for()
+
+        notice.get_by_role("button", name="全部重新对齐").click()
+        self.page.get_by_role("button", name="开始重新对齐").click()
+        notice.filter(has_text="正在重新对齐 1/2").wait_for()
+        self.assertEqual(job["started"], 1)
+        # While the queue runs, nothing else may start another job.
+        self.assertEqual(self.page.get_by_role("button", name="生成对齐").count(),
+                         self.page.locator("button:disabled", has_text="生成对齐").count())
+        self.assertEqual(self.page.get_by_role("button", name=re.compile(r"^重新对齐 \d+ 组$")).count(), 0)
+        self.assert_hidden_really_hidden("batch realign: first job")
+
+        job["done"] = True
+        notice.filter(has_text="正在重新对齐 2/2").wait_for()
+        self.assertEqual(job["started"], 2)
+
+        job["done"] = True
+        self.page.get_by_text("已重新对齐 2 组").first.wait_for()
+        notice.filter(has_text="正在重新对齐").wait_for(state="detached")
+        self.assertEqual(job["started"], 2)
+        self.assert_hidden_really_hidden("batch realign: finished")
 
     def test_reader_switching_books_shows_only_the_new_book(self) -> None:
         self.navigate("译本对照")
