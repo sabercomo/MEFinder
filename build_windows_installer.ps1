@@ -78,6 +78,12 @@ try {
     }
     $packagerPythonArgs = if ($PackagerPythonExe) { @() } else { $pythonLauncherArgs }
 
+    # Probe the runtime PyInstaller will bundle, even when tests use another Python.
+    & $packagerPythonCommand @packagerPythonArgs -c "from src.me_finder.persistence.short_gram_schema import short_gram_supported; raise SystemExit(0 if short_gram_supported() else 1)"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed: the packaging Python/SQLite runtime lacks FTS5 contentless_delete (need SQLite 3.43+)."
+    }
+
     $pythonInfoOutput = & $pythonCommand @pythonLauncherArgs -c "import struct, sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}|{struct.calcsize(chr(80)) * 8}')"
     if ($LASTEXITCODE -ne 0) { throw "Could not start the selected Python interpreter." }
     $pythonInfo = ($pythonInfoOutput | Out-String).Trim().Split('|')

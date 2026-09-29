@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
+
+from src.me_finder.persistence.short_gram_schema import short_gram_supported
 
 
 class WindowsPackagingTests(unittest.TestCase):
@@ -190,6 +195,28 @@ class WindowsPackagingTests(unittest.TestCase):
             self.assertIn('"dist\\MEFinderData"', script)
             self.assertIn("function Restore-LocalDevelopmentDataMarker", script)
             self.assertIn("Restore-LocalDevelopmentDataMarker", script.split("finally {", 1)[1])
+
+    def test_release_sqlite_guard_probes_the_packager_before_pyinstaller(self) -> None:
+        for name, script in (("installer", self.build_script), ("portable", self.portable_script)):
+            with self.subTest(script=name):
+                guard = re.search(
+                    r'& (\$\w+) (@\w+) -c "([^"\n]*short_gram_supported[^"\n]*)"',
+                    script,
+                )
+                self.assertIsNotNone(guard, "missing SQLite capability probe")
+                self.assertEqual(guard.group(1), "$packagerPythonCommand")
+                self.assertEqual(guard.group(2), "@packagerPythonArgs")
+                self.assertLess(guard.start(), script.index("-m PyInstaller"))
+                self.assertRegex(script[guard.end():], r'^\s+if \(\$LASTEXITCODE -ne 0\) \{\s+throw')
+                for prefix, expected in (
+                    ("", 0 if short_gram_supported() else 1),
+                    ("import sqlite3; sqlite3.sqlite_version_info = (3, 42, 0); ", 1),
+                ):
+                    result = subprocess.run(
+                        [sys.executable, "-c", prefix + guard.group(3)],
+                        capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
 
 
 if __name__ == "__main__":

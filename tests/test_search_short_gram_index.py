@@ -498,6 +498,32 @@ class FuzzyTieOrderTests(unittest.TestCase):
 
 
 class ShortGramBackfillLoopTests(_Base):
+    def test_backfill_installs_index_after_sqlite_capability_returns(self) -> None:
+        with patch.object(sgi, "short_gram_supported", return_value=False):
+            build_database(_corpus(), self.path)
+            migrate_index_database(self.path)
+            self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), 0)
+        with contextlib.closing(sqlite3.connect(self.path)) as connection:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            self.assertFalse(sgs.objects_present(connection))
+
+        # The schema version has already advanced; background work must repair
+        # the optional index without another migration or a full DB rebuild.
+        with patch.object(sgi, "DRAIN_MAX_ROWS", 1):
+            self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), 1)
+            pending = _pending(self.path)
+            self.assertGreater(pending, 1)
+            self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), 1)
+            self.assertEqual(_pending(self.path), pending - 1)
+        self.assertSameAsPlainScan()
+        _drain_all(self.path)
+        self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), 0)
+        self.assertEqual(_pending(self.path), 0)
+        with contextlib.closing(sqlite3.connect(self.path)) as connection:
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], version)
+            self.assertTrue(sgi.short_gram_prefilter_ready(connection))
+        self.assertSameAsPlainScan()
+
     def test_loop_drains_then_idles_and_stops(self) -> None:
         stop = threading.Event()
         calls = []

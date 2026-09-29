@@ -165,10 +165,14 @@ def drain_short_gram_backlog(connection: sqlite3.Connection) -> int:
     A pending rowid whose paragraph is gone only loses its stale grams.
     """
 
-    if not short_gram_supported() or not _objects_present(connection):
+    if not short_gram_supported():
         return 0
     connection.execute("BEGIN IMMEDIATE")
     try:
+        # A library created on older SQLite can already have the current
+        # schema version but no optional index. Retry when capability returns;
+        # the installer preserves an existing index and its pending queue.
+        install_short_gram_index(connection)
         rows = connection.execute(
             "SELECT q.paragraph_rowid, "
             + ", ".join(f"p.{column}" for column in _TEXT_COLUMNS)
