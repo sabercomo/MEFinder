@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +19,8 @@ from unittest.mock import patch
 
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
+from src.me_finder.persistence import passage_reads
+from src.me_finder.persistence import short_gram_index as sgi
 from src.me_finder.search import SearchEngine
 
 TEXTS = [
@@ -69,7 +72,7 @@ class SearchPassagesShortQueryTest(unittest.TestCase):
         self.path = Path(temporary.name) / "index.sqlite3"
         build_database(_corpus(), self.path)
 
-    def passages(self, query: str, *, prefilter: bool = True, **kwargs) -> list:
+    def passages(self, query: str, *, prefilter: bool = True, **kwargs) -> dict:
         engine = SearchEngine(self.path)
         try:
             disabled = patch("src.me_finder.search.short_gram_prefilter_ready", return_value=False)
@@ -104,11 +107,54 @@ class SearchPassagesShortQueryTest(unittest.TestCase):
         self.assertEqual(response["total"], 4)
         self.assertTrue(response["has_more"])
 
+    @unittest.skipUnless(sgi.short_gram_supported(), "short-gram FTS unavailable")
     def test_prefilter_does_not_change_results(self) -> None:
-        with_index = self.passages("社会")
+        self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), len(TEXTS))
+        # All-pending fixtures admit every row even if the FTS predicate is
+        # broken. Exercise the completed index and require its actual use.
+        with patch("src.me_finder.persistence.passage_reads.short_gram_prefilter",
+                   wraps=passage_reads.short_gram_prefilter) as prefilter:
+            with_index = self.passages("社会")
+        prefilter.assert_called_once_with(["社会"])
         without_index = self.passages("社会", prefilter=False)
         self.assertEqual(json.dumps(with_index, ensure_ascii=False, sort_keys=True),
                          json.dumps(without_index, ensure_ascii=False, sort_keys=True))
+
+    @unittest.skipUnless(sgi.short_gram_supported(), "short-gram FTS unavailable")
+    def test_indexed_and_pending_rows_keep_current_results(self) -> None:
+        self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), len(TEXTS))
+        with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
+            for pid, text in (("P-0000", "历史研究"), ("P-0001", "社会历史")):
+                connection.execute(
+                    "UPDATE paragraphs SET text_raw=?, normalized_text=?, compact_text=?, plain_text=? "
+                    "WHERE paragraph_id=?", (text, text, text, text, pid),
+                )
+            connection.execute("DELETE FROM paragraphs WHERE paragraph_id='P-0002'")
+        pending_response = self.passages("社会")
+        self.assertEqual(self.ids(pending_response), ["P-0005", "P-0003", "P-0001"])
+        self.assertEqual(pending_response, self.passages("社会", prefilter=False))
+        self.assertEqual(self.ids(self.passages("社会", source_type="word")), ["P-0001"])
+        self.assertEqual(sgi.drain_short_gram_backlog_at(self.path), 3)
+        self.assertEqual(self.passages("社会"), pending_response)
+
+    def test_candidate_budget_and_ties_are_independent_of_insertion_order(self) -> None:
+        for count in (64, 65):
+            with self.subTest(count=count):
+                corpus = _corpus()
+                paragraph = corpus["paragraphs"][0]
+                corpus["paragraphs"] = [
+                    {**paragraph, "paragraph_id": f"P-{index:04d}", "paragraph_index": index}
+                    for index in reversed(range(count))
+                ]
+                build_database(corpus, self.path)
+                with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
+                    connection.execute("ANALYZE")
+                response = self.passages("社会", limit=1)
+                self.assertEqual(self.ids(response), ["P-0000"])
+                self.assertEqual(response["total"], 64)
+                self.assertEqual(response["total_is_exact"], count == 64)
+                self.assertTrue(response["has_more"])
+                self.assertEqual(response, self.passages("社会", limit=1, prefilter=False))
 
     def test_results_keep_location_anchors(self) -> None:
         first = self.passages("社会")["results"][0]

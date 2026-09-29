@@ -123,3 +123,19 @@
 - 本机 `.venv-macos312-arm64/bin/python -m unittest discover -t . -s tests`：2676 项，`OK (skipped=34)`，232.519 s；ruff（排除既有临时目录 `.codex-tmp`）零告警；文件行数与架构守卫通过。
 
 本轮没有重跑真实书库的 30 组对照、耗时或库体积基准；第三节性能数字仍是此前版本的测量，不作为本轮新测数据。
+
+## 七、2026-09-29 补充：主题检索两字回退的复审
+
+审阅 `d8e6e38`：两字回退确实改为查 SQLite；BM25 查询和范围谓词的搬迁保持原语义，SQL 已下沉 persistence，架构白名单没有放宽。独立重跑搜索、范围、金样、短词索引和两条架构守卫共 66 项通过，未发现需要修改产品查询实现的问题。
+
+**发现的是验收覆盖不足。** `test_prefilter_does_not_change_results` 建库后有 6 条待补、辅助索引 0 行；预筛会无条件放行待补，所以仅比较这个状态不能证明已建索引的正确性。将 `passage_reads.short_gram_prefilter` 在测试进程中替换为仅查询待补 rowid（完全丢掉索引命中），原测试仍通过。
+
+**补强后的验证：**
+
+- 等价测试先实际排空待补，确认调用了预筛，再比较开/关预筛的完整响应。相同的“丢掉索引命中”变异现在触发断言失败；真实实现通过。
+- 新增 `test_indexed_and_pending_rows_keep_current_results`：完整索引后，将一个命中改为不命中、一个普通 Word 非命中改为命中、删除一个 EPUB 命中；待补期间与全表扫描完整响应一致，Word 筛选排除 EPUB，后台排空后响应仍一致。
+- 新增 `test_candidate_budget_and_ties_are_independent_of_insertion_order`：64/65 段逆序写入，执行 `ANALYZE`，`limit=1` 时第一条都是段落序号最小者；`total=64`，`total_is_exact` 在超过预算时才变为 false，`has_more=true`，预筛开关响应一致。
+
+**说明更正：** 单字查询不是无条件返回空；若归一化段落本身只有查询的那个字，两字片段辅助函数会保留它，实测“社”命中 1 条。SQLite 与内存后端只在“两字候选全部同分”这一点相同，SQLite 显式排序，内存保留输入顺序。没有据此扩展单字召回或改动排序策略；性能优化与召回质量基准仍另行推进。
+
+**门禁：** 本机全量 unittest 2684 项，`OK (skipped=34)`，283.392 s；Ruff（`--extend-exclude .codex-tmp`）零告警。`d8e6e38` CI run 36587076753 独立核实为 success。本轮未改产品代码、未重跑真实库性能基准或打包。
