@@ -18,12 +18,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import sqlite3
 import threading
 import unittest
+from contextlib import closing
 from typing import Callable, List
 from unittest import mock
 
 from src.me_finder.app_context import AppContext
+from src.me_finder.structured_reader import get_document_window
 from src.me_finder.text_alignment import generate_alignment
 from src.me_finder.web import ManagedThreadingHTTPServer, make_handler
 from tests import test_text_alignment
@@ -157,6 +160,48 @@ class BrowserRegressionTests(unittest.TestCase):
 
     def pair_line(self, pattern: str):
         return self.page.locator(".tw-pair-line").filter(has_text=re.compile(pattern))
+
+    def reader_page_labels(self) -> List[str]:
+        return self.page.eval_on_selector_all(
+            ".mef-reader-source-pane .mef-reader-item-label",
+            "nodes => nodes.filter(node => node.getClientRects().length).map(node => node.textContent.trim())",
+        )
+
+    def stored_page_labels(self, source_id: str) -> List[str]:
+        """Page wording the backend stores for each reading unit of a book."""
+
+        items = get_document_window(self.fixture.db, source_id, count=10)["items"]
+        return [str(item["page_display"]) for item in items]
+
+    def give_books_distinct_pages(self) -> None:
+        """Calibrate the German PDF to page 38 and give the EPUB publisher pages 27–28.
+
+        With distinct page wording per book, a label left over from the
+        previous book cannot pass for the new one.
+        """
+
+        with closing(sqlite3.connect(self.fixture.db)) as connection, connection:
+            row = connection.execute(
+                "SELECT row_id, payload_json FROM pdf_pages WHERE source_file_id = 'pdf-de'"
+            ).fetchone()
+            payload = json.loads(row[1])
+            payload.update(citation_page="38", page_mapping_method="manual_segment",
+                           segment_id="MAPSEG-000000-000000")
+            connection.execute("UPDATE pdf_pages SET payload_json = ? WHERE row_id = ?",
+                               (json.dumps(payload, ensure_ascii=False), row[0]))
+            for index, page in ((0, "27"), (1, "28")):
+                paragraph_id = f"epub-en-p{index}"
+                payload = json.loads(connection.execute(
+                    "SELECT payload_json FROM paragraphs WHERE paragraph_id = ?", (paragraph_id,)
+                ).fetchone()[0])
+                payload.update(page_source_type="epub_page_list", page_display=page,
+                               original_page_start=page, original_page_end=page)
+                connection.execute(
+                    "UPDATE paragraphs SET page_source_type = 'epub_page_list', page_display = ?, "
+                    "citation_page_start = ?, citation_page_end = ?, payload_json = ? "
+                    "WHERE paragraph_id = ?",
+                    (page, page, page, json.dumps(payload, ensure_ascii=False), paragraph_id),
+                )
 
     def reader_texts(self) -> List[str]:
         return self.page.eval_on_selector_all(
@@ -334,6 +379,15 @@ class BrowserRegressionTests(unittest.TestCase):
         self.assert_hidden_really_hidden("batch realign: finished")
 
     def test_reader_switching_books_shows_only_the_new_book(self) -> None:
+        self.give_books_distinct_pages()
+        german_pages = self.stored_page_labels("pdf-de")
+        english_pages = self.stored_page_labels("epub-en")
+        chinese_pages = self.stored_page_labels("pdf-zh")
+        # Fixture sanity: each book's page wording differs from the others'.
+        self.assertEqual(german_pages, ["引用页码：38"])
+        self.assertEqual(english_pages, ["第 27 页", "第 28 页"])
+        self.assertTrue(set(chinese_pages).isdisjoint(german_pages + english_pages))
+
         self.navigate("译本对照")
         versions = self.page.locator(".tw-btn.link", has_text="阅读")
         versions.first.wait_for()
@@ -341,6 +395,7 @@ class BrowserRegressionTests(unittest.TestCase):
         self.page.wait_for_url(re.compile(r"/reader\?source=pdf-de"))
         self.wait_until(lambda: any("Der Geist" in text for text in self.reader_texts()), "German text missing")
         self.assertEqual(self.page.locator("#mef-reader-title").inner_text(), "Phänomenologie des Geistes")
+        self.assertEqual(self.reader_page_labels(), german_pages)
         self.assert_hidden_really_hidden("reader: German")
 
         self.page.get_by_role("button", name="左栏版本").click()
@@ -354,6 +409,7 @@ class BrowserRegressionTests(unittest.TestCase):
         )
         self.assertEqual(self.page.locator("#mef-reader-title").inner_text(), "Phenomenology of Spirit")
         self.assertIn("English EPUB", self.page.get_by_role("button", name="左栏版本").inner_text())
+        self.assertEqual(self.reader_page_labels(), english_pages)
         self.assert_hidden_really_hidden("reader: English after switch")
 
         self.page.locator(".mef-reader-back").click()
@@ -370,6 +426,7 @@ class BrowserRegressionTests(unittest.TestCase):
             f"reopened reader shows another book: {self.reader_texts()}",
         )
         self.assertEqual(self.page.locator("#mef-reader-title").inner_text(), "精神现象学")
+        self.assertEqual(self.reader_page_labels(), chinese_pages)
         self.assert_hidden_really_hidden("reader: reopened Chinese")
 
 

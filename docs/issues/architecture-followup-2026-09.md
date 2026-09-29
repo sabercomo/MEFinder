@@ -64,3 +64,9 @@
 - 变异检查：队列结束一项后不前进 → 浏览器与节点测试失败；去掉结束汇总提示 → 浏览器测试失败；`snapshot()` 改为共享原数组 → 节点测试失败；还原后通过。
 - 过程发现：`host.confirm(` 撞上既有守卫（前端禁止 `confirm(`/`alert(`/`prompt(`，防 Windows WebView 黑色系统对话框），宿主能力改名 `askConfirm`。
 - 门禁：前端装配指纹与全局命令预算（新增 `34-works-queue.js`: 1）已同步；macOS 全量通过（34 跳过），浏览器回归 6 项本机连跑 4 轮通过，Ruff 零告警。
+
+## 2026-09-29 追加：对照计划的偏差与补漏
+
+- **遗漏（已补）**：第 1 步计划要求“阅读器换书后内容和页码正确”，初版只检查了正文、标题、版本名与地址，没有检查页码。现把德文 PDF 校准为引用页 38、英文 EPUB 设出版方页码 27—28，换书与重开后逐项比对界面页码标签与后端 `get_document_window` 的 `page_display`（德文“引用页码：38”→英文“第 27 页”“第 28 页”→中译本未校准文案）。变异：阅读器对 Word/EPUB 段落忽略 `page_display` 改显示“段落 N” → 该场景失败；还原后通过。
+- **偏差（未改）**：第 2 步计划把查询并入现有 `document_read_repository.py` / `translation_work_store.py`，实际新建 `structured_reader_reads.py` / `translation_work_reads.py`，以保持现有 store 只写、repository 服务原有调用方；“两文件禁止再执行 SQL”由既有棘轮基线删项实现，未另写规则。
+- **偏差（未改）**：第 1 步计划为“未装 playwright 自动跳过”，实际还需 `MEFINDER_BROWSER_TESTS=1` 才运行，避免试运行期间拖慢或干扰本机全量门禁；CI 专用任务设 REQUIRED 模式。
