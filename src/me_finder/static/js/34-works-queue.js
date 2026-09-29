@@ -13,11 +13,16 @@
 
   function active() { return !!queue; }
 
-  // 只读副本：渲染拿到的是当下状态，改它不影响队列。
+  // 任务项是只含字符串的平面对象，逐项浅复制即完全隔离。
+  function copyItems(items) {
+    return items.map(function (item) { return Object.assign({}, item); });
+  }
+
+  // 只读副本：数组和每个任务项都是新对象，改它不影响队列。
   function snapshot() {
     if (!queue) return null;
     return {
-      items: queue.items.slice(), index: queue.index,
+      items: copyItems(queue.items), index: queue.index,
       completed: queue.completed, stopped: queue.stopped
     };
   }
@@ -37,7 +42,8 @@
       '将用当前模型依次重新计算 ' + items.length + ' 组对齐，耗时取决于书籍长度，可随时停止',
       {title: '重新对齐' + scope + '？', confirmText: '开始重新对齐'}
     )) return;
-    queue = {items: items.slice(), index: 0, completed: 0, failures: [], stopped: false, lastError: ''};
+    // 入队时复制：调用方之后改自己手里的任务项，不会改变队列要跑的内容。
+    queue = {items: copyItems(items), index: 0, completed: 0, failures: [], stopped: false, lastError: ''};
     run();
   }
 

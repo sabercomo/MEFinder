@@ -138,7 +138,7 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         self.assertIn("workQueue.configure({", WORKS_JS)
         self.assertIn("global.MEFinder.workQueue = Object.freeze({", QUEUE_JS)
         # 渲染只拿只读副本。
-        self.assertIn("items: queue.items.slice()", _function_body(QUEUE_JS, "function snapshot()"))
+        self.assertIn("items: copyItems(queue.items)", _function_body(QUEUE_JS, "function snapshot()"))
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_realign_queue_runs_pairs_in_order_and_stops_on_cancel(self) -> None:
@@ -159,11 +159,15 @@ queue.configure({pairKey, isRunning:()=>!!works.running, canGenerate:()=>true, g
 (async()=>{
  const items=staleQueueItems([groups.G]);
  assert.deepEqual(items.map(i=>[i.pivot,i.target]),[['B','A']],'only stale direct pairs, original direction');
- await queue.start(items.concat([{groupId:'G',pivot:'A',target:'C'}]),'x');
+ const second={groupId:'G',pivot:'A',target:'C'};
+ await queue.start(items.concat([second]),'x');
  assert.deepEqual(started,[['B','A',true]]);
  assert.equal(queue.isQueued('G','C','A'),true);
- const view=queue.snapshot(); view.items.length=0; view.index=99;
+ const view=queue.snapshot(); view.items[1].target='X'; view.items[1].pivot='Y'; view.items.length=0; view.index=99;
  assert.equal(queue.snapshot().items.length,2,'snapshot is a copy');
+ assert.equal(queue.snapshot().items[1].target,'C','editing a snapshot item must not reach the queue');
+ second.target='Z';
+ assert.equal(queue.snapshot().items[1].target,'C','editing the caller item after start must not reach the queue');
  works.running=null;queue.onJobEnd('ok');await new Promise(r=>setImmediate(r));
  assert.deepEqual(started[1],['A','C',true]);
  works.running=null;queue.onJobEnd('cancelled');await new Promise(r=>setImmediate(r));
