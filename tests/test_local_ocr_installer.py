@@ -334,7 +334,10 @@ else:
             installer.perform({"provider_id": "ndlocr-lite", "action": "update"})
             result = self._wait(installer)
 
-        self.assertEqual(len(calls), 2)
+        # The injected lock forces at least one retry.  On Windows the real
+        # rename may meet a further transient lock (freshly extracted files
+        # being scanned), so only require that retrying eventually succeeded.
+        self.assertGreaterEqual(len(calls), 2)
         self.assertEqual(result["state"], "installed")
         self.assertFalse(result["error"])
         self.assertEqual(result["installed_tag"], "1.1")
