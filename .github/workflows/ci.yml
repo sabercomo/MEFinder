@@ -44,10 +44,14 @@ jobs:
     # Runtime maintenance uses Windows file locks as well as POSIX leases.
     # Exercise both platforms on pushes; release smoke still owns packaging.
     runs-on: windows-2022
-    timeout-minutes: 20
+    # The suite normally takes ~800s here but a slow runner pushed it past the
+    # old 1000s dump deadline mid-run (run 36537244376, tests still passing).
+    # Keep the dump below the job timeout so a genuine stall still logs stacks.
+    timeout-minutes: 30
     env:
       # Match the documented Windows gate; fixtures contain Chinese text.
       PYTHONUTF8: "1"
+      MEFINDER_FAULTHANDLER_SECONDS: "1600"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
