@@ -31,6 +31,7 @@ from .page_display import (
     resolve_citation_page,
 )
 from .pdf_extractors import pdf_page_text_hash
+from .persistence import structured_reader_reads as reads
 
 
 DEFAULT_WINDOW_COUNT = 20
@@ -163,15 +164,7 @@ def get_document_window(
 
     connection = open_database(database_path)
     try:
-        source_row = connection.execute(
-            """
-            SELECT source_file_id, source_type, file_name, relative_path,
-                   volume_number, payload_json
-            FROM source_files
-            WHERE source_file_id = ?
-            """,
-            (validated_source_id,),
-        ).fetchone()
+        source_row = reads.read_source_row(connection, validated_source_id)
         if source_row is None:
             raise SourceNotFound(f"未找到文献：{validated_source_id}")
 
@@ -235,15 +228,7 @@ def get_document_citation(
 
     connection = open_database(database_path)
     try:
-        source_row = connection.execute(
-            """
-            SELECT source_file_id, source_type, file_name, relative_path,
-                   volume_number, payload_json
-            FROM source_files
-            WHERE source_file_id = ?
-            """,
-            (validated_source_id,),
-        ).fetchone()
+        source_row = reads.read_source_row(connection, validated_source_id)
         if source_row is None:
             raise SourceNotFound(f"未找到文献：{validated_source_id}")
         source = _source_metadata(connection, source_row)
@@ -392,30 +377,13 @@ def _citation_catalog(
     source_payload.setdefault("file_name", source_row["file_name"])
     source_payload.setdefault("volume_number", source_row["volume_number"])
 
-    volume_rows = connection.execute(
-        """
-        SELECT volume_id, payload_json
-        FROM volumes
-        WHERE source_file_id = ?
-        ORDER BY rowid
-        """,
-        (source_row["source_file_id"],),
-    ).fetchall()
+    volume_rows = reads.read_volume_payloads(connection, source_row["source_file_id"])
     volumes = {
         str(row["volume_id"]): _json_object(row["payload_json"])
         for row in volume_rows
         if row["volume_id"] not in (None, "")
     }
-    work_rows = connection.execute(
-        """
-        SELECT works.work_id, works.payload_json
-        FROM works
-        INNER JOIN volumes ON volumes.volume_id = works.volume_id
-        WHERE volumes.source_file_id = ?
-        ORDER BY works.rowid
-        """,
-        (source_row["source_file_id"],),
-    ).fetchall()
+    work_rows = reads.read_work_payloads(connection, source_row["source_file_id"])
     works = {
         str(row["work_id"]): _json_object(row["payload_json"])
         for row in work_rows
@@ -654,15 +622,7 @@ def _pdf_anchor_position(
     suffix_match = re.search(r"-PAGE-([0-9]{1,10})\Z", anchor_id)
     if suffix_match is not None:
         hinted_index = int(suffix_match.group(1))
-        hinted_rows = connection.execute(
-            """
-            SELECT pdf_page_index, payload_json
-            FROM pdf_pages
-            WHERE source_file_id = ? AND pdf_page_index = ?
-            ORDER BY rowid
-            """,
-            (source_id, hinted_index),
-        ).fetchall()
+        hinted_rows = reads.read_pdf_pages_at(connection, source_id, hinted_index)
         hinted_matches = [
             int(row["pdf_page_index"])
             for row in hinted_rows
@@ -674,15 +634,7 @@ def _pdf_anchor_position(
             raise CitationPositionNotFound("所选 PDF 页锚点不存在或不唯一。")
 
     matches: List[int] = []
-    rows = connection.execute(
-        """
-        SELECT pdf_page_index, payload_json
-        FROM pdf_pages
-        WHERE source_file_id = ?
-        ORDER BY pdf_page_index, rowid
-        """,
-        (source_id,),
-    ).fetchall()
+    rows = reads.read_all_pdf_page_payloads(connection, source_id)
     for row in rows:
         payload = _json_object(row["payload_json"])
         if payload.get("pdf_page_id") == anchor_id:
@@ -697,15 +649,7 @@ def _word_anchor_position(
     source_id: str,
     anchor_id: str,
 ) -> int:
-    rows = connection.execute(
-        """
-        SELECT paragraph_index
-        FROM paragraphs
-        WHERE source_file_id = ? AND paragraph_id = ?
-        ORDER BY rowid
-        """,
-        (source_id, anchor_id),
-    ).fetchall()
+    rows = reads.read_paragraph_positions(connection, source_id, anchor_id)
     if len(rows) != 1:
         raise CitationPositionNotFound("所选 Word 段落锚点不存在或不唯一。")
     return int(rows[0]["paragraph_index"])
@@ -773,23 +717,9 @@ def _pdf_citation_records(
     start_index: int,
     end_index: int,
 ) -> List[Tuple[int, Dict[str, object]]]:
-    rows = connection.execute(
-        """
-        SELECT pdf_page_index, payload_json
-        FROM pdf_pages
-        WHERE source_file_id = ?
-          AND pdf_page_index >= ?
-          AND pdf_page_index <= ?
-        ORDER BY pdf_page_index, rowid
-        LIMIT ?
-        """,
-        (
-            source_id,
-            start_index,
-            end_index,
-            MAX_CITATION_RANGE_ITEMS + 1,
-        ),
-    ).fetchall()
+    rows = reads.read_pdf_page_range(
+        connection, source_id, start_index, end_index, MAX_CITATION_RANGE_ITEMS + 1
+    )
     records: List[Tuple[int, Dict[str, object]]] = []
     for row in rows:
         position = int(row["pdf_page_index"])
@@ -810,24 +740,9 @@ def _word_citation_records(
     start_index: int,
     end_index: int,
 ) -> List[Tuple[int, Dict[str, object]]]:
-    rows = connection.execute(
-        """
-        SELECT paragraph_id, volume_id, work_id, paragraph_index, text_raw,
-               page_display, page_source_type, payload_json
-        FROM paragraphs
-        WHERE source_file_id = ?
-          AND paragraph_index >= ?
-          AND paragraph_index <= ?
-        ORDER BY paragraph_index, rowid
-        LIMIT ?
-        """,
-        (
-            source_id,
-            start_index,
-            end_index,
-            MAX_CITATION_RANGE_ITEMS + 1,
-        ),
-    ).fetchall()
+    rows = reads.read_paragraph_range(
+        connection, source_id, start_index, end_index, MAX_CITATION_RANGE_ITEMS + 1
+    )
     return [
         (int(row["paragraph_index"]), _merged_word_payload(row))
         for row in rows
@@ -878,16 +793,7 @@ def _source_metadata(
 ) -> Dict[str, object]:
     payload = _json_object(source_row["payload_json"])
     profile = payload.get("pdf_profile") or {}
-    volume_row = connection.execute(
-        """
-        SELECT display_title, payload_json
-        FROM volumes
-        WHERE source_file_id = ?
-        ORDER BY rowid
-        LIMIT 1
-        """,
-        (source_row["source_file_id"],),
-    ).fetchone()
+    volume_row = reads.read_first_volume(connection, source_row["source_file_id"])
     volume_payload = (
         _json_object(volume_row["payload_json"]) if volume_row is not None else {}
     )
@@ -956,36 +862,19 @@ def _pdf_window(
     count: int,
     citation_catalog: Mapping[str, object],
 ) -> Tuple[int, List[Dict[str, object]], bool, Optional[int], Optional[int]]:
-    summary = connection.execute(
-        """
-        SELECT COUNT(*) AS total, MAX(pdf_page_index) AS last_position
-        FROM pdf_pages
-        WHERE source_file_id = ?
-        """,
-        (source_id,),
-    ).fetchone()
+    summary = reads.read_position_summary(connection, "pdf", source_id)
     total = int(summary["total"])
     last_position = (
         int(summary["last_position"])
         if summary["last_position"] is not None
         else None
     )
-    rows = connection.execute(
-        """
-        SELECT row_id, pdf_page_index, payload_json
-        FROM pdf_pages
-        WHERE source_file_id = ? AND pdf_page_index >= ?
-        ORDER BY pdf_page_index, row_id
-        LIMIT ?
-        """,
-        (source_id, start, count + 1),
-    ).fetchall()
+    rows = reads.read_pdf_window_rows(connection, source_id, start, count + 1)
     has_more = len(rows) > count
     rows = rows[:count]
     previous_start = _previous_natural_start(
         connection,
-        table="pdf_pages",
-        position_column="pdf_page_index",
+        kind="pdf",
         source_id=source_id,
         before=int(rows[0]["pdf_page_index"]) if rows else start,
         count=count,
@@ -1089,37 +978,19 @@ def _word_window(
     count: int,
     citation_catalog: Mapping[str, object],
 ) -> Tuple[int, List[Dict[str, object]], bool, Optional[int], Optional[int]]:
-    summary = connection.execute(
-        """
-        SELECT COUNT(*) AS total, MAX(paragraph_index) AS last_position
-        FROM paragraphs
-        WHERE source_file_id = ?
-        """,
-        (source_id,),
-    ).fetchone()
+    summary = reads.read_position_summary(connection, "word", source_id)
     total = int(summary["total"])
     last_position = (
         int(summary["last_position"])
         if summary["last_position"] is not None
         else None
     )
-    rows = connection.execute(
-        """
-        SELECT rowid, paragraph_id, volume_id, work_id, paragraph_index,
-               text_raw, page_display, page_source_type, payload_json
-        FROM paragraphs
-        WHERE source_file_id = ? AND paragraph_index >= ?
-        ORDER BY paragraph_index, rowid
-        LIMIT ?
-        """,
-        (source_id, start, count + 1),
-    ).fetchall()
+    rows = reads.read_word_window_rows(connection, source_id, start, count + 1)
     has_more = len(rows) > count
     rows = rows[:count]
     previous_start = _previous_natural_start(
         connection,
-        table="paragraphs",
-        position_column="paragraph_index",
+        kind="word",
         source_id=source_id,
         before=int(rows[0]["paragraph_index"]) if rows else start,
         count=count,
@@ -1127,17 +998,7 @@ def _word_window(
     previous_page_key: Optional[Tuple[str, str]] = None
     if rows:
         first_position = int(rows[0]["paragraph_index"])
-        previous_row = connection.execute(
-            """
-            SELECT paragraph_id, volume_id, work_id, paragraph_index, text_raw,
-                   page_display, page_source_type, payload_json
-            FROM paragraphs
-            WHERE source_file_id = ? AND paragraph_index < ?
-            ORDER BY paragraph_index DESC, rowid DESC
-            LIMIT 1
-            """,
-            (source_id, first_position),
-        ).fetchone()
+        previous_row = reads.read_paragraph_before(connection, source_id, first_position)
         if previous_row is not None:
             previous_payload = _merged_word_payload(previous_row)
             previous_page_key = _word_page_key(previous_payload)
@@ -1211,29 +1072,14 @@ def _word_window(
 def _previous_natural_start(
     connection: sqlite3.Connection,
     *,
-    table: str,
-    position_column: str,
+    kind: str,
     source_id: str,
     before: int,
     count: int,
 ) -> Optional[int]:
-    """Return the first natural position in the preceding record window.
+    """Return the first natural position in the preceding record window."""
 
-    ``table`` and ``position_column`` are internal constants supplied by the
-    two reader implementations above; user input is never interpolated into
-    this query.
-    """
-
-    rows = connection.execute(
-        f"""
-        SELECT {position_column}
-        FROM {table}
-        WHERE source_file_id = ? AND {position_column} < ?
-        ORDER BY {position_column} DESC, rowid DESC
-        LIMIT ?
-        """,
-        (source_id, before, count),
-    ).fetchall()
+    rows = reads.read_positions_before(connection, kind, source_id, before, count)
     if not rows:
         return None
     return int(rows[-1][0])

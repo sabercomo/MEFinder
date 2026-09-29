@@ -403,3 +403,5 @@ grep -oE "on(click|change|input)=" src/me_finder/templates/index.html | wc -l
 ```
 
 全量测试与 lint 命令以 AGENTS.md §3.6 为准。
+
+2026-09-29(后续):`structured_reader.py` 与 `translation_works.py` 的只读 SQL 已进入 `persistence/structured_reader_reads.py`、`persistence/translation_work_reads.py`,SQL 散落文件 18→16。详见 `docs/issues/architecture-followup-2026-09.md` 第 2 步。

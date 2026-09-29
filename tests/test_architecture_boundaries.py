@@ -12,6 +12,8 @@ PACKAGE = ROOT / "src" / "me_finder"
 # 只许删不许增——迁走一处就把这里对应的计数减掉(减到 0 删掉条目),
 # 新增调用点或新文件都会让门禁失败。目标见 docs/refactor-v0.5.7-plan.md 阶段 A。
 # 2026-09-25 A2 完成:connect 已清零,连接一律走 persistence/connection.py。
+# 2026-09-29 架构后续第 2 步:structured_reader.py / translation_works.py 的读 SQL
+# 移入 persistence/structured_reader_reads.py、translation_work_reads.py,移出基线。
 SQLITE_CONNECT_OUTSIDE_PERSISTENCE: dict[str, int] = {}
 
 SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
@@ -31,8 +33,6 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "search.py",
     "search_assembly.py",
     "search_recall.py",
-    "structured_reader.py",
-    "translation_works.py",
 }
 
 # C3: direct thread creation must have an explicit lifecycle owner. Startup

@@ -29,6 +29,7 @@ from .alignment_overrides import confirm_override, create_override_proposal
 from .alignment_regions import alignment_body_bounds
 from .persistence.connection import connect_index, table_exists
 from .tasks.background_tasks import BackgroundTasks
+from .persistence import translation_work_reads as reads
 from .persistence.translation_work_store import (
     clear_review_deferral_row,
     defer_review_row,
@@ -100,12 +101,7 @@ def read_reading_position(db_path: Path, document_group_id: object) -> Dict[str,
     try:
         if not table_exists(connection, "document_group_reading_positions"):
             return {"document_group_id": group_id, "position": None}
-        row = connection.execute(
-            "SELECT left_source_file_id, right_source_file_id, item_index, "
-            "char_offset, updated_at FROM document_group_reading_positions "
-            "WHERE document_group_id = ?",
-            (group_id,),
-        ).fetchone()
+        row = reads.read_reading_position_row(connection, group_id)
         return {
             "document_group_id": group_id,
             "position": None if row is None else dict(row),
@@ -140,14 +136,7 @@ def save_reading_position(
     timestamp = _now()
 
     def operation(connection: sqlite3.Connection) -> Dict[str, object]:
-        members = {
-            str(row[0])
-            for row in connection.execute(
-                "SELECT source_file_id FROM document_group_members "
-                "WHERE document_group_id = ?",
-                (group_id,),
-            )
-        }
+        members = set(reads.read_member_ids(connection, group_id))
         if left_id not in members or (right_id is not None and right_id not in members):
             raise InvalidAlignmentRequest("阅读位置中的版本不属于该作品。")
         save_reading_position_row(
@@ -177,10 +166,7 @@ def list_suggestion_dismissals(db_path: Path) -> Dict[str, object]:
     try:
         if not table_exists(connection, "document_group_suggestion_dismissals"):
             return {"dismissals": []}
-        rows = connection.execute(
-            "SELECT source_file_ids_json FROM document_group_suggestion_dismissals "
-            "ORDER BY created_at"
-        ).fetchall()
+        rows = reads.read_suggestion_dismissal_rows(connection)
         return {
             "dismissals": [
                 sorted(str(value) for value in json.loads(row[0] or "[]"))
@@ -222,14 +208,7 @@ def _detected_body_bounds(
 ) -> Tuple[int, int]:
     bounds = _DETECTED_BOUNDS_CACHE.get(segment_set_id)
     if bounds is None:
-        bounds = alignment_body_bounds([
-            str(row[0])
-            for row in connection.execute(
-                "SELECT text_raw FROM text_segments WHERE segment_set_id = ? "
-                "ORDER BY order_index",
-                (segment_set_id,),
-            )
-        ])
+        bounds = alignment_body_bounds(reads.read_segment_texts(connection, segment_set_id))
         if len(_DETECTED_BOUNDS_CACHE) >= _DETECTED_BOUNDS_CACHE_LIMIT:
             _DETECTED_BOUNDS_CACHE.clear()
         _DETECTED_BOUNDS_CACHE[segment_set_id] = bounds
@@ -311,10 +290,7 @@ def warm_detected_body_bounds(
         if not table_exists(connection, "alignment_runs"):
             return 0
         set_ids: set[str] = set()
-        for pivot_set, target_set, parameters_json in connection.execute(
-            "SELECT pivot_segment_set_id, target_segment_set_id, parameters_json "
-            "FROM alignment_runs WHERE status = 'completed'"
-        ):
+        for pivot_set, target_set, parameters_json in reads.read_completed_run_segment_sets(connection):
             if _json_object(parameters_json).get("body_range_source") == "detected":
                 set_ids.update(str(value) for value in (pivot_set, target_set) if value)
         wanted = sorted(set_ids)[:_DETECTED_BOUNDS_CACHE_LIMIT]
@@ -451,14 +427,7 @@ def _direct_run_statistics(
     target_id = str(run["target_source_file_id"])
     segment_counts = {
         str(row["review_status"]): int(row["segment_count"])
-        for row in connection.execute(
-            "SELECT l.review_status, COUNT(DISTINCT m.segment_id) AS segment_count "
-            "FROM alignment_links l JOIN alignment_link_members m "
-            "ON m.alignment_link_id = l.alignment_link_id "
-            "WHERE l.alignment_run_id = ? AND m.side = 'pivot' "
-            "GROUP BY l.review_status",
-            (run["alignment_run_id"],),
-        )
+        for row in reads.read_pivot_status_counts(connection, run["alignment_run_id"])
     }
     total = sum(segment_counts.values())
     unmatched = sum(segment_counts.get(status, 0) for status in UNMATCHED_STATUSES)
@@ -471,13 +440,7 @@ def _direct_run_statistics(
     )
     review_count = 0
     link_members: Dict[str, Dict[str, List[str]]] = {}
-    for row in connection.execute(
-        "SELECT l.alignment_link_id, m.side, m.segment_id "
-        "FROM alignment_links l JOIN alignment_link_members m "
-        "ON m.alignment_link_id = l.alignment_link_id "
-        "WHERE l.alignment_run_id = ? AND l.review_status = 'rejected'",
-        (run["alignment_run_id"],),
-    ):
+    for row in reads.read_rejected_link_members(connection, run["alignment_run_id"]):
         bucket = link_members.setdefault(
             str(row["alignment_link_id"]), {"pivot": [], "target": []}
         )
@@ -525,34 +488,17 @@ def alignment_overview(
             return {"works": []}
         has_runs = table_exists(connection, "alignment_runs")
         works: List[Dict[str, object]] = []
-        group_query = "SELECT document_group_id, base_source_file_id FROM document_groups"
-        if source_id:
-            group_query += (
-                " WHERE document_group_id IN (SELECT document_group_id "
-                "FROM document_group_members WHERE source_file_id = ?)"
-            )
-        groups = connection.execute(group_query, (source_id,) if source_id else ()).fetchall()
+        groups = reads.read_groups(connection, source_id)
         for group in groups:
             group_id = str(group["document_group_id"])
             base_id = str(group["base_source_file_id"] or "")
-            member_ids = [
-                str(row[0])
-                for row in connection.execute(
-                    "SELECT source_file_id FROM document_group_members "
-                    "WHERE document_group_id = ? ORDER BY member_order, source_file_id",
-                    (group_id,),
-                )
-            ]
+            member_ids = reads.read_member_ids(connection, group_id)
             languages: Dict[str, str] = {}
             pairs: List[Dict[str, object]] = []
             for member_id in member_ids:
                 if not table_exists(connection, "segment_sets"):
                     break
-                row = connection.execute(
-                    "SELECT language_code FROM segment_sets WHERE source_file_id = ? "
-                    "ORDER BY created_at DESC LIMIT 1",
-                    (member_id,),
-                ).fetchone()
+                row = reads.read_latest_language_code(connection, member_id)
                 if row is not None and row[0] and str(row[0]) != "und":
                     languages[member_id] = str(row[0])
             for left_id, right_id in combinations(member_ids, 2):
@@ -632,27 +578,9 @@ def _segments_in_items(
     start_index: int,
     end_index: int,
 ) -> List[str]:
-    if kind == "pdf":
-        query = (
-            "SELECT DISTINCT s.segment_id, s.order_index FROM text_segment_spans p "
-            "JOIN text_segments s ON s.segment_id = p.segment_id "
-            "WHERE s.segment_set_id = ? AND p.source_file_id = ? "
-            "AND p.pdf_page_index BETWEEN ? AND ? ORDER BY s.order_index"
-        )
-    else:
-        query = (
-            "SELECT DISTINCT s.segment_id, s.order_index "
-            "FROM text_segment_paragraph_spans p "
-            "JOIN text_segments s ON s.segment_id = p.segment_id "
-            "WHERE s.segment_set_id = ? AND p.source_file_id = ? "
-            "AND p.paragraph_index BETWEEN ? AND ? ORDER BY s.order_index"
-        )
-    return [
-        str(row[0])
-        for row in connection.execute(
-            query, (segment_set_id, source_id, start_index, end_index)
-        )
-    ]
+    return reads.read_segment_ids_in_items(
+        connection, kind, segment_set_id, source_id, start_index, end_index
+    )
 
 
 def _segment_spans(
@@ -662,21 +590,7 @@ def _segment_spans(
     spans: Dict[str, List[Dict[str, int]]] = {segment_id: [] for segment_id in ids}
     if not ids:
         return spans
-    placeholders = ",".join("?" for _ in ids)
-    if kind == "pdf":
-        query = (
-            "SELECT segment_id, pdf_page_index AS item_index, page_char_start AS "
-            "char_start, page_char_end AS char_end FROM text_segment_spans "
-            f"WHERE segment_id IN ({placeholders}) ORDER BY span_order"
-        )
-    else:
-        query = (
-            "SELECT segment_id, paragraph_index AS item_index, paragraph_char_start "
-            "AS char_start, paragraph_char_end AS char_end "
-            f"FROM text_segment_paragraph_spans WHERE segment_id IN ({placeholders}) "
-            "ORDER BY span_order"
-        )
-    for row in connection.execute(query, ids):
+    for row in reads.read_segment_spans(connection, kind, ids):
         spans[str(row["segment_id"])].append(
             {
                 "item_index": int(row["item_index"]),
@@ -696,28 +610,16 @@ def _run_links_for_segments(
     if not segment_ids:
         return []
     from_side = "pivot" if str(run["pivot_source_file_id"]) == from_source_id else "target"
-    placeholders = ",".join("?" for _ in segment_ids)
-    link_rows = connection.execute(
-        "SELECT DISTINCT l.alignment_link_id, l.order_index, l.review_status, "
-        "l.confidence FROM alignment_links l JOIN alignment_link_members m "
-        "ON m.alignment_link_id = l.alignment_link_id "
-        f"WHERE l.alignment_run_id = ? AND m.side = ? AND m.segment_id IN ({placeholders}) "
-        "ORDER BY l.order_index",
-        (run["alignment_run_id"], from_side, *segment_ids),
-    ).fetchall()
+    link_rows = reads.read_links_touching_segments(
+        connection, run["alignment_run_id"], from_side, segment_ids
+    )
     if not link_rows:
         return []
     link_ids = [str(row["alignment_link_id"]) for row in link_rows]
-    link_placeholders = ",".join("?" for _ in link_ids)
     members: Dict[str, Dict[str, List[str]]] = {
         link_id: {"from": [], "to": []} for link_id in link_ids
     }
-    for row in connection.execute(
-        "SELECT m.alignment_link_id, m.side, m.segment_id FROM alignment_link_members m "
-        "JOIN text_segments s ON s.segment_id = m.segment_id "
-        f"WHERE m.alignment_link_id IN ({link_placeholders}) ORDER BY s.order_index",
-        link_ids,
-    ):
+    for row in reads.read_link_members(connection, link_ids):
         side = "from" if str(row["side"]) == from_side else "to"
         members[str(row["alignment_link_id"])][side].append(str(row["segment_id"]))
     return [
@@ -805,15 +707,9 @@ def alignment_link_window(
         overrides = corrections[0]
         deferred: set[str] = set()
         if table_exists(connection, "alignment_review_deferrals"):
-            deferred = {
-                str(row[0])
-                for row in connection.execute(
-                    "SELECT source_segment_key FROM alignment_review_deferrals "
-                    "WHERE source_file_id = ? AND target_source_file_id = ? "
-                    "AND source_segment_set_id = ?",
-                    (source_id, target_id, source_set_id),
-                )
-            }
+            deferred = reads.read_deferred_segment_keys(
+                connection, source_id, target_id, source_set_id
+            )
 
         result_links: List[Dict[str, object]] = []
         for link in links:
@@ -963,26 +859,12 @@ def _nearest_aligned_targets(
     side = "pivot" if str(run["pivot_source_file_id"]) == source_id else "target"
     other = "target" if side == "pivot" else "pivot"
     order = int(source_rows[0]["order_index"])
-    row = connection.execute(
-        "SELECT l.alignment_link_id FROM alignment_links l "
-        "JOIN alignment_link_members sm ON sm.alignment_link_id = l.alignment_link_id "
-        "AND sm.side = ? JOIN text_segments s ON s.segment_id = sm.segment_id "
-        "WHERE l.alignment_run_id = ? AND EXISTS (SELECT 1 FROM alignment_link_members tm "
-        "WHERE tm.alignment_link_id = l.alignment_link_id AND tm.side = ?) "
-        "ORDER BY ABS(s.order_index - ?) LIMIT 1",
-        (side, run["alignment_run_id"], other, order),
-    ).fetchone()
+    row = reads.read_nearest_link_with_counterpart(
+        connection, run["alignment_run_id"], side, other, order
+    )
     if row is None:
         return []
-    return [
-        str(member[0])
-        for member in connection.execute(
-            "SELECT m.segment_id FROM alignment_link_members m "
-            "JOIN text_segments s ON s.segment_id = m.segment_id "
-            "WHERE m.alignment_link_id = ? AND m.side = ? ORDER BY s.order_index",
-            (row[0], other),
-        )
-    ]
+    return reads.read_link_side_segment_ids(connection, row[0], other)
 
 
 def save_correction(
