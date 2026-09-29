@@ -74,12 +74,11 @@ jobs:
           python -m unittest tests.test_script_conversion tests.test_script_search
 
   browser-regression:
-    # Trial job: real Chrome against the real backend on a disposable DB
-    # (tests/test_browser_regression.py). Non-blocking until it has proven
-    # stable across runs; see docs/issues/architecture-followup-2026-09.md.
+    # Real Chrome against the real backend on a disposable DB
+    # (tests/test_browser_regression.py). Blocking since 2026-09-29 after nine
+    # consecutive green trial runs; see docs/issues/architecture-followup-2026-09.md.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    continue-on-error: true
     env:
       MEFINDER_BROWSER_TESTS_REQUIRED: "1"
     steps:

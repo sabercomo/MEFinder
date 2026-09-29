@@ -144,7 +144,7 @@ EPUB 与 DOCX 共用文本语料通道(`corpus/raw_docx/`),不经 MinerU / PDF �
 .venv-windows/Scripts/python.exe -m unittest tests.test_alignment_anchor_gates.ClassName.test_method
 ```
 
-**真实浏览器回归(可选,试运行中):** 需先 `pip install -r requirements-browser-tests.txt`,并装有 Google Chrome;默认跳过,`MEFINDER_BROWSER_TESTS=1` 开启:
+**真实浏览器回归(CI 门禁;本机可选):** 需先 `pip install -r requirements-browser-tests.txt`,并装有 Google Chrome;默认跳过,`MEFINDER_BROWSER_TESTS=1` 开启:
 
 ```bash
 MEFINDER_BROWSER_TESTS=1 .venv-windows/Scripts/python.exe -m unittest tests.test_browser_regression
