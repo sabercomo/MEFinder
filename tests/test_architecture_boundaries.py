@@ -192,10 +192,14 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # assembly/contract 六个单向依赖模块；门面 317 行，上限随之下调，
             # 新模块按当前行数封顶。
             "search.py": 350,
-            # JSON 后端内存召回拆为 search_recall_memory（短查询两字索引同轮接入），
-            # 上限随之下调。
-            "search_recall.py": 580,
+            # JSON 后端内存召回拆为 search_recall_memory（短查询两字索引同轮接入）。
             "search_recall_memory.py": 98,
+            # search_passages 的相关性召回拆为 search_recall_passages（两字查询
+            # 不再扫描 SQLite 后端从不加载的内存段落表），SQL 下沉到
+            # persistence/passage_reads.py 与 paragraph_scope.py；
+            # search_recall.py 的上限随之只降不升。
+            "search_recall.py": 477,
+            "search_recall_passages.py": 135,
             "search_scoring.py": 250,
             "search_anchors.py": 240,
             "search_citation.py": 140,

@@ -20,6 +20,7 @@ from .normalization import (
     normalize_with_spans,
     punctuationless_text,
 )
+from .persistence.paragraph_scope import source_filter_clause
 from .persistence.short_gram_index import short_gram_prefilter
 from .search_contract import (
     FUZZY_RESCORE_LIMIT,
@@ -28,12 +29,13 @@ from .search_contract import (
     SQL_CANDIDATE_MULTIPLIER,
 )
 from .search_recall_memory import InMemoryRecallPasses
+from .search_recall_passages import PassageRetrieval
 from .search_scoring import best_window_ratio
 
 Scope = Optional[frozenset]
 
 
-class CandidateRecall(InMemoryRecallPasses):
+class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
     """Recall candidates for one query from a SQLite or in-memory index."""
 
     def __init__(
@@ -166,36 +168,9 @@ class CandidateRecall(InMemoryRecallPasses):
         scope: Scope,
         alias: str = "",
     ) -> Tuple[str, List[object]]:
-        prefix = f"{alias}." if alias else ""
-        clauses: List[str] = []
-        args: List[object] = []
-        if source_type == "epub":
-            clauses.append(f"{prefix}source_type = 'word'")
-            clauses.append(
-                f"json_extract({prefix}payload_json, '$.source_format') = 'epub'"
-            )
-        elif source_type == "word":
-            clauses.append(f"{prefix}source_type = 'word'")
-            clauses.append(
-                f"COALESCE(json_extract({prefix}payload_json, '$.source_format'), 'word') <> 'epub'"
-            )
-        elif source_type != "all":
-            clauses.append(f"{prefix}source_type = ?")
-            args.append(source_type)
-        if scope is not None:
-            # Explicit set scope (DocumentGroup members). An empty set matches
-            # nothing; it must never fall through to an unscoped whole-library search.
-            if not scope:
-                clauses.append("1 = 0")
-            else:
-                ordered = list(scope)
-                placeholders = ", ".join("?" for _ in ordered)
-                clauses.append(f"{prefix}source_file_id IN ({placeholders})")
-                args.extend(ordered)
-        elif source_file_id:
-            clauses.append(f"{prefix}source_file_id = ?")
-            args.append(source_file_id)
-        return (" AND " + " AND ".join(clauses), args) if clauses else ("", args)
+        """Scope predicate for every SQLite pass; the SQL lives in persistence."""
+
+        return source_filter_clause(source_type, source_file_id, scope, alias)
 
     def _sql_exact_pass(
         self,
@@ -412,82 +387,6 @@ class CandidateRecall(InMemoryRecallPasses):
         start = max(0, min(start, len(spans) - 1))
         end = max(start, min(end, len(spans) - 1))
         return min(0.9, max(0.58, ratio)), spans[start][0], spans[end][1]
-
-    # ------------------------------------------------------------------
-    # Relevance retrieval (passage search; never claims a verbatim hit)
-    # ------------------------------------------------------------------
-
-    def retrieve_passages(
-        self,
-        query: str,
-        source_type: str,
-        source_file_id: Optional[str],
-        scope: Scope,
-        limit: int,
-    ) -> Tuple[List[Tuple[Dict[str, object], float]], bool, str]:
-        """Relevance retrieval seam: return ``(ranked, truncated, method)``.
-
-        ``ranked`` is a list of ``(paragraph, raw_relevance)`` ordered
-        most-relevant first. ``raw_relevance`` follows a "lower is more relevant"
-        convention (both SQLite ``bm25`` and the trigram fallback do); callers must
-        rely only on the ordering, never on the scale. A future embedding backend
-        replaces this method alone.
-        """
-
-        q_plain = punctuationless_text(query)
-        budget = max(SQL_CANDIDATE_FLOOR, limit * SQL_CANDIDATE_MULTIPLIER)
-        if self.backend == "sqlite" and self.db() is not None:
-            fts_query = self.fts_match_expression(q_plain, "OR")
-            if fts_query:
-                source_clause, source_args = self.sql_source_filter(source_type, source_file_id, scope, "p")
-                rows = self.db().execute(
-                    f"SELECT {PARAGRAPH_SELECT_COLUMNS}, "
-                    "bm25(paragraphs_fts) AS bm25_score "
-                    "FROM paragraphs_fts JOIN paragraphs p "
-                    "ON p.rowid = paragraphs_fts.rowid "
-                    "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
-                    + source_clause
-                    + " ORDER BY bm25(paragraphs_fts) LIMIT ?",
-                    [fts_query, *source_args, budget + 1],
-                ).fetchall()
-                truncated = len(rows) > budget
-                ranked = [
-                    (paragraph_from_database_row(row), float(row["bm25_score"]))
-                    for row in rows[:budget]
-                ]
-                return ranked, truncated, "bm25"
-        return self._scan_passages(q_plain, source_type, source_file_id, scope, budget)
-
-    def _scan_passages(
-        self,
-        q_plain: str,
-        source_type: str,
-        source_file_id: Optional[str],
-        scope: Scope,
-        budget: int,
-    ) -> Tuple[List[Tuple[Dict[str, object], float]], bool, str]:
-        """Fallback relevance ranking by trigram overlap (no FTS / JSON backend)."""
-
-        if not q_plain or not self.paragraphs:
-            return [], False, "trigram"
-        query_grams = self._ngrams_set(q_plain)
-        if not query_grams:
-            return [], False, "trigram"
-        scored: List[Tuple[int, Dict[str, object]]] = []
-        for paragraph in self.paragraphs:
-            if not self._source_allowed(paragraph, source_type, source_file_id, scope):
-                continue
-            plain = str(paragraph.get("plain_text") or "")
-            overlap = len(query_grams.intersection(self._ngrams_set(plain)))
-            if overlap:
-                scored.append((overlap, paragraph))
-        scored.sort(key=lambda item: item[0], reverse=True)
-        truncated = len(scored) > budget
-        # Negate overlap to keep the "lower is more relevant" raw-score convention.
-        ranked = [
-            (paragraph, float(-overlap)) for overlap, paragraph in scored[:budget]
-        ]
-        return ranked, truncated, "trigram"
 
     # ------------------------------------------------------------------
     # Shared candidate bookkeeping

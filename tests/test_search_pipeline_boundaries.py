@@ -2,9 +2,10 @@
 
 The pipeline is one-way: ``search.py`` (facade) orchestrates recall, scoring
 and assembly; assembly consumes anchors and citation helpers; recall only
-needs scoring's fuzzy-window helper.  Stages must never import the facade or
-reach backwards across the pipeline — this keeps every stage testable and the
-frozen response contract reviewable in one place.
+needs scoring's fuzzy-window helper plus its two leaf sub-stages
+(``search_recall_memory``, ``search_recall_passages``).  Stages must never
+import the facade or reach backwards across the pipeline — this keeps every
+stage testable and the frozen response contract reviewable in one place.
 """
 
 from __future__ import annotations
@@ -23,7 +24,13 @@ ALLOWED: dict[str, set[str]] = {
     "search_citation": set(),
     "search_scoring": {"search_anchors"},
     "search_recall_memory": set(),
-    "search_recall": {"search_contract", "search_recall_memory", "search_scoring"},
+    "search_recall_passages": {"search_contract"},
+    "search_recall": {
+        "search_contract",
+        "search_recall_memory",
+        "search_recall_passages",
+        "search_scoring",
+    },
     "search_assembly": {"search_anchors", "search_citation", "search_scoring"},
     "search": FACADE_ALLOWED,
 }

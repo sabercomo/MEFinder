@@ -33,3 +33,13 @@
 
 - 金样测试 + 全量 2115 项 unittest 通过(22 skip),Ruff F 零告警。
 - 真实库(65 本、63,994 段)端到端:重构前后各跑一轮 `bench_real_library.py --scenario normal`(40 请求/轮),`--compare` 确认 warmup 结果身份(命中数、顺序、原文、字符区间、页锚点摘要)完全一致,成功延迟 p50 比值 0.99–1.08(噪声范围内)。
+
+## 2026-09-29 追加:`search_passages` 的检索接缝拆出 recall
+
+上面模块表的 `search_recall.py` 一行已不完全准确,以本节为准(旧结论保留不删)。
+
+- 事实:`search_passages` 的 BM25/trigram 检索接缝移出 `search_recall.py`,落到新阶段模块 `search_recall_passages.py`(`PassageRetrieval`,与 `search_recall_memory.InMemoryRecallPasses` 同为 `CandidateRecall` 的叶子混入)。直接原因是 `search_recall.py` 撞到 580 行上限;同轮修好了两字查询在 SQLite 后端返回空的缺陷——回退分支原先只扫描内存段落表,而 SQLite 后端从不加载它。
+- 事实:接缝的两条读查询下沉到 `persistence/passage_reads.py`;召回级联共用的范围谓词(书目类型 / 单本文献 / 作品组)下沉到 `persistence/paragraph_scope.py`,`search_recall.sql_source_filter` 保留为委托方法,四条 SQLite 通道的谓词只有一处定义。
+- 事实:边界表加两行——`search_recall_passages → {search_contract}`,`search_recall → {search_contract, search_recall_memory, search_recall_passages, search_scoring}`;依赖仍单向,新模块不 import 门面。`test_architecture_boundaries.py` 把 `search_recall.py` 上限从 580 降到 477,并为新模块封顶 135。
+- 推断:范围谓词进了 persistence 之后,若再把 recall 其余三条 SQLite 通道也下沉,`search_recall.py` 有机会整份移出「persistence 之外执行 SQL」的棘轮基线;本轮未做。
+- 验证:`tests/test_search_passages_short_query.py`(6 项,修复前按预期失败)、`tests/test_search_pipeline_boundaries.py`、`tests/test_architecture_boundaries.py`,加全量 2682 项 unittest(34 跳过)与 Ruff F 零告警。
