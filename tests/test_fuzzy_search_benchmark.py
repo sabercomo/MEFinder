@@ -36,6 +36,18 @@ class PerturbTest(unittest.TestCase):
         self.assertTrue(all(b in bench.OCR_MAP[a] for a, b in changed))
         self.assertIsNone(bench.perturb(rng, "没有形近字", "ocr"))
 
+    def test_positioned_substitutions_break_every_trigram(self) -> None:
+        # FTS 三字片段全都含错字,正是短查询退回两字扫描要覆盖的情形。
+        rng = random.Random(2)
+        for kind, original in (("sub_center", "共同劳动形"), ("sub2_spread", "共同劳动形成"),
+                               ("sub2_spread", "共同劳动形成制"), ("sub2_spread", "共同劳动形成制度")):
+            with self.subTest(kind=kind, length=len(original)):
+                query = bench.perturb(rng, original, kind)
+                self.assertEqual(len(query), len(original))
+                trigrams = {original[i:i + 3] for i in range(len(original) - 2)}
+                self.assertFalse(trigrams & {query[i:i + 3] for i in range(len(query) - 2)})
+        self.assertIsNone(bench.perturb(rng, "共同劳动", "sub_center"))
+
 
 class BenchmarkCaseTest(unittest.TestCase):
     @classmethod
@@ -71,7 +83,8 @@ class BenchmarkCaseTest(unittest.TestCase):
 
     def test_negative_cases_never_occur_in_the_library(self) -> None:
         negatives = [case for case in self.cases if case["category"].startswith("negative")]
-        self.assertEqual(len(negatives), 2 * len(bench.NEGATIVE_LENGTHS))
+        lengths = (*bench.NEGATIVE_LENGTHS, *bench.EXTRA_NEGATIVE_LENGTHS)
+        self.assertEqual(len(negatives), 2 * len(lengths))
         for case in negatives:
             self.assertFalse(any(case["query"] in plain for plain in self.plains))
 

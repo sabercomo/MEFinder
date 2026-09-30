@@ -75,6 +75,14 @@ CATEGORIES: Dict[str, tuple] = {
     "long_paragraph": ((16, 30), 1500, "sub2"),
 }
 NEGATIVE_LENGTHS = (4, 12)
+# 2026-09-30 追加:错字恰好打断每个三字片段的中短查询(FTS 召回为空的情形)。
+# 用各自独立的随机源,上面的原有样本逐条不变。
+EXTRA_CATEGORIES: Dict[str, tuple] = {
+    "mid5_sub_center": ((5, 5), 20, "sub_center"),
+    "mid68_sub2_spread": ((6, 8), 20, "sub2_spread"),
+}
+EXTRA_NEGATIVE_LENGTHS = (8,)
+PURE_KINDS = {"sub_center", "sub2_spread"}  # 按位置打错字,原句须全是汉字
 
 
 def _window(rng: random.Random, text: str, length: int, *, pure: bool) -> Optional[int]:
@@ -105,6 +113,14 @@ def perturb(rng: random.Random, original: str, kind: str) -> Optional[str]:
         if len(positions) < count:
             return None
         for index in rng.sample(positions, count):
+            chars[index] = rng.choice([ch for ch in SUBSTITUTE_POOL if ch != chars[index]])
+        return "".join(chars)
+    if kind in {"sub_center", "sub2_spread"}:
+        # 中间一字 / 第 3 字与倒数第 3 字:长度 ≤8 时每个三字片段都含错字。
+        targets = [len(original) // 2] if kind == "sub_center" else [2, len(original) - 3]
+        if len(original) < 5 or any(index not in positions for index in targets):
+            return None
+        for index in dict.fromkeys(targets):
             chars[index] = rng.choice([ch for ch in SUBSTITUTE_POOL if ch != chars[index]])
         return "".join(chars)
     if kind == "omit2":
@@ -138,6 +154,56 @@ def _containing(connection: sqlite3.Connection, original: str, query: str) -> tu
     return [row[0] for row in rows if row[1]], any(row[2] for row in rows)
 
 
+def _labelled_cases(connection: sqlite3.Connection, rng: random.Random, lengths: Dict[int, int],
+                    category: str, spec: tuple, per_category: int) -> List[dict]:
+    (low, high), min_paragraph, kind = spec
+    pool = sorted(rowid for rowid, size in lengths.items() if (size or 0) >= min_paragraph)
+    rng.shuffle(pool)
+    cases: List[dict] = []
+    for rowid in pool[: per_category * 40]:
+        if len(cases) >= per_category:
+            break
+        paragraph_id, text = connection.execute(
+            "SELECT paragraph_id, text_raw FROM paragraphs WHERE rowid = ?", (rowid,)
+        ).fetchone()
+        length = rng.randint(low, high)
+        start = _window(rng, text or "", length, pure=length <= 4 or kind in PURE_KINDS)
+        if start is None:
+            continue
+        original = text[start:start + length]
+        query = perturb(rng, original, kind)
+        if query is None:
+            continue
+        plain_original, plain_query = punctuationless_text(original), punctuationless_text(query)
+        if kind != "none" and plain_query == plain_original:
+            continue
+        acceptable, query_occurs = _containing(connection, plain_original, plain_query)
+        if kind != "none" and query_occurs:
+            continue  # 查询本身原样存在,不是模糊场景
+        cases.append({
+            "id": f"{category}-{len(cases) + 1:03d}", "category": category, "query": query,
+            "original": original, "target_paragraph_id": paragraph_id,
+            "target_start": start, "target_end": start + length,
+            "acceptable_ids": acceptable,
+        })
+    return cases
+
+
+def _negative_cases(connection: sqlite3.Connection, rng: random.Random,
+                    length: int, per_category: int) -> List[dict]:
+    cases: List[dict] = []
+    while len(cases) < per_category:
+        query = "".join(rng.choice(SUBSTITUTE_POOL) for _ in range(length))
+        if _containing(connection, query, query)[1]:
+            continue
+        cases.append({
+            "id": f"negative{length}-{len(cases) + 1:03d}", "category": f"negative{length}",
+            "query": query, "original": None, "target_paragraph_id": None,
+            "target_start": None, "target_end": None, "acceptable_ids": [],
+        })
+    return cases
+
+
 def build_cases(connection: sqlite3.Connection, *, per_category: int, seed: int) -> List[dict]:
     """Sample labelled cases; every original is a verbatim slice of ``text_raw``."""
 
@@ -146,51 +212,16 @@ def build_cases(connection: sqlite3.Connection, *, per_category: int, seed: int)
         "SELECT rowid, length(text_raw) FROM paragraphs WHERE eligible_for_search = 1"
     ).fetchall())
     cases: List[dict] = []
-    for category, ((low, high), min_paragraph, kind) in CATEGORIES.items():
-        pool = sorted(rowid for rowid, size in lengths.items() if (size or 0) >= min_paragraph)
-        rng.shuffle(pool)
-        made = 0
-        for rowid in pool[: per_category * 40]:
-            if made >= per_category:
-                break
-            paragraph_id, text = connection.execute(
-                "SELECT paragraph_id, text_raw FROM paragraphs WHERE rowid = ?", (rowid,)
-            ).fetchone()
-            length = rng.randint(low, high)
-            start = _window(rng, text or "", length, pure=length <= 4)
-            if start is None:
-                continue
-            original = text[start:start + length]
-            query = perturb(rng, original, kind)
-            if query is None:
-                continue
-            plain_original, plain_query = punctuationless_text(original), punctuationless_text(query)
-            if kind != "none" and plain_query == plain_original:
-                continue
-            acceptable, query_occurs = _containing(connection, plain_original, plain_query)
-            if kind != "none" and query_occurs:
-                continue  # 查询本身原样存在,不是模糊场景
-            made += 1
-            cases.append({
-                "id": f"{category}-{made:03d}", "category": category, "query": query,
-                "original": original, "target_paragraph_id": paragraph_id,
-                "target_start": start, "target_end": start + length,
-                "acceptable_ids": acceptable,
-            })
+    for category, spec in CATEGORIES.items():
+        cases += _labelled_cases(connection, rng, lengths, category, spec, per_category)
     for length in NEGATIVE_LENGTHS:
-        made = 0
-        while made < per_category:
-            query = "".join(rng.choice(SUBSTITUTE_POOL) for _ in range(length))
-            if _containing(connection, query, query)[1]:
-                continue
-            made += 1
-            cases.append({
-                "id": f"negative{length}-{made:03d}", "category": f"negative{length}",
-                "query": query, "original": None, "target_paragraph_id": None,
-                "target_start": None, "target_end": None, "acceptable_ids": [],
-            })
+        cases += _negative_cases(connection, rng, length, per_category)
+    for category, spec in EXTRA_CATEGORIES.items():
+        extra = random.Random(f"{seed}:{category}")
+        cases += _labelled_cases(connection, extra, lengths, category, spec, per_category)
+    for length in EXTRA_NEGATIVE_LENGTHS:
+        cases += _negative_cases(connection, random.Random(f"{seed}:negative{length}"), length, per_category)
     return cases
-
 
 def run_case(engine: SearchEngine, case: dict, mode: str, *, limit: int, repeats: int) -> dict:
     """Time ``repeats`` plain runs, then one instrumented run for the diagnosis."""
@@ -259,7 +290,8 @@ def summarize(cases: List[dict], runs: List[dict]) -> List[dict]:
 
     by_id = {case["id"]: case for case in cases}
     rows = []
-    for category in [*CATEGORIES, *(f"negative{n}" for n in NEGATIVE_LENGTHS)]:
+    negatives = (*NEGATIVE_LENGTHS, *EXTRA_NEGATIVE_LENGTHS)
+    for category in [*CATEGORIES, *EXTRA_CATEGORIES, *(f"negative{n}" for n in negatives)]:
         for mode in MODES:
             group = [run for run in runs if run["mode"] == mode and by_id[run["case_id"]]["category"] == category]
             if not group:
