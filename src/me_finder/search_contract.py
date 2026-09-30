@@ -27,6 +27,12 @@ SQL_CANDIDATE_MULTIPLIER = 8
 # window search only runs on the strongest few; the weaker ones cannot clear
 # the ratio gate anyway.
 FUZZY_RESCORE_LIMIT = 64
+# Query lengths whose typos can break every trigram: when FTS then yields no
+# fuzzy candidate, retry through the bigram scan. 3 characters stay out (most
+# hits would be unrelated); from 9 on, two typos always leave a trigram intact.
+# Decided per engine query, so each script-folding variant decides for itself.
+# Evidence: reports/fuzzy-search-benchmark-2026-09-30.md section 9.
+FUZZY_BIGRAM_FALLBACK_LENGTHS = range(4, 9)
 
 
 class CandidateSpec(TypedDict):

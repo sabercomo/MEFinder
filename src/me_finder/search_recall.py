@@ -22,9 +22,12 @@ from .normalization import (
     punctuationless_text,
 )
 from .persistence.paragraph_scope import source_filter_clause
-from .persistence.passage_reads import RANK_COLUMNS, read_gram_passage_rows, read_paragraph_rows
+from .persistence.passage_reads import (
+    RANK_COLUMNS, read_bm25_passage_rows, read_gram_passage_rows, read_paragraph_rows,
+)
 from .persistence.short_gram_index import short_gram_prefilter
 from .search_contract import (
+    FUZZY_BIGRAM_FALLBACK_LENGTHS,
     FUZZY_RESCORE_LIMIT,
     MAX_FTS_QUERY_TRIGRAMS,
     SQL_CANDIDATE_FLOOR,
@@ -312,18 +315,10 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
     ) -> bool:
         if self.db() is None or not q_plain:
             return False
-        source_clause, source_args = self.sql_source_filter(source_type, source_file_id, scope, "p")
+        before, truncated = len(candidates), False
         fts_query = self.fts_match_expression(q_plain, "OR")
         if fts_query:
-            rows = self.db().execute(
-                f"SELECT {PARAGRAPH_SELECT_COLUMNS} "
-                "FROM paragraphs_fts JOIN paragraphs p "
-                "ON p.rowid = paragraphs_fts.rowid "
-                "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
-                + source_clause
-                + " ORDER BY bm25(paragraphs_fts) LIMIT 701",
-                [fts_query, *source_args],
-            ).fetchall()
+            rows = read_bm25_passage_rows(self.db(), fts_query, source_type, source_file_id, scope, 701)
             truncated = len(rows) >= 701
             query_grams = self._ngrams_set(q_plain)
             prefiltered: List[Tuple[int, object]] = []
@@ -344,7 +339,10 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
                 if candidate_budget is not None and len(candidates) >= candidate_budget:
                     truncated = True
                     break
-            return truncated
+            # Typos breaking every trigram leave FTS nothing to score: retry
+            # through the bigram scan for the lengths where that can happen.
+            if len(candidates) > before or len(q_plain) not in FUZZY_BIGRAM_FALLBACK_LENGTHS:
+                return truncated
 
         query_grams = self._ngrams_set(q_plain)
         # Paragraphs sharing no query gram score zero overlap and are dropped
@@ -371,7 +369,7 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
             if ratio is None:
                 continue
             self._add_candidate(paragraph, "ngram_fuzzy", ratio[0], ratio[1], ratio[2], candidates)
-        return len(ranked) > FUZZY_RESCORE_LIMIT
+        return truncated or len(ranked) > FUZZY_RESCORE_LIMIT
 
     def _score_fuzzy_window(
         self, q_plain: str, paragraph: Dict[str, object], plain: str
