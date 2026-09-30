@@ -11,17 +11,20 @@ from __future__ import annotations
 
 import contextlib
 import json
+import random
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.me_finder.database import build_database
+from src.me_finder.database import build_database, paragraph_from_database_row
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.persistence import passage_reads
 from src.me_finder.persistence import short_gram_index as sgi
 from src.me_finder.search import SearchEngine
+from src.me_finder.search_recall import CandidateRecall
+from src.me_finder.search_recall_passages import gram_overlap
 
 TEXTS = [
     "社会学的对象是社会事实。",  # 0 pdf-a
@@ -166,6 +169,36 @@ class SearchPassagesShortQueryTest(unittest.TestCase):
     def test_three_character_query_still_uses_fts(self) -> None:
         response = self.passages("社会学")
         self.assertEqual(sorted(self.ids(response)), ["P-0000", "P-0005"])
+
+
+    def test_only_ranked_rows_are_parsed(self) -> None:
+        # Common two-character words match most of a library; decoding every
+        # hit's payload before the budget cut dominated the scan.
+        corpus = _corpus()
+        paragraph = corpus["paragraphs"][0]
+        corpus["paragraphs"] = [
+            {**paragraph, "paragraph_id": f"P-{index:04d}", "paragraph_index": index}
+            for index in range(65)
+        ]
+        build_database(corpus, self.path)
+        with patch("src.me_finder.search_recall_passages.paragraph_from_database_row",
+                   wraps=paragraph_from_database_row) as parse:
+            response = self.passages("社会", limit=1)
+        self.assertEqual(parse.call_count, 64)
+        self.assertEqual(self.ids(response), ["P-0000"])
+        self.assertFalse(response["total_is_exact"])
+
+
+class GramOverlapTest(unittest.TestCase):
+    def test_matches_bigram_set_intersection(self) -> None:
+        rng = random.Random(20260930)
+        alphabet = "社会学史历"
+        for _ in range(4000):
+            query = "".join(rng.choice(alphabet) for _ in range(rng.randint(1, 6)))
+            plain = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 9)))
+            grams = CandidateRecall._ngrams_set(query)
+            expected = len(grams.intersection(CandidateRecall._ngrams_set(plain)))
+            self.assertEqual(gram_overlap(grams, plain), expected, (query, plain))
 
 
 if __name__ == "__main__":

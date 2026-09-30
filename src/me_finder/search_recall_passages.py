@@ -8,7 +8,7 @@ module only ranks the rows it gets back.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from .database import paragraph_from_database_row
 from .normalization import punctuationless_text
@@ -19,6 +19,18 @@ from .persistence.passage_reads import (
 from .search_contract import SQL_CANDIDATE_FLOOR, SQL_CANDIDATE_MULTIPLIER
 
 Scope = Optional[frozenset]
+
+
+def gram_overlap(query_grams: Set[str], plain: str) -> int:
+    """``len(query_grams & bigrams(plain))`` without building the paragraph set.
+
+    Mirrors ``CandidateRecall._ngrams_set``: a text of two characters or fewer
+    is its own single gram; longer texts only yield two-character grams.
+    """
+
+    if len(plain) <= 2:
+        return 1 if plain and plain in query_grams else 0
+    return sum(1 for gram in query_grams if len(gram) == 2 and gram in plain)
 
 
 class PassageRetrieval:
@@ -84,10 +96,9 @@ class PassageRetrieval:
             scope,
             self._short_gram_ready(),
         )
-        scored: List[Tuple[tuple, Dict[str, object], int]] = []
+        scored: List[Tuple[tuple, object, int]] = []
         for row in rows:
-            plain = str(row["plain_text"] or "")
-            overlap = len(query_grams.intersection(self._ngrams_set(plain)))
+            overlap = gram_overlap(query_grams, str(row["plain_text"] or ""))
             if overlap:
                 # Ties follow reading order, never the query plan's row order.
                 key = (
@@ -96,11 +107,16 @@ class PassageRetrieval:
                     int(row["paragraph_index"] or 0),
                     str(row["paragraph_id"]),
                 )
-                scored.append((key, paragraph_from_database_row(row), overlap))
+                scored.append((key, row, overlap))
+        # Keys end in the unique paragraph id, so rows are never compared.
         scored.sort(key=lambda item: item[0])
         truncated = len(scored) > budget
-        # Negate overlap to keep the "lower is more relevant" raw-score convention.
-        ranked = [(paragraph, float(-overlap)) for _key, paragraph, overlap in scored[:budget]]
+        # Decode payloads only for rows that survive the budget cut; negate
+        # overlap to keep the "lower is more relevant" raw-score convention.
+        ranked = [
+            (paragraph_from_database_row(row), float(-overlap))
+            for _key, row, overlap in scored[:budget]
+        ]
         return ranked, truncated, "trigram"
 
     def _scan_passages(
