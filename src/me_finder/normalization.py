@@ -358,6 +358,48 @@ def normalize_with_spans(
     return "".join(characters), spans
 
 
+def _is_hangul_jamo(ch: str) -> bool:
+    value = ord(ch)
+    return 0x1100 <= value <= 0x11FF or 0xA960 <= value <= 0xA97F or 0xD7B0 <= value <= 0xD7FF
+
+
+def plain_spans(text: str) -> List[SourceSpan]:
+    """Source spans of ``normalize_with_spans(text, "plain")``, faster.
+
+    ``_nfkc_with_spans`` only merges characters into one segment around
+    combining marks and Hangul jamo.  Without those, every segment is a single
+    source character, so each output character's span is that character's own
+    ``(index, index + 1)`` and the whole pipeline reduces to a per-character
+    table -- provided NFKC of the full text equals the per-character NFKC
+    (otherwise the full pipeline reconciles, and so do we).  Equivalence is
+    pinned by a property test.
+    """
+
+    raw = text or ""
+    nfkc = {ch: unicodedata.normalize("NFKC", ch) for ch in set(raw)}
+    if any(
+        unicodedata.combining(ch) or any(_is_hangul_jamo(piece) for piece in form)
+        for ch, form in nfkc.items()
+    ) or unicodedata.normalize("NFKC", raw) != "".join(nfkc[ch] for ch in raw):
+        return normalize_with_spans(raw, "plain")[1]
+    kept = {}
+    for ch, form in nfkc.items():
+        kept[ch] = sum(
+            1
+            for piece in form
+            if not is_invisible_format(piece)
+            for translated in piece.translate(QUOTE_TRANSLATION).translate(PUNCT_TRANSLATION)
+            for lowered in translated.lower()
+            if not lowered.isspace() and not is_ignored_punctuation(lowered)
+        )
+    spans: List[SourceSpan] = []
+    for index, ch in enumerate(raw):
+        count = kept[ch]
+        if count:
+            spans.extend([(index, index + 1)] * count)
+    return spans
+
+
 def normalize_with_map(text: str, mode: str) -> Tuple[str, List[int]]:
     """Return normalized text and a map from normalized chars to source indices.
 

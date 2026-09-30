@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import itertools
+import random
 import unittest
+from unittest.mock import patch
 
 from src.me_finder.normalization import (
     compact_text,
@@ -9,6 +11,7 @@ from src.me_finder.normalization import (
     normalize_text,
     normalize_with_map,
     normalize_with_spans,
+    plain_spans,
     punctuationless_text,
 )
 
@@ -98,6 +101,43 @@ class NormalizeWithMapTests(unittest.TestCase):
                     self.assertTrue(
                         all(0 <= source_index < len(raw) for source_index in mapping)
                     )
+
+
+class PlainSpansTests(unittest.TestCase):
+    """``plain_spans`` must equal the full pipeline's plain-mode spans exactly."""
+
+    # Fullwidth punctuation, ligatures, compatibility and combining forms,
+    # Hangul jamo (compatibility jamo NFKC to conjoining jamo), Indic vowel
+    # compositions, kana voicing marks, invisible formats, İ and Σ.
+    ALPHABET = list("社会学的历史，。“”‘’（）《》、：；！？ \n\tAbcXYZ09-_.,;:!?\"'()[]") + [
+        "\u3000", "\uff21", "\uff0c", "\u00ad", "\u200b", "\ufeff", "\u0301", "\u1100",
+        "\u1161", "\u11a8", "\uac00", "\uac01", "\ufb01", "\u0130", "\u03a3", "\u00c5",
+        "\u212b", "\u2014", "\u2026", "\u00a0", "\u2002", "\u2160", "\u3231", "\u00bd",
+        "\uff66", "\u0e33", "\u3131", "\u314f", "\uffa1", "\u2474", "\u00a8", "\u02dc",
+        "\u0344", "\u0f73", "\u0cc6", "\u0cc2", "\u09c7", "\u09be", "\uff9e", "\u309b",
+        "\u304b", "\u3099", "\uff76",
+    ]
+
+    def test_matches_full_pipeline_on_random_text(self) -> None:
+        rng = random.Random(20260930)
+        for _ in range(20000):
+            text = "".join(rng.choice(self.ALPHABET) for _ in range(rng.randint(0, 24)))
+            self.assertEqual(plain_spans(text), normalize_with_spans(text, "plain")[1], repr(text))
+
+    def test_common_chinese_text_takes_the_table_path(self) -> None:
+        text = "社会学的对象是社会事实，“历史”与（理论）：ＡＢ。"
+        with patch("src.me_finder.normalization.normalize_with_spans",
+                   side_effect=AssertionError("full pipeline used")):
+            spans = plain_spans(text)
+        self.assertEqual(spans, normalize_with_spans(text, "plain")[1])
+
+    def test_composing_text_falls_back_to_full_pipeline(self) -> None:
+        for text in ("e\u0301", "\u1100\u1161", "\u3131\u314f", "\u09c7\u09be"):
+            with self.subTest(text=repr(text)):
+                with patch("src.me_finder.normalization.normalize_with_spans",
+                           wraps=normalize_with_spans) as full:
+                    plain_spans(text)
+                full.assert_called_once()
 
 
 if __name__ == "__main__":

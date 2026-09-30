@@ -18,6 +18,7 @@ from .normalization import (
     compact_text,
     normalize_text,
     normalize_with_spans,
+    plain_spans,
     punctuationless_text,
 )
 from .persistence.paragraph_scope import source_filter_clause
@@ -29,7 +30,7 @@ from .search_contract import (
     SQL_CANDIDATE_MULTIPLIER,
 )
 from .search_recall_memory import InMemoryRecallPasses
-from .search_recall_passages import PassageRetrieval
+from .search_recall_passages import PassageRetrieval, gram_overlap
 from .search_scoring import best_window_ratio
 
 Scope = Optional[frozenset]
@@ -324,17 +325,17 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
             ).fetchall()
             truncated = len(rows) >= 701
             query_grams = self._ngrams_set(q_plain)
-            prefiltered: List[Tuple[int, Dict[str, object], str]] = []
+            prefiltered: List[Tuple[int, object]] = []
             for row in rows:
-                paragraph = paragraph_from_database_row(row)
-                plain = str(paragraph.get("plain_text") or "")
-                overlap = len(query_grams.intersection(self._ngrams_set(plain)))
+                overlap = gram_overlap(query_grams, str(row["plain_text"] or ""))
                 if overlap:
-                    prefiltered.append((overlap, paragraph, plain))
+                    prefiltered.append((overlap, row))
             prefiltered.sort(key=lambda item: item[0], reverse=True)
             if len(prefiltered) > FUZZY_RESCORE_LIMIT:
                 truncated = True
-            for _overlap, paragraph, plain in prefiltered[:FUZZY_RESCORE_LIMIT]:
+            for _overlap, row in prefiltered[:FUZZY_RESCORE_LIMIT]:
+                paragraph = paragraph_from_database_row(row)
+                plain = str(paragraph.get("plain_text") or "")
                 score = self._score_fuzzy_window(q_plain, paragraph, plain)
                 if score is None:
                     continue
@@ -353,18 +354,18 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
             "WHERE p.eligible_for_search = 1" + source_clause + gram_clause,
             [*source_args, *gram_args],
         )
-        ranked: List[Tuple[tuple, Dict[str, object]]] = []
+        ranked: List[Tuple[tuple, object]] = []
         for row in rows:
-            plain = str(row["plain_text"] or "")
-            overlap = len(query_grams.intersection(self._ngrams_set(plain)))
+            overlap = gram_overlap(query_grams, str(row["plain_text"] or ""))
             if overlap:
                 # Ties before the rescore cut follow reading order, never the
                 # query plan's row order (which the prefilter or ANALYZE shift).
                 position = (str(row["source_file_id"] or ""), int(row["paragraph_index"] or 0))
                 key = (-overlap, *position, str(row["paragraph_id"]))
-                ranked.append((key, paragraph_from_database_row(row)))
-        ranked.sort(key=lambda item: item[0])
-        for _, paragraph in ranked[:FUZZY_RESCORE_LIMIT]:
+                ranked.append((key, row))
+        ranked.sort(key=lambda item: item[0])  # keys end in the unique paragraph id
+        for _, row in ranked[:FUZZY_RESCORE_LIMIT]:
+            paragraph = paragraph_from_database_row(row)
             plain = str(paragraph.get("plain_text") or "")
             ratio = self._score_fuzzy_window(q_plain, paragraph, plain)
             if ratio is None:
@@ -380,8 +381,7 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
         ratio, start, end = best_window_ratio(q_plain, plain)
         if ratio < 0.58:
             return None
-        raw = str(paragraph.get("text_raw") or "")
-        _, spans = self._normalization_spans(paragraph, raw, "plain")
+        spans = plain_spans(str(paragraph.get("text_raw") or ""))
         if not spans:
             return None
         start = max(0, min(start, len(spans) - 1))
