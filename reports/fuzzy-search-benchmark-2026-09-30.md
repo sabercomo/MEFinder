@@ -173,3 +173,26 @@ PYTHONPATH=. .venv-macos312-arm64/bin/python -m scripts.fuzzy_search_benchmark -
 
 推断：下一轮可以先只读排序所需的列，截断后再按 rowid 取整行，同样需用逐字段比对验证。
 
+## 八、2026-09-30 第 ③ 步第二轮：先读排序列，截断后按 rowid 取整行（结果不变）
+
+改动：
+
+- 两字以下模糊搜索（`_sql_fuzzy_pass` 非 FTS 分支）与主题检索两字扫描（`_sql_scan_passages`）先只读 `rowid / paragraph_id / source_file_id / paragraph_index / plain_text`（`persistence.passage_reads.RANK_COLUMNS`）完成排序与截断；
+- 再用 `read_paragraph_rows` 按 `(rowid, paragraph_id)` 取完整行。若两次读取之间段落被删除、rowid 被他段复用，该键会被丢弃，不会换成别的段落（测试 `test_rowid_fetch_drops_keys_that_no_longer_match`）；
+- FTS 分支（三字以上）未改，因为 BM25 同分次序依赖查询计划，拆成两次查询无法保证次序不变。
+
+**结果不变的证据：**以第一轮 `bff4e26` 为旧版，在冻结快照同一副本上跑 1384 组查询（在第七节 1264 组基础上加主题检索 120 组，覆盖 6 种范围 × `limit` 10/50），完整响应 SHA-256 逐条一致。
+
+**耗时：**冻结快照，新旧交替 3 轮，每轮取 2 次最小值，报 3 轮中位数；系统负载仍约 5。
+
+| 查询 | fuzzy 旧 → 新 ms | 主题检索 旧 → 新 ms |
+|---|---:|---:|
+| 社会 | 776 → 288 | 658 → 195 |
+| 历史 | 462 → 194 | 391 → 105 |
+| 主义 | 649 → 228 | 584 → 176 |
+| 国家 | 469 → 221 | 377 → 96 |
+| 马克思 | 633 → 637 | 471 → 427 |
+| 资本主义 | 502 → 518 | 347 → 344 |
+
+三字以上查询走 FTS 分支，本轮未改，耗时不变属预期。两轮合计，fuzzy “社会” 约 4.5 s → 0.29 s（两轮在不同时段测得，只作量级参考）。
+

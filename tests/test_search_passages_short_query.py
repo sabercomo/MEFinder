@@ -189,6 +189,18 @@ class SearchPassagesShortQueryTest(unittest.TestCase):
         self.assertFalse(response["total_is_exact"])
 
 
+    def test_rowid_fetch_drops_keys_that_no_longer_match(self) -> None:
+        # A delete between the rank scan and the full-row fetch may free a
+        # rowid; the fetch must drop that key rather than return a stranger.
+        with contextlib.closing(sqlite3.connect(self.path)) as connection:
+            connection.row_factory = sqlite3.Row
+            rowids = dict(connection.execute("SELECT paragraph_id, rowid FROM paragraphs"))
+            keys = [(rowids["P-0005"], "P-0005"), (rowids["P-0000"], "P-0003"),
+                    (10_000, "P-9999"), (rowids["P-0002"], "P-0002")]
+            rows = passage_reads.read_paragraph_rows(connection, keys)
+        self.assertEqual([row["paragraph_id"] for row in rows], ["P-0005", "P-0002"])
+
+
 class GramOverlapTest(unittest.TestCase):
     def test_matches_bigram_set_intersection(self) -> None:
         rng = random.Random(20260930)

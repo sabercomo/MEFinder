@@ -13,8 +13,10 @@ from typing import Dict, List, Optional, Set, Tuple
 from .database import paragraph_from_database_row
 from .normalization import punctuationless_text
 from .persistence.passage_reads import (
+    RANK_COLUMNS,
     read_bm25_passage_rows,
     read_gram_passage_rows,
+    read_paragraph_rows,
 )
 from .search_contract import SQL_CANDIDATE_FLOOR, SQL_CANDIDATE_MULTIPLIER
 
@@ -89,14 +91,10 @@ class PassageRetrieval:
         if not query_grams:
             return [], False, "trigram"
         rows = read_gram_passage_rows(
-            self.db(),
-            sorted(query_grams),
-            source_type,
-            source_file_id,
-            scope,
-            self._short_gram_ready(),
+            self.db(), sorted(query_grams), source_type, source_file_id, scope,
+            self._short_gram_ready(), RANK_COLUMNS,
         )
-        scored: List[Tuple[tuple, object, int]] = []
+        scored: List[Tuple[tuple, Tuple[int, str], int]] = []
         for row in rows:
             overlap = gram_overlap(query_grams, str(row["plain_text"] or ""))
             if overlap:
@@ -107,15 +105,15 @@ class PassageRetrieval:
                     int(row["paragraph_index"] or 0),
                     str(row["paragraph_id"]),
                 )
-                scored.append((key, row, overlap))
-        # Keys end in the unique paragraph id, so rows are never compared.
-        scored.sort(key=lambda item: item[0])
+                scored.append((key, (row["paragraph_rowid"], row["paragraph_id"]), overlap))
+        scored.sort(key=lambda item: item[0])  # keys end in the unique paragraph id
         truncated = len(scored) > budget
-        # Decode payloads only for rows that survive the budget cut; negate
-        # overlap to keep the "lower is more relevant" raw-score convention.
+        # Full rows only for the survivors of the budget cut; negate overlap
+        # to keep the "lower is more relevant" raw-score convention.
+        overlaps = {row_key: overlap for _key, row_key, overlap in scored[:budget]}
         ranked = [
-            (paragraph_from_database_row(row), float(-overlap))
-            for _key, row, overlap in scored[:budget]
+            (paragraph_from_database_row(row), float(-overlaps[(row["paragraph_rowid"], row["paragraph_id"])]))
+            for row in read_paragraph_rows(self.db(), list(overlaps))
         ]
         return ranked, truncated, "trigram"
 

@@ -22,6 +22,7 @@ from .normalization import (
     punctuationless_text,
 )
 from .persistence.paragraph_scope import source_filter_clause
+from .persistence.passage_reads import RANK_COLUMNS, read_gram_passage_rows, read_paragraph_rows
 from .persistence.short_gram_index import short_gram_prefilter
 from .search_contract import (
     FUZZY_RESCORE_LIMIT,
@@ -348,11 +349,9 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
         query_grams = self._ngrams_set(q_plain)
         # Paragraphs sharing no query gram score zero overlap and are dropped
         # below anyway, so the prefilter never changes which rows can rank.
-        gram_clause, gram_args = self._short_gram_clause(sorted(query_grams))
-        rows = self.db().execute(
-            f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p "
-            "WHERE p.eligible_for_search = 1" + source_clause + gram_clause,
-            [*source_args, *gram_args],
+        rows = read_gram_passage_rows(
+            self.db(), sorted(query_grams), source_type, source_file_id, scope,
+            self._short_gram_ready(), RANK_COLUMNS,
         )
         ranked: List[Tuple[tuple, object]] = []
         for row in rows:
@@ -362,9 +361,10 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
                 # query plan's row order (which the prefilter or ANALYZE shift).
                 position = (str(row["source_file_id"] or ""), int(row["paragraph_index"] or 0))
                 key = (-overlap, *position, str(row["paragraph_id"]))
-                ranked.append((key, row))
+                ranked.append((key, (row["paragraph_rowid"], row["paragraph_id"])))
         ranked.sort(key=lambda item: item[0])  # keys end in the unique paragraph id
-        for _, row in ranked[:FUZZY_RESCORE_LIMIT]:
+        kept = [row_key for _, row_key in ranked[:FUZZY_RESCORE_LIMIT]]
+        for row in read_paragraph_rows(self.db(), kept):
             paragraph = paragraph_from_database_row(row)
             plain = str(paragraph.get("plain_text") or "")
             ratio = self._score_fuzzy_window(q_plain, paragraph, plain)

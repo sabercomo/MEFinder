@@ -199,8 +199,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # persistence/passage_reads.py 与 paragraph_scope.py；
             # search_recall.py 的上限随之只降不升。
             "search_recall.py": 477,
-            # 2026-09-30：两字扫描改为截断后才解析段落、子串计重合度（gram_overlap）。
-            "search_recall_passages.py": 151,
+            # 2026-09-30：两字扫描改为截断后才解析段落、子串计重合度（gram_overlap）；
+            # 同日改为先读排序列、截断后按 rowid 取整行（persistence.passage_reads）。
+            "search_recall_passages.py": 149,
             "search_scoring.py": 250,
             "search_anchors.py": 240,
             "search_citation.py": 140,
