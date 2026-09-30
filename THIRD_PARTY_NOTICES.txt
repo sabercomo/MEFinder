@@ -289,3 +289,10 @@ Source: https://github.com/yichen0831/opencc-python
 License: Apache-2.0. Bundled OpenCC configuration and dictionary data enable
 offline Chinese query conversion. See
 THIRD_PARTY_LICENSES/opencc-python-reimplemented-0.1.7-LICENSE.txt.
+
+RapidFuzz 3.14.6
+----------------
+Source: https://github.com/rapidfuzz/RapidFuzz
+Copyright © 2020-present Max Bachmann; Copyright © 2011 Adam Cohen.
+License: MIT. Used locally for fuzzy search window scoring (no network access).
+See THIRD_PARTY_LICENSES/rapidfuzz-3.14.6-LICENSE.txt.

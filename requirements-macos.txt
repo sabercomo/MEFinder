@@ -14,3 +14,6 @@ pyobjc-framework-Security==11.1
 
 # 本地繁简查询变体（包含词典）
 opencc-python-reimplemented==0.1.7
+
+# 模糊搜索窗口评分（RapidFuzz，本地 C 扩展，无运行时依赖）
+rapidfuzz==3.14.6

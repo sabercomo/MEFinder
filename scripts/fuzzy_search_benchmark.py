@@ -80,7 +80,14 @@ NEGATIVE_LENGTHS = (4, 12)
 EXTRA_CATEGORIES: Dict[str, tuple] = {
     "mid5_sub_center": ((5, 5), 20, "sub_center"),
     "mid68_sub2_spread": ((6, 8), 20, "sub2_spread"),
+    # 2026-09-30 追加:超过 64 字的长查询(RapidFuzz partial_ratio 只保证 64 字内最优)。
+    "vlong_sub3": ((70, 120), 150, "sub3"),
+    # 2026-09-30 追加:短段落(段长不超过原句长 + 8,评分走整段/短段分支)。第 4 项是该上限。
+    "short_para_sub1": ((4, 6), 5, "sub1", 8),
+    "short_para_sub2": ((8, 14), 9, "sub2", 8),
 }
+# 2026-09-30 追加:原句真正跨过 PDF 页界(取自跨页合并段落的接缝两侧)。
+CROSS_PAGE_CATEGORY = "cross_page_sub2"
 EXTRA_NEGATIVE_LENGTHS = (8,)
 PURE_KINDS = {"sub_center", "sub2_spread"}  # 按位置打错字,原句须全是汉字
 
@@ -108,8 +115,8 @@ def perturb(rng: random.Random, original: str, kind: str) -> Optional[str]:
     chars = list(original)
     if kind == "none":
         return original
-    if kind in {"sub1", "sub2"}:
-        count = 1 if kind == "sub1" else 2
+    if kind in {"sub1", "sub2", "sub3"}:
+        count = {"sub1": 1, "sub2": 2, "sub3": 3}[kind]
         if len(positions) < count:
             return None
         for index in rng.sample(positions, count):
@@ -156,8 +163,10 @@ def _containing(connection: sqlite3.Connection, original: str, query: str) -> tu
 
 def _labelled_cases(connection: sqlite3.Connection, rng: random.Random, lengths: Dict[int, int],
                     category: str, spec: tuple, per_category: int) -> List[dict]:
-    (low, high), min_paragraph, kind = spec
-    pool = sorted(rowid for rowid, size in lengths.items() if (size or 0) >= min_paragraph)
+    (low, high), min_paragraph, kind, *rest = spec
+    slack = rest[0] if rest else None
+    pool = sorted(rowid for rowid, size in lengths.items()
+                  if (size or 0) >= min_paragraph and (slack is None or (size or 0) <= high + slack))
     rng.shuffle(pool)
     cases: List[dict] = []
     for rowid in pool[: per_category * 40]:
@@ -167,6 +176,8 @@ def _labelled_cases(connection: sqlite3.Connection, rng: random.Random, lengths:
             "SELECT paragraph_id, text_raw FROM paragraphs WHERE rowid = ?", (rowid,)
         ).fetchone()
         length = rng.randint(low, high)
+        if slack is not None and len(text or "") > length + slack:
+            continue
         start = _window(rng, text or "", length, pure=length <= 4 or kind in PURE_KINDS)
         if start is None:
             continue
@@ -221,7 +232,115 @@ def build_cases(connection: sqlite3.Connection, *, per_category: int, seed: int)
         cases += _labelled_cases(connection, extra, lengths, category, spec, per_category)
     for length in EXTRA_NEGATIVE_LENGTHS:
         cases += _negative_cases(connection, random.Random(f"{seed}:negative{length}"), length, per_category)
+    cases += _cross_page_cases(connection, random.Random(f"{seed}:{CROSS_PAGE_CATEGORY}"), per_category)
     return cases
+
+
+def _cross_page_cases(connection: sqlite3.Connection, rng: random.Random, per_category: int) -> List[dict]:
+    """Originals straddling the page seam of a cross-page paragraph, two typos each."""
+
+    rowids = [row[0] for row in connection.execute(
+        "SELECT rowid FROM paragraphs WHERE eligible_for_search = 1 AND paragraph_id LIKE '%-CROSS-%' "
+        "ORDER BY rowid")]
+    rng.shuffle(rowids)
+    cases: List[dict] = []
+    for rowid in rowids[: per_category * 40]:
+        if len(cases) >= per_category:
+            break
+        paragraph_id, text, payload = connection.execute(
+            "SELECT paragraph_id, text_raw, payload_json FROM paragraphs WHERE rowid = ?", (rowid,)
+        ).fetchone()
+        spans = (json.loads(payload or "{}").get("text_source_spans") or [])
+        if len(spans) < 2 or not text:
+            continue
+        seam = int(spans[0]["paragraph_char_end"])
+        length = rng.randint(16, 30)
+        low, high = max(0, seam - length + 4), min(seam - 4, len(text) - length)
+        if low > high:
+            continue
+        start = rng.randint(low, high)
+        original = text[start:start + length]
+        visible = [ch for ch in original if not ch.isspace()]
+        if not visible or sum(1 for ch in visible if CJK.match(ch)) < 0.85 * len(visible):
+            continue
+        query = perturb(rng, original, "sub2")
+        if query is None:
+            continue
+        plain_original, plain_query = punctuationless_text(original), punctuationless_text(query)
+        if plain_query == plain_original:
+            continue
+        acceptable, query_occurs = _containing(connection, plain_original, plain_query)
+        if query_occurs or paragraph_id not in acceptable:
+            continue
+        cases.append({
+            "id": f"{CROSS_PAGE_CATEGORY}-{len(cases) + 1:03d}", "category": CROSS_PAGE_CATEGORY,
+            "query": query, "original": original, "target_paragraph_id": paragraph_id,
+            "target_start": start, "target_end": start + length, "acceptable_ids": acceptable,
+        })
+    return cases
+
+
+def _expected_pages(engine: SearchEngine, paragraph_id: str, original: str) -> Optional[set]:
+    """PDF page ranges the original actually occupies in ``paragraph_id``.
+
+    Every exact occurrence counts (some paragraphs repeat their text); a cross-page
+    paragraph maps characters to pages through ``text_source_spans``.  None when
+    the document has no PDF pages or the original is not verbatim in the text.
+    """
+
+    row = engine.db.execute(
+        "SELECT text_raw, pdf_page_start_index, pdf_page_end_index, payload_json "
+        "FROM paragraphs WHERE paragraph_id = ?", (paragraph_id,)).fetchone()
+    if row is None or row[1] is None:
+        return None
+    text, first, last, payload = row
+    spans = json.loads(payload or "{}").get("text_source_spans") or []
+    ranges, start = set(), (text or "").find(original)
+    while start >= 0:
+        end = start + len(original)
+        pages = [int(span["pdf_page_index"]) for span in spans
+                 if int(span["paragraph_char_start"]) < end and int(span["paragraph_char_end"]) > start]
+        ranges.add((min(pages), max(pages)) if pages else (int(first), int(last)))
+        start = text.find(original, start + 1)
+    return ranges or None
+
+def _page_checks(engine: SearchEngine, hit: dict, original: str) -> tuple:
+    """(高亮锚点页是否正确, 显示/复制的引用页码是否正确);无从判断的为 None。
+
+    预期值只取入库记录,不取返回结果本身:原句所在物理页由段落的
+    ``text_source_spans`` 推出,每页的引用页码取 ``pdf_pages`` 表。
+    锚点看 ``page_match_spans`` 落在哪些物理页;库里该段本无页面对照时记 None,
+    库里有而结果没带锚点记失败。引用页码看 ``citation_page_start/end``
+    是否正好是原句所在页(段落跨两页而原句只在一页时,报出两页范围即判错)。
+    """
+
+    paragraph_id = str(hit.get("paragraph_id"))
+    expected = _expected_pages(engine, paragraph_id, original)
+    if expected is None:
+        return None, None
+    source_file_id, payload = engine.db.execute(
+        "SELECT source_file_id, payload_json FROM paragraphs WHERE paragraph_id = ?", (paragraph_id,)
+    ).fetchone()
+    has_source_anchors = bool(json.loads(payload or "{}").get("text_source_spans"))
+    anchors = {int(span["pdf_page_index"]) for span in hit.get("page_match_spans") or []}
+    if anchors:
+        anchor_ok = any(anchors == set(range(a, b + 1)) for a, b in expected)
+    else:
+        anchor_ok = False if has_source_anchors else None
+    labels = {}
+    for a, b in expected:
+        for index in (a, b):
+            row = engine.db.execute(
+                "SELECT payload_json FROM pdf_pages WHERE source_file_id = ? AND pdf_page_index = ?",
+                (source_file_id, index)).fetchone()
+            page = json.loads(row[0] or "{}") if row else {}
+            labels[index] = (page.get("citation_page_start"), page.get("citation_page_end"))
+    wanted = [(labels[a][0], labels[b][1]) for a, b in expected]
+    cited = (hit.get("citation_page_start"), hit.get("citation_page_end"))
+    if any(None in pair for pair in wanted):
+        return anchor_ok, None
+    return anchor_ok, cited in wanted
+
 
 def run_case(engine: SearchEngine, case: dict, mode: str, *, limit: int, repeats: int) -> dict:
     """Time ``repeats`` plain runs, then one instrumented run for the diagnosis."""
@@ -246,7 +365,7 @@ def run_case(engine: SearchEngine, case: dict, mode: str, *, limit: int, repeats
     ids = [str(item.get("paragraph_id")) for item in results]
     found_rank = next((rank for rank, pid in enumerate(ids, 1) if pid in acceptable), None)
     target = case["target_paragraph_id"]
-    highlight_ratio = None
+    highlight_ratio = anchor_page_ok = citation_page_ok = None
     if found_rank is not None:
         # 高亮核对看第一条正确命中的高亮文字与原句的相似度,不比位置:
         # 同一句在段内重复(真实库有整段正文重复两遍的段落)时,高亮任一处都算对。
@@ -255,6 +374,7 @@ def run_case(engine: SearchEngine, case: dict, mode: str, *, limit: int, repeats
         highlight_ratio = round(difflib.SequenceMatcher(
             None, punctuationless_text(highlighted), punctuationless_text(case["original"])
         ).ratio(), 4)
+        anchor_page_ok, citation_page_ok = _page_checks(engine, hit, case["original"])
     target_ratio = None
     if target is not None:
         (plain,) = engine.db.execute(
@@ -276,6 +396,7 @@ def run_case(engine: SearchEngine, case: dict, mode: str, *, limit: int, repeats
     return {
         "mode": mode, "stage": stage, "found_rank": found_rank,
         "highlight_ratio": highlight_ratio,
+        "anchor_page_ok": anchor_page_ok, "citation_page_ok": citation_page_ok,
         "target_ratio": target_ratio, "target_scored": target in scored if target else None,
         "scored_count": len(scored), "returned": len(ids),
         "noise": sum(1 for pid in ids if pid not in acceptable),
@@ -291,7 +412,8 @@ def summarize(cases: List[dict], runs: List[dict]) -> List[dict]:
     by_id = {case["id"]: case for case in cases}
     rows = []
     negatives = (*NEGATIVE_LENGTHS, *EXTRA_NEGATIVE_LENGTHS)
-    for category in [*CATEGORIES, *EXTRA_CATEGORIES, *(f"negative{n}" for n in negatives)]:
+    categories = [*CATEGORIES, *EXTRA_CATEGORIES, CROSS_PAGE_CATEGORY]
+    for category in [*categories, *(f"negative{n}" for n in negatives)]:
         for mode in MODES:
             group = [run for run in runs if run["mode"] == mode and by_id[run["case_id"]]["category"] == category]
             if not group:
@@ -308,6 +430,11 @@ def summarize(cases: List[dict], runs: List[dict]) -> List[dict]:
                 "stages": stages,
                 "highlight_exact": sum(1 for value in ratios if value >= HIGHLIGHT_EXACT),
                 "highlight_measured": len(ratios),
+                "highlight_strict": sum(1 for value in ratios if value == 1.0),
+                "anchor_ok": sum(1 for run in group if run.get("anchor_page_ok")),
+                "anchor_measured": sum(1 for run in group if run.get("anchor_page_ok") is not None),
+                "citation_ok": sum(1 for run in group if run.get("citation_page_ok")),
+                "citation_measured": sum(1 for run in group if run.get("citation_page_ok") is not None),
                 "highlight_min": min(ratios) if ratios else None,
                 "mean_noise": round(statistics.mean(run["noise"] for run in group), 2),
                 "with_any_result": sum(1 for run in group if run["returned"]),
@@ -320,14 +447,17 @@ def summarize(cases: List[dict], runs: List[dict]) -> List[dict]:
 
 def render_summary(rows: List[dict]) -> str:
     lines = [
-        "| 类别 | 模式 | 条数 | 找到 | 首位 | 卡点分布 | 高亮准确 | 高亮最低 | 平均噪音 | 中位 ms | P90 ms | 最大 ms |",
-        "|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|",
+        "| 类别 | 模式 | 条数 | 找到 | 首位 | 卡点分布 | 高亮准确 | 高亮完全一致 | 锚点页正确 | 引用页码正确 | 高亮最低 | 平均非目标 | 中位 ms | P90 ms | 最大 ms |",
+        "|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         stages = ", ".join(f"{key} {value}" for key, value in sorted(row["stages"].items()))
         lines.append(
             f"| {row['category']} | {row['mode']} | {row['n']} | {row['found']} | {row['found_at_1']} | "
-            f"{stages} | {row['highlight_exact']}/{row['highlight_measured']} | {row['highlight_min']} | {row['mean_noise']} | "
+            f"{stages} | {row['highlight_exact']}/{row['highlight_measured']} | "
+            f"{row['highlight_strict']}/{row['highlight_measured']} | {row['anchor_ok']}/{row['anchor_measured']} | "
+            f"{row['citation_ok']}/{row['citation_measured']} | "
+            f"{row['highlight_min']} | {row['mean_noise']} | "
             f"{row['latency_median_ms']} | {row['latency_p90_ms']} | {row['latency_max_ms']} |"
         )
     return "\n".join(lines)

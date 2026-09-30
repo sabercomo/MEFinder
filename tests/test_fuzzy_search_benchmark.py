@@ -7,6 +7,7 @@ every sampled case carries a truthful answer key and a sane diagnosis.
 
 from __future__ import annotations
 
+import json
 import random
 import sqlite3
 import tempfile
@@ -107,6 +108,61 @@ class BenchmarkCaseTest(unittest.TestCase):
         self.assertEqual([(row["category"], row["mode"]) for row in rows],
                          [("exact_control", "auto"), (negative["category"], "fuzzy")])
         self.assertIn("| exact_control | auto | 1 | 1 | 1 |", bench.render_summary(rows))
+
+
+class ExpectedPagesTest(unittest.TestCase):
+    def test_pages_follow_text_source_spans_and_repeats(self) -> None:
+        connection = sqlite3.connect(":memory:")
+        connection.execute("CREATE TABLE paragraphs (paragraph_id, text_raw, pdf_page_start_index, "
+                           "pdf_page_end_index, payload_json)")
+        spans = [{"paragraph_char_start": 0, "paragraph_char_end": 6, "pdf_page_index": 56},
+                 {"paragraph_char_start": 7, "paragraph_char_end": 14, "pdf_page_index": 57}]
+        connection.executemany("INSERT INTO paragraphs VALUES (?, ?, ?, ?, ?)", [
+            ("cross", "甲乙丙丁戊己 庚辛壬癸子丑寅", 56, 57, json.dumps({"text_source_spans": spans})),
+            ("single", "甲乙丙丁甲乙丙丁", 9, 9, "{}"),
+            ("word", "甲乙丙丁", None, None, "{}"),
+        ])
+        engine = type("Engine", (), {"db": connection})()
+        self.assertEqual(bench._expected_pages(engine, "cross", "己 庚辛"), {(56, 57)})
+        self.assertEqual(bench._expected_pages(engine, "cross", "甲乙丙"), {(56, 56)})
+        self.assertEqual(bench._expected_pages(engine, "cross", "辛壬癸"), {(57, 57)})
+        self.assertEqual(bench._expected_pages(engine, "single", "甲乙丙丁"), {(9, 9)})
+        self.assertIsNone(bench._expected_pages(engine, "word", "甲乙丙丁"))
+        self.assertIsNone(bench._expected_pages(engine, "single", "不在此处"))
+
+    def test_page_checks_use_stored_pages_not_the_result(self) -> None:
+        connection = sqlite3.connect(":memory:")
+        connection.execute("CREATE TABLE paragraphs (paragraph_id, source_file_id, text_raw, "
+                           "pdf_page_start_index, pdf_page_end_index, payload_json)")
+        connection.execute("CREATE TABLE pdf_pages (source_file_id, pdf_page_index, payload_json)")
+        spans = [{"paragraph_char_start": 0, "paragraph_char_end": 6, "pdf_page_index": 485},
+                 {"paragraph_char_start": 7, "paragraph_char_end": 14, "pdf_page_index": 486}]
+        connection.executemany("INSERT INTO paragraphs VALUES (?, ?, ?, ?, ?, ?)", [
+            ("cross", "f", "甲乙丙丁戊己 庚辛壬癸子丑寅", 485, 486, json.dumps({"text_source_spans": spans})),
+            ("legacy", "f", "甲乙丙丁戊己", 485, 485, "{}"),
+        ])
+        connection.executemany("INSERT INTO pdf_pages VALUES (?, ?, ?)", [
+            ("f", 485, json.dumps({"citation_page_start": "463", "citation_page_end": "463"})),
+            ("f", 486, json.dumps({"citation_page_start": "464", "citation_page_end": "464"})),
+        ])
+        engine = type("Engine", (), {"db": connection})()
+        hit = {"paragraph_id": "cross", "pdf_page_start_index": 485, "pdf_page_end_index": 486,
+               "citation_page_start": "463", "citation_page_end": "463",
+               "page_match_spans": [{"pdf_page_index": 485}]}
+        self.assertEqual(bench._page_checks(engine, hit, "甲乙丙"), (True, True))
+        # 段落跨两页、原句只在一页,却报出整段范围:引用页码错。
+        self.assertEqual(bench._page_checks(engine, {**hit, "citation_page_end": "464"}, "甲乙丙"),
+                         (True, False))
+        # 入库记录是 463,结果被改成 999:必须判错,不能用结果自证。
+        self.assertEqual(bench._page_checks(engine, {**hit, "citation_page_start": "999",
+                                                     "citation_page_end": "999"}, "甲乙丙"), (True, False))
+        self.assertEqual(bench._page_checks(engine, {**hit, "page_match_spans": [
+            {"pdf_page_index": 485}, {"pdf_page_index": 486}], "citation_page_end": "464"}, "己 庚辛"),
+            (True, True))
+        # 库里有页面对照、结果却没带锚点:失败;库里本无对照(旧库):无法核对。
+        self.assertEqual(bench._page_checks(engine, {**hit, "page_match_spans": []}, "甲乙丙")[0], False)
+        legacy = {**hit, "paragraph_id": "legacy", "pdf_page_end_index": 485, "page_match_spans": []}
+        self.assertEqual(bench._page_checks(engine, legacy, "甲乙丙"), (None, True))
 
 
 if __name__ == "__main__":

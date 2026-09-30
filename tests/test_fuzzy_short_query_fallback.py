@@ -4,8 +4,10 @@ A 4-8 character query whose typos break every trigram gets no FTS candidate at
 all, so the scorer never sees the intended sentence. For those lengths the
 fuzzy pass retries through the bigram scan; 3-character queries stay as they
 were (the benchmark showed ~9 of 10 hits would be unrelated "社会X"), and
-queries FTS can serve are untouched. Evidence:
-reports/fuzzy-search-benchmark-2026-09-30.md section 9.
+4-character queries FTS can serve are untouched. From 5 to 8 characters the
+bigram scan also runs after FTS found candidates, so a weak FTS hit cannot
+hide the sentence (D7). Evidence: reports/fuzzy-search-benchmark-2026-09-30.md
+sections 9 and 10.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from unittest.mock import patch
 from src.me_finder.application.search_service import SearchRequest, SearchService
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
+from src.me_finder import search_recall
 from src.me_finder.search import SearchEngine
 from src.me_finder.search_contract import FUZZY_BIGRAM_FALLBACK_LENGTHS
 
@@ -29,9 +32,9 @@ TEXTS = [
 ]
 
 
-def _corpus() -> dict:
+def _corpus(texts=TEXTS) -> dict:
     paragraphs = []
-    for index, text in enumerate(TEXTS):
+    for index, text in enumerate(texts):
         paragraphs.append({
             "paragraph_id": f"P-{index:04d}", "volume_id": "V-a", "work_id": "W-a",
             "source_file_id": "word-a", "source_type": "word", "paragraph_index": index,
@@ -92,10 +95,46 @@ class FuzzyShortQueryFallbackTest(unittest.TestCase):
             self.assertEqual(self.ids("共X劳动Y成Z度并"), [])
         scan.assert_not_called()
 
-    def test_queries_fts_can_serve_skip_the_fallback(self) -> None:
-        with patch("src.me_finder.search_recall.read_gram_passage_rows") as scan:
+    def test_queries_fts_can_serve_skip_the_scan_at_four_and_from_nine(self) -> None:
+        for query in ("共同劳动", "人们通过共同劳动形X度"):
+            with self.subTest(query=query):
+                with patch("src.me_finder.search_recall.read_gram_passage_rows") as scan:
+                    self.assertEqual(self.ids(query), ["P-0000"])
+                scan.assert_not_called()
+
+    def test_five_to_eight_scan_even_when_fts_found_something(self) -> None:
+        with patch("src.me_finder.search_recall.read_gram_passage_rows",
+                   wraps=search_recall.read_gram_passage_rows) as scan:
             self.assertEqual(self.ids("共同劳动形X制度"), ["P-0000"])
-        scan.assert_not_called()
+        scan.assert_called()
+
+
+class WeakFtsCandidateTest(unittest.TestCase):
+    """A weak FTS candidate must not hide the sentence (review case mid68-020)."""
+
+    TEXTS = ["他们以共同劳动形成制度。", "这是异同乙动形的例子。"]
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "index.sqlite3"
+        build_database(_corpus(self.TEXTS), path)
+        self.engine = SearchEngine(path)
+        self.addCleanup(self.engine.close)
+
+    def ids(self, query: str) -> list:
+        response = SearchService.execute(self.engine, SearchRequest(query=query, mode="fuzzy"))
+        return [item["paragraph_id"] for item in response["results"]]
+
+    def test_five_characters_find_the_sentence_behind_a_weak_fts_hit(self) -> None:
+        # FTS matches only the unrelated "同乙动形"; the target shares no trigram.
+        self.assertIn("P-0000", self.ids("共同乙动形"))
+        with patch("src.me_finder.search_recall.fuzzy_needs_bigram_scan",
+                   lambda length, found: 4 <= length <= 8 and not found):
+            self.assertEqual(self.ids("共同乙动形"), ["P-0001"])  # the pre-D7 rule missed it
+
+    def test_four_characters_keep_the_fallback_only_rule(self) -> None:
+        self.assertEqual(self.ids("同乙动形"), ["P-0001"])
 
     def test_absent_query_still_returns_nothing(self) -> None:
         self.assertEqual(self.ids("鳞爪星槎"), [])

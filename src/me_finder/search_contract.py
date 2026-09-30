@@ -33,6 +33,18 @@ FUZZY_RESCORE_LIMIT = 64
 # Decided per engine query, so each script-folding variant decides for itself.
 # Evidence: reports/fuzzy-search-benchmark-2026-09-30.md section 9.
 FUZZY_BIGRAM_FALLBACK_LENGTHS = range(4, 9)
+# From 5 characters the bigram scan runs even when FTS already produced fuzzy
+# candidates: a weak FTS candidate must not hide the intended sentence (the
+# 4-character rule stays as above). Evidence: same report, section 10.
+FUZZY_BIGRAM_UNION_LENGTHS = range(5, 9)
+
+
+def fuzzy_needs_bigram_scan(query_length: int, fts_found: bool) -> bool:
+    """Whether the fuzzy pass also runs the bigram scan after the FTS branch."""
+
+    if query_length not in FUZZY_BIGRAM_FALLBACK_LENGTHS:
+        return False
+    return not fts_found or query_length in FUZZY_BIGRAM_UNION_LENGTHS
 
 
 class CandidateSpec(TypedDict):

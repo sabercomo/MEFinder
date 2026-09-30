@@ -68,6 +68,7 @@ class WindowsPackagingTests(unittest.TestCase):
             "MIT.txt",
             "setuptools-vendored__autocommand-2.2.2.dist-info__LICENSE",
             "MCP-2.0.0-runtime-NOTICES.txt",
+            "rapidfuzz-3.14.6-LICENSE.txt",
         ):
             path = license_dir / filename
             self.assertTrue(path.is_file(), f"missing third-party license: {path}")

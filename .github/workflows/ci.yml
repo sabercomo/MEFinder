@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0" "opencc-python-reimplemented==0.1.7"
+        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0" "opencc-python-reimplemented==0.1.7" "rapidfuzz==3.14.6"
       - name: Run the whole test suite
         run: python -m unittest discover -t . -s tests
       - name: Verify cold backend without alignment compute dependencies
@@ -59,7 +59,7 @@ jobs:
           python-version: "3.12"
           architecture: x64
       - name: Install test dependencies
-        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0" "opencc-python-reimplemented==0.1.7"
+        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0" "opencc-python-reimplemented==0.1.7" "rapidfuzz==3.14.6"
       - name: Run the whole test suite on Windows
         # Diagnostic (temporary): the Windows gate has stalled for the full
         # timeout without unittest revealing which case hangs. This runner
@@ -87,7 +87,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0" "opencc-python-reimplemented==0.1.7" -r requirements-browser-tests.txt
+        run: python -m pip install "numpy>=1.26" "PyMuPDF==1.26.5" "mcp==2.0.0" "opencc-python-reimplemented==0.1.7" "rapidfuzz==3.14.6" -r requirements-browser-tests.txt
       - name: Run real-browser regressions
         run: python -m unittest -v tests.test_browser_regression
 

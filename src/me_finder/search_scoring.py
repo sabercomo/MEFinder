@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import difflib
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
+
+from rapidfuzz import process
+from rapidfuzz.distance import Indel, Levenshtein
 
 from .normalization import punctuationless_text
 from .search_anchors import page_match_spans
+
+# Query-length windows kept for boundary refinement in ``best_window_ratio``.
+FUZZY_WINDOW_ANCHORS = 3
 
 
 def rank_key(item: Dict[str, object]) -> Tuple[float, int, int, str, int, str, int]:
@@ -174,52 +180,54 @@ def cross_candidate_duplicate(
 
 
 def best_window_ratio(query_plain: str, plain: str) -> Tuple[float, int, int]:
+    """Best fuzzy window of ``plain`` for ``query_plain`` as ``(score, start, end)``.
+
+    ``end`` is inclusive.  A verbatim hit scores 0.91.  Otherwise every
+    query-length window is scored with Indel in RapidFuzz's C loop, and the best
+    ``FUZZY_WINDOW_ANCHORS`` are refined by up to ``min(3, len // 5)`` characters
+    of length and at least one of start.  The window with the fewest edits
+    (Levenshtein, so a typo counts once) wins, then the length nearest the query,
+    then Indel, then the earliest start; it scores its normalized Levenshtein
+    similarity.  A paragraph shorter than every window keeps the historical
+    whole-paragraph difflib ratio.  Evidence:
+    reports/fuzzy-search-benchmark-2026-09-30.md section 10.
+    """
+
     if not query_plain or not plain:
         return 0.0, 0, 0
     if query_plain in plain:
         start = plain.find(query_plain)
         return 0.91, start, start + len(query_plain) - 1
     q_len = len(query_plain)
-    if len(plain) <= q_len + 8:
-        return difflib.SequenceMatcher(None, query_plain, plain).ratio(), 0, max(0, len(plain) - 1)
-    window_sizes = sorted(set([q_len, int(q_len * 1.25) + 1, int(q_len * 1.6) + 1, q_len + 8]))
-    step = max(1, q_len // 3)
-    # A fine window scan across a whole book page (footnote-dense, 2000+ chars)
-    # is O(len) SequenceMatcher calls and dominates fuzzy search time.  For long
-    # paragraphs, first locate the promising region with a coarse stride, then
-    # refine only around it.  Short paragraphs keep the exhaustive scan so their
-    # behaviour (and the regression fixtures) is unchanged.
-    if len(plain) > 600:
-        primary = window_sizes[0]
-        coarse_step = max(step, q_len)
-        anchor = 0
-        anchor_ratio = -1.0
-        for start in range(0, max(1, len(plain) - primary + 1), coarse_step):
-            ratio = difflib.SequenceMatcher(
-                None, query_plain, plain[start : start + primary]
-            ).ratio()
-            if ratio > anchor_ratio:
-                anchor_ratio = ratio
-                anchor = start
-        region_lo = max(0, anchor - q_len)
-        region_hi = min(len(plain), anchor + primary + q_len)
-    else:
-        region_lo = 0
-        region_hi = len(plain)
-    best = (0.0, 0, min(len(plain) - 1, q_len))
-    for size in window_sizes:
-        if size <= 0:
-            continue
-        for start in range(region_lo, max(region_lo + 1, region_hi - size + 1), step):
-            window = plain[start : start + size]
-            ratio = difflib.SequenceMatcher(None, query_plain, window).ratio()
-            if ratio > best[0]:
-                best = (ratio, start, start + len(window) - 1)
-        tail_start = max(0, len(plain) - size)
-        window = plain[tail_start:]
-        ratio = difflib.SequenceMatcher(None, query_plain, window).ratio()
-        if ratio > best[0]:
-            best = (ratio, tail_start, len(plain) - 1)
+    delta = min(3, q_len // 5)
+    sizes = [size for size in range(q_len - delta, q_len + delta + 1) if 1 <= size <= len(plain)]
+    if not sizes:
+        return difflib.SequenceMatcher(None, query_plain, plain).ratio(), 0, len(plain) - 1
+    width = min(q_len, len(plain))
+    windows = [plain[index : index + width] for index in range(len(plain) - width + 1)]
+    anchors = process.extract(
+        query_plain, windows, scorer=Indel.normalized_similarity, limit=FUZZY_WINDOW_ANCHORS
+    )
+    shift = max(1, delta)
+    best_key: Optional[Tuple[int, int, float, int]] = None
+    best = (0.0, 0, 0)
+    for _window, _score, anchor in anchors:
+        for size in sizes:
+            for start in range(max(0, anchor - shift), min(len(plain) - size, anchor + shift) + 1):
+                window = plain[start : start + size]
+                key = (
+                    -Levenshtein.distance(query_plain, window),
+                    -abs(size - q_len),
+                    Indel.normalized_similarity(query_plain, window),
+                    -start,
+                )
+                if best_key is None or key > best_key:
+                    best_key = key
+                    best = (
+                        Levenshtein.normalized_similarity(query_plain, window),
+                        start,
+                        start + size - 1,
+                    )
     return best
 
 

@@ -27,11 +27,11 @@ from .persistence.passage_reads import (
 )
 from .persistence.short_gram_index import short_gram_prefilter
 from .search_contract import (
-    FUZZY_BIGRAM_FALLBACK_LENGTHS,
     FUZZY_RESCORE_LIMIT,
     MAX_FTS_QUERY_TRIGRAMS,
     SQL_CANDIDATE_FLOOR,
     SQL_CANDIDATE_MULTIPLIER,
+    fuzzy_needs_bigram_scan,
 )
 from .search_recall_memory import InMemoryRecallPasses
 from .search_recall_passages import PassageRetrieval, gram_overlap
@@ -339,9 +339,9 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
                 if candidate_budget is not None and len(candidates) >= candidate_budget:
                     truncated = True
                     break
-            # Typos breaking every trigram leave FTS nothing to score: retry
-            # through the bigram scan for the lengths where that can happen.
-            if len(candidates) > before or len(q_plain) not in FUZZY_BIGRAM_FALLBACK_LENGTHS:
+            # Typos breaking every trigram leave FTS nothing (or only weak
+            # candidates) to score: add the bigram scan where that can happen.
+            if not fuzzy_needs_bigram_scan(len(q_plain), len(candidates) > before):
                 return truncated
 
         query_grams = self._ngrams_set(q_plain)
