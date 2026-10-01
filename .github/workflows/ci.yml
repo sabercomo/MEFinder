@@ -34,6 +34,7 @@ jobs:
       - name: Verify cold backend without alignment compute dependencies
         run: |
           python -m venv .core-test-venv
+          .core-test-venv/bin/python -m pip install -r requirements-core.txt
           .core-test-venv/bin/python -m unittest tests.test_core_without_alignment
       - name: Verify fallback without OpenCC
         run: |
