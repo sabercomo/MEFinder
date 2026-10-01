@@ -49,4 +49,4 @@
 
 - 事实：用户在 Astra 两轮复核后批准 D7。评分改用 RapidFuzz（编辑次数最少的窗口，归一化 Levenshtein 得分；极短段落保留 difflib）。5～8 字查询在 FTS 已有模糊候选时也走两字扫描，4 字仍只在 FTS 为空时退回。证据：`reports/fuzzy-search-benchmark-2026-09-30.md` 第十节。
 - 更正上文“0.667 刚过 0.58”一类的阈值讨论：D7 改为 Levenshtein 得分后，三字错一字仍是 0.667，三字查询仍不退回，结论不变。
-- 未完成：三字错字仍 0 召回；`mid5_sub_center` 仍有约一半排不进两字扫描前 64；跨页段落引用范围另立 `docs/issues/search-cross-page-citation-range.md`。
+- 未完成：三字错字仍 0 召回；`mid5_sub_center` 仍有约一半排不进两字扫描前 64；跨页段落引用范围另立 `docs/issues/search-cross-page-citation-range.md`（2026-10-01 已修复）。

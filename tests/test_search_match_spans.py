@@ -571,6 +571,73 @@ class SearchMatchSpanTests(unittest.TestCase):
         self.assertEqual(item["page_match_spans"], [])
         self.assertFalse(item["precise_highlight_available"])
 
+    def test_single_layout_cross_hit_narrows_citation_to_hit_page(self) -> None:
+        left = "左页开头与左页尾"
+        right = "右页首句和右页末尾"
+        text = f"{left}\n{right}"
+        spans = [
+            {
+                "paragraph_char_start": 0,
+                "paragraph_char_end": len(left),
+                "pdf_page_id": "pdf-test-PAGE-000485",
+                "pdf_page_index": 485,
+                "page_char_start": 100,
+                "page_char_end": 100 + len(left),
+            },
+            {
+                "paragraph_char_start": len(left) + 1,
+                "paragraph_char_end": len(text),
+                "pdf_page_id": "pdf-test-PAGE-000486",
+                "pdf_page_index": 486,
+                "page_char_start": 0,
+                "page_char_end": len(right),
+            },
+        ]
+        paragraph = self._paragraph(
+            "pdf-test-CROSS-000485-000486",
+            text,
+            spans,
+            is_cross_page=True,
+            pdf_page_start_index=485,
+        )
+        paragraph.update(
+            {
+                "page_source_type": "fixed_offset",
+                "page_mapping_method": "fixed_offset",
+                "layout_mode": "single",
+                "original_page_start": "463",
+                "original_page_end": "464",
+                "citation_page_start": "463",
+                "citation_page_end": "464",
+                "citation_page_number_start": 463,
+                "citation_page_number_end": 464,
+                "citation_page_label_start": "463",
+                "citation_page_label_end": "464",
+                "printed_page_start": "463",
+                "printed_page_end": "464",
+            }
+        )
+        with self._engine([paragraph]) as engine:
+            left_item = engine.search("左页尾", mode="exact", source_type="pdf")["results"][0]
+            right_item = engine.search("右页首句", mode="exact", source_type="pdf")["results"][0]
+            both_item = engine.search("尾\n右", mode="exact", source_type="pdf")["results"][0]
+
+        for item, page in ((left_item, "463"), (right_item, "464")):
+            self.assertEqual((item["citation_page_start"], item["citation_page_end"]), (page, page))
+            self.assertEqual(item["citation_page_number_start"], int(page))
+            self.assertEqual(item["citation_page_number_end"], int(page))
+            self.assertEqual(item["page"], f"引用页码：{page}")
+            self.assertIn(f"引用页码：{page}", item["copy_text"])
+            self.assertNotIn("463–464", item["copy_text"])
+            # The paragraph record itself still describes both physical pages.
+            self.assertEqual(
+                (item["pdf_page_start_index"], item["pdf_page_end_index"]), (485, 486)
+            )
+        self.assertEqual(
+            (both_item["citation_page_start"], both_item["citation_page_end"]), ("463", "464")
+        )
+        self.assertEqual(both_item["page"], "引用页码：463–464")
+
     def test_spread_hits_resolve_left_right_and_cross_gutter_pages(self) -> None:
         text = "左页包含定位目标\n右页同样包含定位目标"
         right_start = text.index("右页")

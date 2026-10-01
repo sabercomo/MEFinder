@@ -1,7 +1,7 @@
 """Boundary guard for the split search pipeline modules.
 
 The pipeline is one-way: ``search.py`` (facade) orchestrates recall, scoring
-and assembly; assembly consumes anchors and citation helpers; recall only
+and assembly; assembly consumes anchors, cross-page narrowing and citation helpers; recall only
 needs scoring's fuzzy-window helper plus its two leaf sub-stages
 (``search_recall_memory``, ``search_recall_passages``).  Stages must never
 import the facade or reach backwards across the pipeline — this keeps every
@@ -22,6 +22,7 @@ ALLOWED: dict[str, set[str]] = {
     "search_contract": set(),
     "search_anchors": set(),
     "search_citation": set(),
+    "search_cross_page": {"search_anchors"},
     "search_scoring": {"search_anchors"},
     "search_recall_memory": set(),
     "search_recall_passages": {"search_contract"},
@@ -31,7 +32,12 @@ ALLOWED: dict[str, set[str]] = {
         "search_recall_passages",
         "search_scoring",
     },
-    "search_assembly": {"search_anchors", "search_citation", "search_scoring"},
+    "search_assembly": {
+        "search_anchors",
+        "search_citation",
+        "search_cross_page",
+        "search_scoring",
+    },
     "search": FACADE_ALLOWED,
 }
 

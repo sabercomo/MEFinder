@@ -206,6 +206,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "search_anchors.py": 240,
             "search_citation.py": 140,
             "search_assembly.py": 400,
+            # 2026-10-01：普通版式跨页段落按命中页收窄引用页码，独立成模块。
+            "search_cross_page.py": 70,
             "search_contract.py": 60,
             "application/document_heading_enrichment.py": 330,
         }
