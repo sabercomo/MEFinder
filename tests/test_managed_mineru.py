@@ -390,6 +390,72 @@ else:
         )
         self.assertNotIn("MINERU_HOME", environment)
 
+    def test_install_from_another_platform_is_never_reused_or_replaced(self) -> None:
+        """A cloud-synced data root carries another computer's install."""
+
+        foreign = self._fake_receipt(
+            "pipeline",
+            {"schema_version": 1, "profile": "pipeline", "platform": "win32-x86_64"},
+        )
+        manager = self._manager()
+        self.assertEqual(
+            manager.component_root,
+            (self.runtime / "components/mineru/platforms/test-platform").resolve(),
+        )
+        self.assertFalse(manager._installed("pipeline"))
+        self.assertTrue((foreign / "installed.json").is_file())
+
+    def test_install_from_this_platform_stays_in_the_legacy_location(self) -> None:
+        self._fake_receipt(
+            "pipeline",
+            {"schema_version": 1, "profile": "pipeline", "platform": "test-platform"},
+        )
+        manager = self._manager()
+        self.assertEqual(manager.component_root, (self.runtime / "components/mineru").resolve())
+
+    def _shared_managed_config(self) -> Path:
+        self.config.parent.mkdir(parents=True, exist_ok=True)
+        self.config.write_text(
+            json.dumps(
+                {
+                    "local_deployment_enabled": True,
+                    "local_deployment_managed": True,
+                    "local_deployment_managed_profile": "pipeline",
+                    "local_deployment_endpoint": "http://127.0.0.1:1407",
+                    "local_deployment_backend": "pipeline",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return self.root / "machine/mineru_local.machine.json"
+
+    def test_shared_managed_setting_from_another_computer_is_not_inherited(self) -> None:
+        machine = self._shared_managed_config()
+        self._fake_receipt(
+            "pipeline",
+            {"schema_version": 1, "profile": "pipeline", "platform": "win32-x86_64"},
+        )
+        with mock.patch.dict("os.environ", {"ME_FINDER_MINERU_LOCAL_CONFIG": str(machine)}):
+            self._manager()
+            summary = mineru_local_config_summary(self.config)
+        self.assertFalse(summary["enabled"])
+        self.assertFalse(summary["managed"])
+        self.assertFalse(machine.exists())
+
+    def test_shared_managed_setting_is_adopted_when_installed_here(self) -> None:
+        machine = self._shared_managed_config()
+        root = self._fake_receipt(
+            "pipeline",
+            {"schema_version": 1, "profile": "pipeline", "platform": "test-platform"},
+        )
+        (root / "mineru.json").write_text("{}", encoding="utf-8")
+        with mock.patch.dict("os.environ", {"ME_FINDER_MINERU_LOCAL_CONFIG": str(machine)}):
+            self._manager()
+            summary = mineru_local_config_summary(self.config)
+        self.assertTrue(summary["managed"])
+        self.assertEqual(summary["managed_profile"], "pipeline")
+        self.assertTrue(machine.is_file())
+
     def test_legacy_receipt_without_series_is_treated_as_3x(self) -> None:
         root = self._fake_receipt(
             "pipeline",
@@ -427,7 +493,7 @@ else:
         item = self._wait(manager, "pipeline")
         self.assertFalse(item["error"], item["error"])
         receipt = json.loads(
-            (self.runtime / "components/mineru/pipeline/installed.json").read_text(
+            (manager.component_root / "pipeline/installed.json").read_text(
                 encoding="utf-8"
             )
         )
@@ -448,7 +514,7 @@ else:
         item = self._wait(manager, "pipeline")
         self.assertFalse(item["error"], item["error"])
         receipt = json.loads(
-            (self.runtime / "components/mineru/pipeline/installed.json").read_text(
+            (manager.component_root / "pipeline/installed.json").read_text(
                 encoding="utf-8"
             )
         )

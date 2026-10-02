@@ -1,4 +1,4 @@
-2026-10-01：v0.5.8 开发中，功能尚未加完，未发版；新增模糊搜索提速（结果不变）、4～8 字查询的错字找回与 RapidFuzz 窗口评分（均会改变结果），跨页段落引用页码改按原句所在页给出；新增两字短词检索提速（DB v11；复验后补了旧 SQLite 写入兼容、模糊搜索同分排序、环境升级后自动补装索引与 Windows 打包解释器能力检查，并修好主题检索两字查询在 SQLite 库上返回空、给它提速）。macOS arm64 本机测试包（未上传）已于 2026-10-01 在 `f1f0cb2` 上重打，含以上全部改动；此前旧包上的 MCP 只读结构查询与书目补全试用通过。
+2026-10-02：v0.5.8 开发中，功能尚未加完，未发版；本地 MinerU 设置改为每台电脑各存一份（网盘共用数据目录时不再互相覆盖，下方本机测试包尚不含此项）；新增模糊搜索提速（结果不变）、4～8 字查询的错字找回与 RapidFuzz 窗口评分（均会改变结果），跨页段落引用页码改按原句所在页给出；新增两字短词检索提速（DB v11；复验后补了旧 SQLite 写入兼容、模糊搜索同分排序、环境升级后自动补装索引与 Windows 打包解释器能力检查，并修好主题检索两字查询在 SQLite 库上返回空、给它提速）。macOS arm64 本机测试包（未上传）已于 2026-10-01 在 `f1f0cb2` 上重打，含以上全部改动；此前旧包上的 MCP 只读结构查询与书目补全试用通过。
 
 # v0.5.8 迭代说明
 
@@ -48,6 +48,9 @@
 
 - 书目补全写入时原以导入配置记录为“当前题录”：配置记录不全的旧文献，补一个字段会把配置里缺的书名、作者等连同写空。改为以索引中面板所显示的题录为准，配置有而索引缺的值也保留（先写复现测试 `test_sparse_config_record_never_blanks_values_shown_from_the_index`）。
 - MCP 服务器版本号原取契约文件的旧值 0.5.1，改为直接报应用版本。
+- 本地 MinerU 设置改为**每台电脑各存一份**：数据目录放在网盘里被 Mac 与 Windows 共用时，原来 Windows 装好的托管 Pipeline 设置（地址 `127.0.0.1:1407`）同步到 Mac，Mac 上显示绿色“已配置，未启动”却连不上，用户自部署在 `127.0.0.1:8000` 的 MinerU 4 也用不上。桌面版现把服务地址、启用状态、托管配置写到本机文件 `mineru_local.machine.json`（macOS `~/Library/Application Support/MEFinder/`，Windows `%LOCALAPPDATA%\MEFinder\`），MinerU API 账号仍随数据目录同步。首次启动沿用共享文件里的自部署设置；共享文件里的托管设置只有本机确实装了该组件才继承。开发 / 便携模式不变。测试 `test_per_machine_settings_never_touch_the_shared_config`、`test_shared_managed_setting_from_another_computer_is_not_inherited`。
+- 托管 MinerU 组件按系统分目录：另一台电脑装在共享数据目录里的组件不再被本机识别成“未安装”后原地重装覆盖；本机新装进 `components/mineru/platforms/<平台>/`，已有的本机安装留在原位不迁移。测试 `test_install_from_another_platform_is_never_reused_or_replaced`。
+- 设置页 MinerU 本地部署：托管配置本机未安装时状态改为黄色“本机未安装”；「检查新版本 / 安装推荐配置」按钮原被拉成竖排挤在中间，恢复横排靠右；Apple Silicon 设备名原显示为 `arm`。
 
 ## 打包侧车试用（真实库只读快照的副本）
 

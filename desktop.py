@@ -215,6 +215,18 @@ def local_app_data_root(home: Path | None = None) -> Path:
     return runtime_location.local_app_data_root(home, bundle_root=app_root())
 
 
+def machine_local_config_root() -> Path:
+    """Per-computer settings folder, never the (possibly synced) data root."""
+
+    if sys.platform == "darwin":
+        return default_macos_data_root()
+    if sys.platform == "win32":
+        return default_windows_data_root(
+            local_app_data=os.environ.get("LOCALAPPDATA") or None,
+        )
+    return runtime_location.local_app_data_root(bundle_root=app_root())
+
+
 def python_launcher() -> str:
     return "py -3" if os.name == "nt" else "python3"
 
@@ -679,6 +691,10 @@ def main() -> None:
     if getattr(sys, "frozen", False) and not portable:
         mineru_config_path = local_app_data_root() / "mineru_api.local.json"
         os.environ["ME_FINDER_MINERU_CONFIG"] = str(mineru_config_path)
+        # 数据目录可能在网盘里被多台电脑共用；本地 MinerU 服务地址只属于这台电脑。
+        os.environ["ME_FINDER_MINERU_LOCAL_CONFIG"] = str(
+            machine_local_config_root() / "mineru_local.machine.json"
+        )
         vision_config_path = local_app_data_root() / "vision_api.local.json"
         os.environ["ME_FINDER_VISION_CONFIG"] = str(vision_config_path)
         preferences_path = local_app_data_root() / "preferences.json"

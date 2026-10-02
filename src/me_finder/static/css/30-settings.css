@@ -1090,7 +1090,8 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
   gap: 0;
 }
 .managed-mineru-heading { display: flex; align-items: center; gap: 20px; padding: 0 0 20px; }
-.managed-mineru-heading > span,
+/* 只取说明文字那一列：右侧按钮组也是 span，不能被拉成竖排、margin-right:auto 推到中间。 */
+.managed-mineru-heading > span:first-child,
 .managed-mineru-profile > div:first-child {
   display: grid;
   gap: 3px;
@@ -1153,7 +1154,7 @@ html[data-data-location-available="true"] .settings-nav-item.cap-data-location {
 .mineru-local-enable-control { display: flex; align-items: center; }
 @media (max-width: 760px) {
   .managed-mineru-heading { align-items: flex-start; flex-wrap: wrap; }
-  .managed-mineru-heading > span { flex: 1 1 220px; }
+  .managed-mineru-heading > span:first-child { flex: 1 1 220px; }
   .managed-mineru-profile { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
   .managed-mineru-profile .settings-actions { grid-column: 1 / -1; width: 100%; justify-content: flex-start; }
 }

@@ -1763,6 +1763,11 @@ class MineruLocalDisplayTests(unittest.TestCase):
           {enabled:true, managed:true, managed_profile:'vlm'},
           {service:{running:true, profile:'vlm'}}
         );
+        // 网盘共用数据目录：配置写着托管 Pipeline，但本机（另一个系统）没装
+        var missingHere = module.exports.managedMineruSummaryLabel(
+          {enabled:true, managed:true, managed_profile:'pipeline'},
+          {service:{running:false}, profiles:[{profile:'pipeline', supported:true, installed:false}]}
+        );
         module.exports.renderManagedMineru({
           supported:true,
           hardware:{name:'CPU', recommended_profile:'pipeline'},
@@ -1777,6 +1782,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
           autoInstall:autoInstall,
           runningHint:runningHint,
           whileVlmRunning:whileVlmRunning,
+          missingHere:missingHere,
           afterStop:elements['mineru-local-status'].textContent,
           state:view.profileView('pipeline').stateText,
           startHidden:!view.profileView('pipeline').start.visible,
@@ -1791,6 +1797,7 @@ class MineruLocalDisplayTests(unittest.TestCase):
             "autoInstall": "已安装",
             "runningHint": "",
             "whileVlmRunning": "VLM 运行中",
+            "missingHere": "本机未安装",
             "afterStop": "已配置，未启动",
             "state": "已安装",
             "startHidden": False,

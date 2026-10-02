@@ -35,12 +35,35 @@ from .parser_provider import ParserProviderError
 from .mineru_local_settings import (
     clear_managed_mineru,
     configure_managed_mineru,
+    legacy_managed_mineru_config,
     mineru_local_config_summary,
 )
 from .tasks import TaskEvent
 
 
 MANAGED_MINERU_COMPONENT_DIR = "components/mineru"
+
+
+def managed_mineru_component_root(runtime_root: Path, platform_key: str) -> Path:
+    """Return where this platform's managed MinerU profiles live.
+
+    The data root can be shared between computers (for example through a
+    cloud drive). Profiles installed before this layout sit directly under
+    ``components/mineru``; they stay there only for the platform that
+    installed them. Every other platform gets its own subdirectory so one
+    computer's install never replaces another's.
+    """
+
+    legacy_root = Path(runtime_root) / MANAGED_MINERU_COMPONENT_DIR
+    for receipt_path in legacy_root.glob("*/installed.json"):
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        # 很早的回执没写 platform：照旧留在原位置，由 _installed 的 venv 布局检查兜底。
+        if isinstance(receipt, Mapping) and receipt.get("platform", platform_key) == platform_key:
+            return legacy_root
+    return legacy_root / "platforms" / platform_key
 ACTIVE_STATES = frozenset(
     {"provisioning", "downloading_models", "validating", "starting", "cleaning"}
 )
@@ -374,7 +397,8 @@ def detect_mineru_hardware(
         )
         return {
             "kind": "apple_silicon",
-            "name": platform.processor() or "Apple Silicon",
+            # platform.processor() 在 macOS 上只返回 "arm"，对用户没有信息量
+            "name": "Apple Silicon",
             "vlm_supported": supported,
             "recommended_profile": "vlm" if supported else "pipeline",
             "vram_mb": None,
@@ -460,9 +484,11 @@ class ManagedMinerU:
     ) -> None:
         self.runtime_root = Path(runtime_root).resolve()
         self.config_path = Path(config_path).resolve()
-        self.component_root = self.runtime_root / MANAGED_MINERU_COMPONENT_DIR
         self._manifest_path = manifest_path
         self.platform_key = platform_key or current_platform_key()
+        self.component_root = managed_mineru_component_root(
+            self.runtime_root, self.platform_key
+        )
         self.opener = opener
         self.process_launcher = process_launcher
         self._hardware_detector = hardware_detector or (
@@ -492,6 +518,21 @@ class ManagedMinerU:
             )
             for profile_id in self.manifest.profiles
         }
+        self._adopt_legacy_managed_config()
+
+    def _adopt_legacy_managed_config(self) -> None:
+        # 旧版把托管设置写在共享配置里；只有本机确实装了该配置时才继承，
+        # 否则那是另一台电脑的安装，本机保持「未启用」。
+        legacy = legacy_managed_mineru_config(self.config_path)
+        profile_id = str(legacy.get("managed_profile") or "")
+        if not legacy or not self._installed(profile_id):
+            return
+        configure_managed_mineru(
+            self.config_path,
+            endpoint=str(legacy["endpoint"]),
+            backend=str(legacy["backend"]),
+            profile=profile_id,
+        )
 
     def summary(self) -> Dict[str, object]:
         with self._lock:

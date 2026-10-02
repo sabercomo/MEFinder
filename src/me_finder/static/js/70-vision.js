@@ -361,11 +361,21 @@
     if (runtimeIsCurrent !== false) renderManagedMineru(config.managed_runtime || {});
     syncMineruLocalImportOption(!!config.enabled);
     var label = managedMineruSummaryLabel(config, config.managed_runtime || {});
-    updateMineruLocalStatus(!!config.enabled, label);
+    updateMineruLocalStatus(!!config.enabled, label, managedMineruMissingHere(config, config.managed_runtime || {}));
+  }
+
+  // 数据目录放在网盘里被多台电脑共用时，配置会写着「托管 Pipeline」，
+  // 但组件是另一台电脑（另一个系统）装的，本机实际不可用；不能显示成绿色「已配置」。
+  function managedMineruMissingHere(config, runtime) {
+    if (!config.managed) return false;
+    var profileId = config.managed_profile || 'pipeline';
+    var profile = ((runtime || {}).profiles || []).find(function(item) { return item.profile === profileId; });
+    return !!profile && !profile.installed;
   }
 
   function managedMineruSummaryLabel(config, runtime) {
     if (!config.managed) return config.enabled ? '自部署已配置' : '';
+    if (managedMineruMissingHere(config, runtime)) return '本机未安装';
     var service = (runtime || {}).service || {};
     if (!service.running) return '已配置，未启动';
     var profile = service.profile || config.managed_profile;
@@ -380,7 +390,8 @@
     if (parserStore.mineruLocalConfig.managed) {
       updateMineruLocalStatus(
         !!parserStore.mineruLocalConfig.enabled,
-        managedMineruSummaryLabel(parserStore.mineruLocalConfig, runtime)
+        managedMineruSummaryLabel(parserStore.mineruLocalConfig, runtime),
+        managedMineruMissingHere(parserStore.mineruLocalConfig, runtime)
       );
     }
     stopManagedMineruPoll();
@@ -469,10 +480,10 @@
     }
   }
 
-  function updateMineruLocalStatus(enabled, label) {
+  function updateMineruLocalStatus(enabled, label, unavailable) {
     var status = document.getElementById('mineru-local-status');
     if (!status) return;
-    status.className = 'settings-status' + (enabled ? ' ready' : '');
+    status.className = 'settings-status' + (unavailable ? ' warning' : enabled ? ' ready' : '');
     status.textContent = label || (enabled ? '已启用' : '未启用');
   }
 

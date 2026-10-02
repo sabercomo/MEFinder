@@ -688,9 +688,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # Zotero 设置分栏与顶部同步摘要；设置目录内联 Lucide 图标。
     # 设置导航与内容区滚动条改为悬停才显示，导航收紧上下留白以免多余滚动。
     BASELINE_SHA256 = (
-        "84ce332f4fab3e30690c89918833e0289039f40554fd594775917ccd6aa97226"
+        "1e4ab521d90a030aaa75a6d4940e77147c2808de01fe465726459a3a652e195c"
     )
-    BASELINE_BYTES = 1512715
+    BASELINE_BYTES = 1513655
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

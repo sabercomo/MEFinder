@@ -23,6 +23,70 @@ class MinerULocalSettingsTests(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         self.path = Path(self.temp_dir.name) / "config" / "mineru.local.json"
 
+    def _machine_env(self):
+        machine = Path(self.temp_dir.name) / "machine" / "mineru_local.machine.json"
+        return machine, patch.dict(
+            "os.environ", {"ME_FINDER_MINERU_LOCAL_CONFIG": str(machine)}
+        )
+
+    def test_per_machine_settings_never_touch_the_shared_config(self) -> None:
+        """A cloud-synced data root must not carry this computer's endpoint."""
+
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text(json.dumps({"token": "shared"}), encoding="utf-8")
+        machine, env = self._machine_env()
+        with env:
+            save_mineru_local_config(
+                {"enabled": True, "endpoint": "http://127.0.0.1:8000", "backend": "pipeline"},
+                self.path,
+            )
+            summary = mineru_local_config_summary(self.path)
+        self.assertTrue(summary["enabled"])
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8")), {"token": "shared"})
+        self.assertTrue(json.loads(machine.read_text(encoding="utf-8"))["local_deployment_enabled"])
+
+    def test_per_machine_settings_start_from_shared_self_hosted_settings(self) -> None:
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text(
+            json.dumps(
+                {
+                    "token": "shared",
+                    "local_deployment_enabled": True,
+                    "local_deployment_endpoint": "http://127.0.0.1:9000",
+                    "local_deployment_api_key": "local-key",
+                }
+            ),
+            encoding="utf-8",
+        )
+        machine, env = self._machine_env()
+        with env:
+            summary = mineru_local_config_summary(self.path)
+            self.assertEqual(load_mineru_local_config(self.path).api_key, "local-key")
+            clear_managed_mineru(self.path)
+        self.assertTrue(summary["enabled"])
+        self.assertEqual(summary["endpoint"], "http://127.0.0.1:9000")
+        self.assertFalse(machine.exists())
+
+    def test_shared_managed_settings_are_not_inherited_by_default(self) -> None:
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text(
+            json.dumps(
+                {
+                    "local_deployment_enabled": True,
+                    "local_deployment_managed": True,
+                    "local_deployment_managed_profile": "pipeline",
+                    "local_deployment_endpoint": "http://127.0.0.1:1407",
+                }
+            ),
+            encoding="utf-8",
+        )
+        _machine, env = self._machine_env()
+        with env:
+            summary = mineru_local_config_summary(self.path)
+        self.assertFalse(summary["enabled"])
+        self.assertFalse(summary["managed"])
+        self.assertEqual(summary["endpoint"], "http://127.0.0.1:8000")
+
     def test_default_is_disabled_and_save_preserves_online_config(self) -> None:
         self.assertEqual(
             mineru_local_config_summary(self.path),
