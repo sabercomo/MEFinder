@@ -205,6 +205,17 @@ class ImportJobStore:
                 and job_id in self._contexts
             ]
 
+    def active_snapshots(self) -> List[Tuple[Job, JobContext]]:
+        """Jobs a worker is still driving, whoever submitted them."""
+
+        with self._lock:
+            return [
+                (deepcopy(job), deepcopy(self._contexts[job_id]))
+                for job_id, job in self._jobs.items()
+                if str(job.get("status") or "") in {"queued", "processing", "cancelling"}
+                and job_id in self._contexts
+            ]
+
     def resume_candidate(self, job_id: str) -> Tuple[Job, JobContext]:
         """Validate current resume eligibility and return isolated inputs."""
 

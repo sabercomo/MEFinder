@@ -1115,6 +1115,37 @@
     }
   }
 
+  async function loadActiveImports() {
+    try {
+      var resp = await MEFinderApi.fetch('/api/import-active');
+      var data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error || '读取在途任务失败');
+      (data.jobs || []).forEach(function(job) {
+        if (importStore.queue.some(function(item) { return item.jobId === job.job_id; })) return;
+        importStore.queue.push({
+          id: 'active-' + job.job_id,
+          jobId: job.job_id,
+          name: job.file_name || '未命名文献',
+          size: Number(job.size_bytes || 0),
+          type: job.file_type === 'pdf' ? 'pdf' : job.file_type === 'epub' ? 'epub' : 'docx',
+          status: 'processing',
+          step: job.file_type === 'pdf' ? 2 : 1,
+          route: job.parse_route || null,
+          providerId: job.provider_id || null,
+          providerName: job.provider_name || null,
+          detectedType: job.detected_pdf_type || null,
+          message: job.message || '正在导入…',
+          canResume: false,
+          fromJournal: true
+        });
+        pollImportJob('active-' + job.job_id);
+      });
+      renderImportQueue();
+    } catch (e) {
+      console.warn('load active imports failed:', e);
+    }
+  }
+
   async function resumeImport(id, options) {
     options = options || {};
     var q = importStore.queue.find(function(item) { return item.id === id; });
@@ -1269,7 +1300,8 @@
     renderPdfParseMode: renderPdfParseMode,
     renderQueue: renderImportQueue,
     pollJob: pollImportJob,
-    loadResumableImports: loadResumableImports
+    loadResumableImports: loadResumableImports,
+    loadActiveImports: loadActiveImports
   };
 
   MEFinderActions.register('handleScanCheckChange', function(event, target) {

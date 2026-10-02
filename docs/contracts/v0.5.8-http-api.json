@@ -21,6 +21,7 @@
     "/api/document/outline",
     "/api/document/pages",
     "/api/general-model",
+    "/api/import-active",
     "/api/import-resumable",
     "/api/import-status",
     "/api/index-meta",

@@ -34,7 +34,8 @@
         "packages": {
           "pipeline": {
             "default": [
-              "mineru[pipeline]=={version}"
+              "mineru[pipeline]=={version}",
+              "six==1.17.0"
             ]
           },
           "vlm": {

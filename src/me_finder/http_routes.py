@@ -159,6 +159,7 @@ def assemble_import_routes(import_job_controller) -> RoutePair:
             (params.get("job_id") or [None])[0]
         ),
         "/api/import-resumable": lambda _params: import_job_controller.resumable(),
+        "/api/import-active": lambda _params: import_job_controller.active(),
     }
     post_routes = {
         "/api/mineru-reparse": mutating(import_job_controller.reparse_with_mineru),

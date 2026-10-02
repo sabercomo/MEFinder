@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional
 
@@ -72,6 +73,7 @@ class LargeDocumentJobEngine:
         self.max_attempts = max(1, int(max_attempts))
         self.publisher = publisher or AtomicPublisher()
         self.credential_pool = credential_pool
+        self._remote_states: Dict[str, Dict[str, list]] = {}
 
     def prepare(
         self,
@@ -288,6 +290,37 @@ class LargeDocumentJobEngine:
             error_summary=None,
         )
 
+    def _note_remote_state(
+        self, job_id: str, slice_id: str, state: Optional[str]
+    ) -> None:
+        if not state:
+            return
+        states = self._remote_states.setdefault(job_id, {})
+        entry = states.get(slice_id)
+        if entry is None or entry[0] != state:
+            states[slice_id] = [state, time.time()]
+
+    def _forget_remote_state(self, job_id: str, slice_id: str) -> None:
+        (self._remote_states.get(job_id) or {}).pop(slice_id, None)
+
+    def remote_wait(self, job_id: str) -> Dict[str, object]:
+        """How long the least-advanced slice has sat in one remote state.
+
+        A provider queue that accepts tasks but never starts them looks like
+        an ordinary parse from the ledger alone; the surfaced state and age
+        are what let the UI say "queued upstream for N minutes" instead of
+        "parsing".
+        """
+
+        states = self._remote_states.get(job_id) or {}
+        if not states:
+            return {}
+        state, since = min(states.values(), key=lambda entry: entry[1])
+        return {
+            "remote_state": str(state),
+            "remote_waiting_minutes": int((time.time() - float(since)) // 60),
+        }
+
     def _advance_slice(self, job: DocumentJob, slice_job: SliceJob) -> None:
         request = self._parser_request(job, slice_job)
         if slice_job.remote_task_id:
@@ -306,6 +339,7 @@ class LargeDocumentJobEngine:
                     remote_task_id=slice_job.remote_task_id,
                     status=ParserTaskStatus.COMPLETED,
                 )
+                self._forget_remote_state(job.id, slice_job.id)
                 self._complete_slice(
                     slice_job,
                     request,
@@ -318,6 +352,7 @@ class LargeDocumentJobEngine:
                 ParserTaskStatus.PERMANENT_FAILURE,
                 ParserTaskStatus.CANCELLED,
             }:
+                self._forget_remote_state(job.id, slice_job.id)
                 self.ledger.update_slice(
                     slice_job.id,
                     status=(
@@ -330,6 +365,7 @@ class LargeDocumentJobEngine:
                 if self.credential_pool is not None:
                     self.credential_pool.finish_remote(slice_job.credential_id)
             else:
+                self._note_remote_state(job.id, slice_job.id, poll.remote_state)
                 self.ledger.update_slice(
                     slice_job.id,
                     status="waiting",

@@ -21,6 +21,7 @@ GET_API_ROUTES = frozenset(
         "/api/text-alignment/models",
         "/api/text-alignment/runtime",
         "/api/import-resumable",
+        "/api/import-active",
         "/api/import-status",
         "/api/index-meta",
         "/api/general-model",

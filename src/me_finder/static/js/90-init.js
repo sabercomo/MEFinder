@@ -91,6 +91,7 @@ renderScanDirectories();
 loadMeta();
 loadPreferences();
 MEFinder.imports.loadResumableImports();
+MEFinder.imports.loadActiveImports();
 MEFinder.library.syncViewButtons();
 // 搜索、文献库与作品页共用摘要请求；这里仅初始化搜索下拉。
 renderSearchDocumentOptions();

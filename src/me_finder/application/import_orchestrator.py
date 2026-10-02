@@ -1041,6 +1041,23 @@ class ImportOrchestrator:
             reverse=True,
         )
 
+    def active_import_jobs(self) -> List[Job]:
+        result: List[Job] = []
+        for job, context in self._job_store.active_snapshots():
+            public_job = self.public_import_job(job)
+            target = Path(context.get("target") or "")
+            public_job["file_type"] = (
+                "pdf"
+                if context.get("is_pdf")
+                else target.suffix.lower().lstrip(".") or "docx"
+            )
+            result.append(public_job)
+        return sorted(
+            result,
+            key=lambda item: str(item.get("last_updated") or ""),
+            reverse=True,
+        )
+
     def retry_index_job(
         self,
         job_id: str,

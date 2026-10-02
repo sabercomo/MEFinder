@@ -259,6 +259,19 @@ else:
             four.model_download_args, ("-s", "auto", "--tier", "{tier}")
         )
 
+    def test_bundled_pipeline_recipe_carries_the_six_pin(self) -> None:
+        """mineru 3.x 的 pipeline 后端 import six 却未在元数据声明，配方必须兜底。"""
+
+        bundled = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "me_finder"
+            / "local_ocr_manifest.json"
+        )
+        manifest = load_managed_mineru_manifest(bundled, platform_key="win32-x86_64")
+        names = {item.split("==", 1)[0] for item in manifest.profiles["pipeline"].packages}
+        self.assertIn("six", names)
+
     def test_unsupported_major_series_is_refused(self) -> None:
         with self.assertRaises(ManagedMinerUError):
             load_managed_mineru_manifest(

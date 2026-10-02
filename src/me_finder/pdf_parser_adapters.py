@@ -363,6 +363,7 @@ def _parse_pdf_with_mineru_accounts(
                     "failed_pages": [],
                     "document_job_id": job.id,
                     "waiting_for_credential": waiting_for_credential,
+                    **engine.remote_wait(job.id),
                 }
             )
         if job.status in {"validated", "permanent_failure", "cancelled"}:

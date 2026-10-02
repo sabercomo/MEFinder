@@ -173,6 +173,7 @@ class MinerUCloudProvider(ParserProvider):
             raw_status=raw,
             progress=parsed_progress,
             message=str(item.get("err_msg") or "") or None,
+            remote_state=state,
         )
 
     def fetch_result(

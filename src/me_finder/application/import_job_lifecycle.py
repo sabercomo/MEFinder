@@ -15,6 +15,22 @@ from .import_job_store import ImportJobStore, Job, JobContext
 FailureStageResolver = Callable[..., Optional[str]]
 JobUpdater = Callable[..., None]
 
+_MINERU_REMOTE_QUEUED = frozenset({"pending", "waiting-file", "queued"})
+
+
+def mineru_progress_message(update: Mapping[str, object]) -> str:
+    """Progress text that tells a queued-upstream parse apart from a running one."""
+
+    completed = update.get("completed", 0)
+    total = update.get("total", 0)
+    if update.get("waiting_for_credential"):
+        return f"等待可用的 MinerU 账号：{completed}/{total} 个分段已完成"
+    minutes = update.get("remote_waiting_minutes")
+    state = str(update.get("remote_state") or "")
+    if state in _MINERU_REMOTE_QUEUED and minutes:
+        return f"MinerU 云端排队中：已等待 {minutes} 分钟，{completed}/{total} 个分段"
+    return f"MinerU 解析中：{completed}/{total} 个分段"
+
 
 class ImportJobCleanupFailed(RuntimeError):
     """Raised after a cancellation cleanup failure becomes durable."""
@@ -377,16 +393,7 @@ class ImportJobLifecycle:
         phase = str(update.get("phase") or "")
         message = "正在处理…"
         if phase == "mineru_processing":
-            if update.get("waiting_for_credential"):
-                message = (
-                    f"等待可用的 MinerU 账号：{update.get('completed', 0)}/"
-                    f"{update.get('total', 0)} 个分段已完成"
-                )
-            else:
-                message = (
-                    f"MinerU 解析中：{update.get('completed', 0)}/"
-                    f"{update.get('total', 0)} 个分段"
-                )
+            message = mineru_progress_message(update)
         elif phase == "vision_processing":
             provider_name = str(update.get("provider_name") or "其他视觉 API")
             message = (

@@ -1074,6 +1074,16 @@ class ZoteroSyncService:
             job_id = str(row.get("import_job_id") or "")
             job = self._ports.job_status(job_id) if job_id else None
             job_state = str((job or {}).get("status") or "")
+            if job_id and job is None:
+                # The job record is gone (dismissed or pruned); no poller will
+                # ever move this row again, so hand it to the manual retry.
+                updated.append({**row, "status": "failed", "import_job_id": None, "status_message": "导入任务记录已不存在，可手动同步重试"})
+                continue
+            if job_state == "paused":
+                # Interrupted by a restart: nothing polls a paused job, and
+                # plan_sync leaves a pending row with a job id alone forever.
+                updated.append({**row, "status": "failed", "import_job_id": None, "status_message": "上次导入被中断，可手动同步重试"})
+                continue
             if job and job_state not in _JOB_DONE | _JOB_FAILED:
                 continue  # still parsing; the document may not be final yet
             source_id = by_hash.get(str(row.get("file_sha256") or "").lower())

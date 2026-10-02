@@ -95,6 +95,7 @@ class ParserPollResult:
     raw_status: object = None
     progress: Optional[float] = None
     message: Optional[str] = None
+    remote_state: Optional[str] = None
 
 
 @dataclass(frozen=True)

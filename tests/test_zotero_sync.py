@@ -658,6 +658,31 @@ class SyncFlowTests(ZoteroSyncTestCase):
         self.service.run_sync("manual")
         self.assertEqual(len(self.library.imported), imported + 1)
 
+    def test_interrupted_or_missing_job_releases_its_row_for_resubmission(self) -> None:
+        """任务被重启打断成 paused、或任务记录消失时，行不再永久搁浅在 pending+job。"""
+
+        self.basic_library()
+        self.select("CAP")
+        self.service.run_sync()
+        paused = self.rows()["ATT1"]["import_job_id"]
+        vanished = self.rows()["ATT2"]["import_job_id"]
+        self.library.jobs[paused].update(status="paused", message="上次导入被中断，可手动继续。")
+        del self.library.jobs[vanished]
+
+        self.assertEqual(self.service.resolve_pending(), 2)
+        for key in ("ATT1", "ATT2"):
+            row = self.rows()[key]
+            self.assertEqual(row["status"], "failed")
+            self.assertFalse(row.get("import_job_id"))
+            self.assertTrue(row.get("status_message"))
+
+        # Automatic syncs leave interrupted rows alone; a manual sync owns them.
+        imported = len(self.library.imported)
+        self.service.run_sync("interval")
+        self.assertEqual(len(self.library.imported), imported)
+        self.service.run_sync("manual")
+        self.assertEqual(len(self.library.imported), imported + 2)
+
     def test_linked_file_attachments_are_supported(self) -> None:
         self.fake.add_collection("C", "分类")
         self.fake.add_item("L", "链接文件", ["C"])

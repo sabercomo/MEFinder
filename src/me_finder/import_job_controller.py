@@ -64,6 +64,16 @@ class ImportJobController:
             jobs.append(response)
         return 200, {"jobs": jobs}
 
+    def active(self) -> ImportJobResponse:
+        jobs = []
+        for public_job in self._imports.active_import_jobs():
+            response = dict(public_job)
+            response["task_event"] = TaskEvent.from_mapping(
+                str(response["job_id"]), response, unit="pages"
+            ).to_dict()
+            jobs.append(response)
+        return 200, {"jobs": jobs}
+
     def reparse_with_mineru(self, payload: object) -> ImportJobResponse:
         if not isinstance(payload, Mapping):
             return 400, {"error": "invalid request"}
