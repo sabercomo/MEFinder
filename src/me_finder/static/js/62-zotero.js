@@ -25,9 +25,11 @@
     folded: {},
     status: null,
     preview: null,
+    catalogStamp: null,
     pollTimer: null,
     loading: false
   };
+  var statusRequest = MEFinderTaskState.createLatest();
 
   function el(tag, className, text) {
     var node = document.createElement(tag);
@@ -329,23 +331,39 @@
   // ── loading & polling ──
 
   async function loadStatus() {
+    var token = statusRequest.begin();
+    clearTimeout(state.pollTimer);
     try {
-      state.status = await getJSON('/api/zotero/status');
+      var status = await getJSON('/api/zotero/status');
+      if (!statusRequest.isCurrent(token)) return;
+      state.status = status;
       state.synced = state.status.synced_collections || [];
+      // 明细只含最近一趟同步；全库 linked 数量还能覆盖后台补交的完成。
+      var linked = (status.documents || {}).linked || 0;
+      var stamp = JSON.stringify([linked, status.last_success_at || '', status.finished_at || '']);
+      var changed = state.catalogStamp === null
+        ? linked > 0 || !!status.last_success_at || !!status.finished_at
+        : stamp !== state.catalogStamp;
+      state.catalogStamp = stamp;
+      if (changed) {
+        global.invalidateLibraryCatalog();
+        if (currentPage === 'library') await global.MEFinder.library.load();
+      }
     } catch (e) {
-      state.status = null;
+      if (!statusRequest.isCurrent(token)) return;
+      showToast('读取 Zotero 同步状态失败：' + e.message);
     }
+    if (!statusRequest.isCurrent(token)) return;
     renderStatus();
     var busy = state.status && (state.status.phase === 'running' || (state.status.rows || []).some(function (r) { return r.tone === 'busy'; }));
-    clearTimeout(state.pollTimer);
     var section = document.getElementById('zotero-settings');
-    if (busy && section && section.classList.contains('active')) {
-      state.pollTimer = setTimeout(function () {
-        loadStatus().then(function () {
-          if (state.status && state.status.phase !== 'running') loadOverview();
-        });
-      }, state.status.phase === 'running' ? 1200 : 3000);
-    }
+    var active = section && section.classList.contains('active');
+    // 安静时也低频观察：启动同步可能稍后开始，interval 同步也不会打开设置页。
+    state.pollTimer = setTimeout(function () {
+      loadStatus().then(function () {
+        if (section && section.classList.contains('active') && state.status && state.status.phase !== 'running') loadOverview();
+      });
+    }, busy && active ? (state.status.phase === 'running' ? 1200 : 3000) : 10000);
   }
 
   async function loadOverview() {
@@ -390,15 +408,18 @@
   }
 
   async function syncZoteroNow() {
+    statusRequest.invalidate();
+    clearTimeout(state.pollTimer);
     try {
       await getJSON('/api/zotero/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     } catch (e) {
       showToast('无法开始同步：' + e.message);
+      loadStatus();
       return;
     }
     state.status = { phase: 'running', message: '正在读取 Zotero', rows: [] };
     renderStatus();
-    setTimeout(loadStatus, 400);
+    state.pollTimer = setTimeout(loadStatus, 400);
   }
 
   async function setZoteroEnabled(enabled) {
@@ -439,6 +460,7 @@
   }
 
   var zoteroAPI = {
+    start: loadStatus,
     open: openZoteroSettings,
     recheck: recheckZotero,
     sync: syncZoteroNow,
