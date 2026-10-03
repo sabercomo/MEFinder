@@ -174,7 +174,7 @@
         <h2 class="sec-h2" id="mcp-h">接入你自己的 Agent</h2>
       </div>
       <div class="mcp-intro">
-        <p>MEFinder 自己不接大模型，也不生成回答。它提供的是一个本地 MCP 接口：发布包里附带 <code>MEFinderMCP</code>（Windows 安装版、绿色版和 macOS 版都有，不用另装 Python），你把它配进自己在用的 Agent，比如 Claude Code、Codex、WorkBuddy，Agent 就能调用 13 个工具查你的文献库。用哪个 Agent、哪个模型、哪个账号，都是你那边的事，和 MEFinder 无关。桌面端不必开着，MCP 进程本身不联网。</p>
+        <p>MEFinder 自己不接大模型，也不生成回答。它提供的是一个本地 MCP 接口：发布包里附带 <code>MEFinderMCP</code>（Windows 安装版、绿色版和 macOS 版都有，不用另装 Python），你把它配进自己在用的 Agent，比如 Claude Code、Codex、WorkBuddy，Agent 就能调用 17 个工具查你的文献库。用哪个 Agent、哪个模型、哪个账号，都是你那边的事，和 MEFinder 无关。桌面端不必开着，MCP 进程本身不联网。</p>
         <p>Agent 拿到的不是 PDF 原件，而是 MEFinder 解析好、存进库里的结构化结果：原文、文献和段落 ID、PDF 页码、书内引用页码，以及这个页码是怎么来的。查到的句子可以直接回到原书那一页核对。</p>      </div>
     </div>
 
@@ -250,18 +250,18 @@
     </div>
 
     <table class="spec mcp-tools">
-      <caption class="visually-hidden">MEFinder MCP 的 13 个工具按用途分组</caption>
+      <caption class="visually-hidden">MEFinder MCP 的 17 个工具按用途分组</caption>
       <thead><tr><th scope="col">用途</th><th scope="col">工具</th></tr></thead>
       <tbody>
-        <tr><th scope="row">定位与阅读</th><td><code>list_documents</code> 列出已入库文献和它们的 ID · <code>locate_quote</code> 定位原句，返回上下文、匹配方式和页码状态 · <code>read_document_window</code> 读命中处前后的若干页或段落</td></tr>
+        <tr><th scope="row">定位与阅读</th><td><code>list_documents</code> 列出已入库文献、ID 和所属作品 · <code>list_sections</code> 列出章节 · <code>locate_quote</code> 定位原句，返回上下文、匹配方式和页码状态 · <code>read_document_window</code> 读命中处前后的若干页或段落，也可按章节读 · <code>describe_page_mapping</code> 说明哪些页码可用于正式引用、PDF 页与印刷页码怎么对应</td></tr>
         <tr><th scope="row">核对</th><td><code>verify_quotes</code> 批量核对多条引文 · <code>diff_quote</code> 把疑似错引和原句逐字对齐</td></tr>
         <tr><th scope="row">检索</th><td><code>search_passages</code> 按大意召回相关段落；命中只说明内容相关，逐字核对还要用 <code>locate_quote</code></td></tr>
         <tr><th scope="row">译本对照</th><td><code>find_parallel_passages</code> 给一句中译，按指定语言返回原书里的对应候选和前后文，不做机器翻译</td></tr>
-        <tr><th scope="row">题录</th><td><code>read_bibliographic_pages</code> 读取版权页、CIP 页 · <code>read_bibliographic_metadata</code> 列出题录字段哪些已填、存疑或缺失</td></tr>
+        <tr><th scope="row">题录</th><td><code>read_bibliographic_pages</code> 读取版权页、CIP 页 · <code>read_bibliographic_metadata</code> 列出题录字段哪些已填、存疑或缺失 · <code>propose_bibliographic_update</code> 依据原书提议补全 · <code>confirm_bibliographic_update</code> 你确认后只填空字段</td></tr>
         <tr><th scope="row">对齐修正</th><td><code>propose_alignment_correction</code> 提出修正 · <code>confirm_alignment_correction</code> 你确认后生效 · <code>revoke_alignment_correction</code> 撤销 · <code>list_alignment_corrections</code> 查看已有修正</td></tr>
       </tbody>
     </table>
-    <p class="mcp-note">13 个工具里 10 个只读。其余 3 个只用来修正译本对齐，必须经你确认才会生效。这些工具不做问答、总结或翻译。</p>
+    <p class="mcp-note">17 个工具里 12 个只读。其余 5 个用来修正译本对齐和补全题录，必须经你确认才会生效。这些工具不做问答、总结或翻译。</p>
 
     <div class="hack">
       <p class="hack-tag">邪修用法</p>
@@ -360,7 +360,7 @@
         <tr><th scope="row">页码</th><td>PDF 物理页与书内引用页分开 · 自动映射 · 人工分段校准 · EPUB page-list / pagebreak</td><td>没有出版方页码时如实标注「页码尚未解析」，不推算、不补数</td></tr>
         <tr><th scope="row">对照</th><td>作品组 · 原文与译本逐段自动对齐 · 双栏阅读 · 正文范围人工修正 · 一次全部重跑</td><td>自动对齐只支持 PDF 与 EPUB 文献</td></tr>
         <tr><th scope="row">引用</th><td>书目识别与补全 · 中文脚注 / GB&#47;T 7714 / APA / MLA / Chicago · 按页导出 Markdown 与 EPUB</td><td>EPUB 页外脚注暂不保证随正文带出</td></tr>
-        <tr><th scope="row">MCP</th><td>13 个工具接入你自己的 Agent（任何支持 MCP 的客户端）：批量核对引文是否逐字命中、比对错引差异、按主题召回段落、读取版权页与题录缺口、辅助修正对齐</td><td>侧车读的是同一个本机库；库被桌面端占用时以桌面端为准</td></tr>
+        <tr><th scope="row">MCP</th><td>17 个工具接入你自己的 Agent（任何支持 MCP 的客户端）：批量核对引文是否逐字命中、比对错引差异、按主题召回段落、按章节阅读、说明页码映射、读取版权页与题录缺口并经确认补全、辅助修正对齐</td><td>侧车读的是同一个本机库；库被桌面端占用时以桌面端为准</td></tr>
         <tr><th scope="row">应用</th><td>18 套界面主题（浅色、深色各 9 套）· 跟随系统切换深浅色 · 自定义主题 · 独立阅读窗口 · 数据位置：打开或迁移资料库，比如云盘同步的文件夹</td><td>「导出备份」只含页码、书目和偏好，不含 PDF 与索引库；完整备份要复制整个数据目录</td></tr>
         <tr><th scope="row">数据</th><td>SQLite schema 版本化迁移 · 嵌入向量携带 <code>model_id</code>，不跨模型混用</td><td>旧版本无法打开升级后的库</td></tr>
       </tbody>
@@ -440,7 +440,7 @@ brew install --cask mefinder</code></pre></li>
       <a href="https://github.com/sabercomo/MEFinder/blob/main/THIRD_PARTY_LICENSES">第三方声明</a>
     </nav>
   </div>
-  <p class="colophon"><span class="colophon-facts">MEFinder <span data-rel-dev-only>v<span data-rel="dev">0.5.7</span>（迭代中）· </span>最新已发布 v<span data-rel="released">0.5.5</span> · <span data-rel="date">2026-09-24</span> · 支持格式 <code>.pdf .docx .epub</code> · 检索模式 5 · 引文格式 5 · MCP 工具 13 · 数据库 schema v8</span><span class="colophon-note">本页界面截图均来自 MEFinder 真实运行画面，演示语料为四段短引文并标注引用页码；未使用统计指标、用户数或推荐内容。</span></p>
+  <p class="colophon"><span class="colophon-facts">MEFinder <span data-rel-dev-only>v<span data-rel="dev">0.5.7</span>（迭代中）· </span>最新已发布 v<span data-rel="released">0.5.5</span> · <span data-rel="date">2026-09-24</span> · 支持格式 <code>.pdf .docx .epub</code> · 检索模式 5 · 引文格式 5 · MCP 工具 17 · 数据库 schema v11</span><span class="colophon-note">本页界面截图均来自 MEFinder 真实运行画面，演示语料为四段短引文并标注引用页码；未使用统计指标、用户数或推荐内容。</span></p>
 </footer>
 
 <script src="release.js"></script>

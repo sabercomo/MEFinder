@@ -1,3 +1,5 @@
+2026-10-03：v0.5.8 正式发布。macOS arm64 包在 `aebf480`（代码同 `84a0fc1`）上重打并上传（`MEFINDER_PYTHON=.venv-macos312-arm64/bin/python ./build_macos.sh`：全量 `unittest` 2738 项通过、34 项条件跳过，签名、侧车冒烟、ZIP/DMG 校验通过；DMG `18b30799…`、ZIP `58927d6b…`），取代 10 月 2 日 `468a8a3` 本机测试包；Windows 安装/升级/卸载 workflow 冒烟未跑通，发布时如实标注。官网 MCP 工具数与 schema 同步为 17 / v11。
+
 2026-10-03：Windows x64 安装包、便携包已基于 `84a0fc1` 在本机打包并上传 0.5.8 Release Draft；本地门禁通过，未正式发布。
 
 2026-10-03：v0.5.8 macOS x86_64 包已基于 `84a0fc1` 重打并通过自动化构建验证；本轮按 tag 与 GitHub Release Draft 交付，尚未正式发布。

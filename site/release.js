@@ -6,8 +6,8 @@
 window.MEF_RELEASE = {
   released: "0.5.5",        // latest published version
   date: "2026-09-24",       // its publish date
-  dev: "0.5.7",             // version in development; null (or already released) hides the "迭代中" notes
-  devTopic: "架构重构与跨平台验收",
+  dev: "0.5.8",             // version in development; null (or already released) hides the "迭代中" notes
+  devTopic: "短词检索提速、MCP 页码章节与书目补全",
   sizes: {                  // asset suffix -> size shown in the download table
     "windows-setup.exe": "74.9 MB",
     "windows-portable.zip": "89.7 MB",
