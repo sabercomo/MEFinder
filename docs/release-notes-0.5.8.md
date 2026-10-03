@@ -1,3 +1,5 @@
+2026-10-03：Windows x64 安装包、便携包已基于 `84a0fc1` 在本机打包并上传 0.5.8 Release Draft；本地门禁通过，未正式发布。
+
 2026-10-03：v0.5.8 macOS x86_64 包已基于 `84a0fc1` 重打并通过自动化构建验证；本轮按 tag 与 GitHub Release Draft 交付，尚未正式发布。
 
 2026-10-03：v0.5.8 开发中，未发版；修复 Zotero 显示“已导入”但文献库仍显示旧列表的问题，离开设置页及启动自动同步也能刷新。
@@ -112,3 +114,19 @@
 |---|---|---|
 | `MEFinder-v0.5.8-macos-x86_64.dmg` | 108635980 | `29d43c3cc7abf3e1eabf0441996a4ac634ece4b1aa2bdce686412132e5c55309` |
 | `MEFinder-v0.5.8-macos-x86_64.zip` | 102745317 | `993f0eaff7112516a457eefb83778cd365c4c7803ea5147ad36dc216b34b06c6` |
+
+
+## Windows 本地安装包与便携包上传 Draft（2026-10-03）
+
+Windows 两个正式格式产物均来自应用代码 `84a0fc1`，本机独立检出目录运行 `build_windows_installer.ps1` 与 `build_portable_release.ps1`，测试解释器与打包解释器均显式指定已有 Python 3.12 环境，Inno 使用 7。安装门禁 2738 项 OK（42 skip，211.265 秒），便携门禁 2738 项 OK（42 skip，209.097 秒）；Ruff、JS/前端守卫、PyInstaller、空库索引、MCP STDIO、隐私和许可证、ZIP CRC 与解包后侧车均通过。包内 Zotero 两份资源与 84a0fc1 逐字节相同，两个 exe 均 x64 / 0.5.8。
+
+首轮 `git archive` 导出目录缺少 Git 索引导致 Homebrew cask 追踪测试失败；同轮一次对齐运行时卸载读取遭遇目录删除竞态。随后改用完整独立 Git 检出，相关 33 项专项复跑通过，再由两个完整官方脚本完成上述门禁；未修改测试或绕过门禁，未宣称卸载竞态已修复。
+
+四个文件存于 `D:/ME_Finder/release/`，并已补入现有 v0.5.8 Release Draft；远端 digest、大小与本地四文件匹配，既有 macOS Intel 四个资产保持原 id/digest。草稿未正式发布，开发版 dist 和真实资料库未因本轮构建被替换或修改。
+
+额外 Windows 安装/升级/卸载 workflow run 37122703673 测试阶段因 cp1252 / UTF-8 编码错误失败（2733 项，8 failures / 36 errors，43 skip），未到安装步骤；主 CI 已设 PYTHONUTF8=1，但该 workflow 缺少此设置。用户明确要求停止额外云端构建，本轮未更改或重跑；正式发布门禁保持未通过，恢复条件是补环境设置后完整验证。用户当前要求的本地打包与 Draft 上传已完成。
+
+| 文件 | 字节数 | SHA-256 |
+|---|---|---|
+| `MEFinder-v0.5.8-windows-setup.exe` | 82457529 | `385b880420228e44e9ee8b5bd387d7206ef9901969418dd70db7f628544744b6` |
+| `MEFinder-v0.5.8-windows-portable.zip` | 98204391 | `1303be2cd920059404c6ed3fde876378428c22891a7cfe9f9ff6dd2132999b3a` |
