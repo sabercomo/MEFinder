@@ -1,3 +1,10 @@
+2026-10-07：v0.5.9 可本机试用，未正式发布。文档包使用 `.mefinder` 后缀，兼容旧包，避免 Mac 辅助文件被 Windows 当作 ZIP 后反复弹窗。源码及两个官方 Windows 构建脚本各自通过 2,741 项 unittest，Ruff、前端、MCP 与制品完整性核验通过。安装 / 升级 / 卸载和 macOS 0.5.9 构建尚未验收。详见 [0.5.9 说明](release-notes-0.5.9.md)。
+
+| 本机文件（`release/`） | SHA-256 |
+| --- | --- |
+| `MEFinder-v0.5.9-windows-setup.exe` | `f42c9c53ed60ffbf36597a45ee4d82e90a4d67b3ba7d0c528c404b20f74a496b` |
+| `MEFinder-v0.5.9-windows-portable.zip` | `d6d5a98a119ba9d6c5b0cf8f47dff2e36261ab4a9f7fe3fc2f8a13def6a8cf2d` |
+
 > **2026-10-03：v0.5.8 正式发布。Windows x64 与 macOS arm64 / x86_64 安装文件已上传 GitHub Release，构建与测试门禁通过；Windows 安装 / 升级 / 卸载自动冒烟及安装后的人工验收仍待进行。**
 
 # 文献原句定位器 v0.5.8

@@ -655,8 +655,9 @@
     var selectedProvider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === selectedProviderId; });
     selectedFiles.forEach(function(file, i) {
       var lowerName = file.name.toLowerCase();
+      if (lowerName.startsWith('._')) return; // macOS metadata, not a document.
       var ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
-      var isPackage = lowerName.endsWith('.mefinder.zip');
+      var isPackage = lowerName.endsWith('.mefinder') || lowerName.endsWith('.mefinder.zip');
       if (!isPackage && ['.pdf', '.docx', '.epub'].indexOf(ext) === -1) {
         showToast('不支持的格式: ' + file.name);
         return;

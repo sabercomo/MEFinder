@@ -96,7 +96,7 @@ request：`{"source_id": "..."}`。
 - `warning_count`
 - `missing_ranges`
 
-导出目标为应用数据目录下的 `exports/`，后缀 `.mefinder.zip`。后端从 SQLite 逐页读取，写入 `<target>.partial`，成功后原子更名；不向浏览器返回整书文本。当前 HTTP/UI 仅支持已建立页级索引的 PDF，Word 返回 400。
+导出目标为应用数据目录下的 `exports/`，后缀 `.mefinder`（兼容导入旧 `.mefinder.zip`）。后端从 SQLite 逐页读取，写入 `<target>.partial`，成功后原子更名；不向浏览器返回整书文本。当前 HTTP/UI 仅支持已建立页级索引的 PDF，Word 返回 400。
 
 ### 1.8 兼容路由和未暴露路由
 

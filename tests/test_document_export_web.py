@@ -125,6 +125,7 @@ class IndexedDocumentExportTests(unittest.TestCase):
             exported = read_document_export(Path(result["path"]))
 
             self.assertEqual(result["schema_version"], "mefinder.document.v1")
+            self.assertEqual(Path(result["path"]).suffix, ".mefinder")
             self.assertEqual(result["page_count"], 3)
             self.assertEqual(result["warning_count"], 1)
             self.assertEqual(exported.manifest["parser"]["provider"], "mineru-cloud")

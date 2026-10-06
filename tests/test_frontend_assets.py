@@ -689,10 +689,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 设置导航与内容区滚动条改为悬停才显示，导航收紧上下留白以免多余滚动。
     # 导入页启动时播种调度器提交的在途任务（/api/import-active），轮询复用现有队列行。
     # Zotero 同步后台观察导入计数及完成时间，变化时失效共享摘要缓存。
+    # 0.5.9：文档包改用 .mefinder，导入兼容旧 ZIP 并忽略 macOS 辅助文件。
     BASELINE_SHA256 = (
-        "1a7b6be0f3bbac086c0dad865ec99ac73847ca60c51d2ca85d866aa16c222bef"
+        "9fefcce81b35b2ae6d3fd9e55fa8fc4151c82a9509a046ccf4c3fdabed25bb96"
     )
-    BASELINE_BYTES = 1516242
+    BASELINE_BYTES = 1516368
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

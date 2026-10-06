@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "contract": "mefinder.mcp.v1",
   "schema_version": "1",
-  "release": "0.5.8",
+  "release": "0.5.9",
   "server": {
     "name": "mefinder",
     "instructions": "定位原句用 locate_quote；译本或原文对应用 find_parallel_passages：只把既有对齐当召回中心，必须比较源句、前后文与全部候选，按跨语言语义、专名和引文结构校准；anchor_distance 仅表示位置。唯一证据充分才回答 confirmed；多个合理候选回答 ambiguous 并列出；证据不足回答 unavailable，不得硬选或自行翻译。批量核对用 verify_quotes；大意检索用 search_passages，再以 locate_quote 逐字定位；错引比对用 diff_quote；题录补全先读元数据缺口再读书目页，据原书用 propose_bibliographic_update 提议，经用户同意后才 confirm；未知文献先用 list_documents；上下文不足用 read_document_window，按章阅读先用 list_sections；判断页码能否引用及 PDF 页与印刷页偏移用 describe_page_mapping，不要逐页试探。不得把 PDF 物理页称为正式引用页，不得隐藏多候选歧义。搜索命中只证明文本在本地索引中出现。"

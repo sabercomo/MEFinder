@@ -213,14 +213,14 @@ class DocumentImportCoordinator:
             kind = str(import_kind or "document").strip().lower()
             allowed = {
                 "document": {".pdf", ".docx", ".epub"},
-                "document_package": {".zip"},
+                "document_package": {".mefinder", ".zip"},
             }
             if kind not in allowed or suffix not in allowed[kind]:
                 raise MinerUError("导入文件类型与导入方式不匹配。")
             if kind == "document_package" and not filename.lower().endswith(
-                ".mefinder.zip"
+                (".mefinder", ".mefinder.zip")
             ):
-                raise MinerUError("文档包文件名必须以 .mefinder.zip 结尾。")
+                raise MinerUError("文档包文件名必须以 .mefinder 或 .mefinder.zip 结尾。")
             if kind == "document":
                 mode, provider_id = self._validated_parse_options(
                     pdf_parse_mode,

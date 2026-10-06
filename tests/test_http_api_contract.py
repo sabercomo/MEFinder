@@ -27,7 +27,7 @@ EXTRA_ROUTE_PATHS = tuple(
     )
 )
 HTTP_PATH = ROOT / "src" / "me_finder" / "web_http.py"
-CONTRACT_PATH = ROOT / "docs" / "contracts" / "v0.5.8-http-api.json"
+CONTRACT_PATH = ROOT / "docs" / "contracts" / "v0.5.9-http-api.json"
 WRITE_CONTRACT_PATH = (
     ROOT / "docs" / "contracts" / "v0.5.1-high-risk-write-api.json"
 )
@@ -79,7 +79,7 @@ def _dictionary_literal_keys(source_path: Path) -> tuple[set[str], set[str]]:
 class HTTPAPIContractTests(unittest.TestCase):
     def test_json_contract_matches_python_contract(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(contract["release"], "0.5.8")
+        self.assertEqual(contract["release"], "0.5.9")
         self.assertEqual(contract["get"], sorted(GET_API_ROUTES))
         self.assertEqual(contract["post"], sorted(POST_API_ROUTES))
 

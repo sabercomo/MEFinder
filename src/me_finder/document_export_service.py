@@ -192,7 +192,7 @@ def export_indexed_pdf(
         destination_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         destination = destination_dir / (
-            f"{_safe_file_stem(title)}-{timestamp}-{uuid.uuid4().hex[:6]}.mefinder.zip"
+            f"{_safe_file_stem(title)}-{timestamp}-{uuid.uuid4().hex[:6]}.mefinder"
         )
         export_document_zip(
             destination,

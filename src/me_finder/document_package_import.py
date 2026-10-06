@@ -54,8 +54,8 @@ def read_document_package(path: Path) -> DocumentPackage:
     """Validate and materialize one ``mefinder.document.v1`` package."""
 
     source = Path(path)
-    if not source.name.lower().endswith(".mefinder.zip"):
-        raise DocumentPackageImportError("文档包文件名必须以 .mefinder.zip 结尾。")
+    if not source.name.lower().endswith((".mefinder", ".mefinder.zip")):
+        raise DocumentPackageImportError("文档包文件名必须以 .mefinder 或 .mefinder.zip 结尾。")
     if not zipfile.is_zipfile(source):
         raise DocumentPackageImportError("MEFinder 文档包不是有效的 ZIP 文件。")
     try:

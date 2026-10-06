@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import shutil
 import sqlite3
+import subprocess
 import tempfile
 import threading
 import time
@@ -107,6 +109,58 @@ class DocumentPackageImportTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
+    def test_new_package_suffix_restores_same_records_as_legacy_zip(self) -> None:
+        legacy = make_package(self.root / "legacy.mefinder.zip")
+        current = self.root / "current.mefinder"
+        current.write_bytes(legacy.read_bytes())
+        self.assertEqual(read_document_package(current), read_document_package(legacy))
+
+    @unittest.skipUnless(shutil.which("node"), "node is required")
+    def test_file_picker_accepts_both_packages_and_skips_mac_metadata(self) -> None:
+        script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync('src/me_finder/static/js/80-import.js', 'utf8');
+const body = source.slice(source.indexOf('  function handleFileSelect('),
+                          source.indexOf('  function renderImportQueue('));
+const uploaded = [];
+const queue = [];
+const context = {
+  importStore: {queue}, parserStore: {visionConfig: {providers: []}},
+  selectedPdfParseMode: () => 'auto', selectedVisionProviderId: () => '',
+  document: {getElementById: () => ({value: ''})},
+  renderImportQueue: () => {}, uploadImport: id => uploaded.push(id),
+  showToast: text => {throw new Error(text);}
+};
+vm.createContext(context);
+vm.runInContext(body, context);
+context.handleFileSelect([
+  {name: 'book.mefinder', size: 100},
+  {name: 'legacy.mefinder.zip', size: 100},
+  {name: 'UPPER.MEFINDER', size: 100},
+  {name: '._book.mefinder', size: 4096},
+  {name: '._legacy.mefinder.zip', size: 4096}
+]);
+assert.deepEqual(queue.map(item => item.name),
+                 ['book.mefinder', 'legacy.mefinder.zip', 'UPPER.MEFINDER']);
+assert.ok(queue.every(item => item.importKind === 'document_package'));
+assert.equal(uploaded.length, 3);
+"""
+        subprocess.run([shutil.which("node"), "-e", script], check=True)
+
+    def test_chunked_upload_accepts_current_and_legacy_package_suffixes(self) -> None:
+        paths = AppPaths.create(self.root / "runtime")
+        coordinator = DocumentImportCoordinator(paths, PackageJobs())
+        try:
+            for name in ("book.mefinder", "book.mefinder.zip", "BOOK.MEFINDER"):
+                with self.subTest(name=name):
+                    self.assertTrue(coordinator.start_chunked(
+                        name, 10, import_kind="document_package",
+                    )["ok"])
+        finally:
+            coordinator.close()
+
     def test_data_only_package_restores_text_metadata_and_page_mapping(self) -> None:
         package_path = make_package(self.root / "shared.mefinder.zip")
         package = read_document_package(package_path)
@@ -200,7 +254,7 @@ class DocumentPackageImportTests(unittest.TestCase):
         source_pdf = self.root / "source.pdf"
         source_pdf.write_bytes(b"original-pdf")
         package_path = make_package(
-            self.root / "roundtrip.mefinder.zip",
+            self.root / "roundtrip.mefinder",
             source_pdf=source_pdf,
             digest=sha256_file(source_pdf),
         )
