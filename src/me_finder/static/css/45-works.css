@@ -246,6 +246,19 @@
 .tw-state.is-direct b { color: var(--success); }
 .tw-state.is-stale b { color: var(--warning); }
 .tw-state.is-running b { color: var(--accent-text); }
+.tw-alignment-progress {
+  display: block;
+  width: min(240px, 100%);
+  height: 4px;
+  margin-top: 7px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+  accent-color: var(--accent-fill);
+}
+.tw-alignment-progress::-webkit-progress-bar { background: var(--border-subtle); border-radius: var(--radius-pill); }
+.tw-alignment-progress::-webkit-progress-value { background: var(--accent-fill); border-radius: var(--radius-pill); }
+.tw-alignment-progress::-moz-progress-bar { background: var(--accent-fill); border-radius: var(--radius-pill); }
 .tw-dot {
   display: inline-block;
   width: 7px;

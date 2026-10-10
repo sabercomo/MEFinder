@@ -645,6 +645,7 @@ def generate_alignment(
     reviewed_body_ranges: Dict[str, List[int]] | None = None,
     expected_segment_set_ids: Mapping[str, str] | None = None,
     compute_runner: Callable[..., Tuple[List[SemanticLink], list]] | None = None,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> Dict[str, object]:
     group_id = str(document_group_id or "").strip()
     if not group_id:
@@ -659,6 +660,8 @@ def generate_alignment(
         else _default_alignment_model_cache(Path(db_path))
     )
     transaction_window = write_window or nullcontext
+    if progress_callback:
+        progress_callback({"stage": "preparing"})
     with transaction_window():
         with generation_write_transaction(db_path, install_schema=True) as connection:
             _require_pair(connection, group_id, pivot_id, target_id)
@@ -789,8 +792,11 @@ def generate_alignment(
         source_language=preparation.pivot_language,
         target_language=preparation.target_language,
         reviewed_body_ranges=preparation.reviewed_body_ranges,
+        **({"progress_callback": progress_callback} if progress_callback else {}),
     )
 
+    if progress_callback:
+        progress_callback({"stage": "saving"})
     with transaction_window():
         with generation_write_transaction(db_path) as connection:
             result = _generate_alignment_on_connection(

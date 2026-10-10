@@ -10,7 +10,7 @@
   var JOB_POLL_MS = 1500;
   var STATUS_ENDPOINT = '/api/text-alignments/status';
   var injectedFetch = null;
-  var jobWatch = {jobId: '', meta: null, subscribers: []};
+  var jobWatch = {jobId: '', meta: null, progress: null, subscribers: [], progressSubscribers: []};
 
   function configure(options) {
     options = options || {};
@@ -35,6 +35,7 @@
     if (!jobId || jobWatch.jobId === jobId) return;
     jobWatch.jobId = String(jobId);
     jobWatch.meta = meta || {};
+    jobWatch.progress = jobWatch.meta.progress || null;
     poll(jobWatch.jobId);
   }
 
@@ -44,7 +45,16 @@
     Object.keys(jobWatch.meta || {}).forEach(function (name) {
       current[name] = jobWatch.meta[name];
     });
+    current.progress = jobWatch.progress;
     return current;
+  }
+
+  function onProgress(handler) {
+    jobWatch.progressSubscribers.push(handler);
+    return function () {
+      var index = jobWatch.progressSubscribers.indexOf(handler);
+      if (index >= 0) jobWatch.progressSubscribers.splice(index, 1);
+    };
   }
 
   async function poll(jobId) {
@@ -61,10 +71,14 @@
       } catch (_error) {
         continue;
       }
-      if (response.status === 202) continue;
       var payload = {};
       try { payload = await response.json(); } catch (_error) { payload = {}; }
       if (jobWatch.jobId !== jobId) return;
+      if (response.status === 202) {
+        jobWatch.progress = payload.progress || null;
+        jobWatch.progressSubscribers.slice().forEach(function (handler) { handler(running()); });
+        continue;
+      }
       var event = {
         jobId: jobId,
         meta: jobWatch.meta || {},
@@ -75,6 +89,7 @@
       };
       jobWatch.jobId = '';
       jobWatch.meta = null;
+      jobWatch.progress = null;
       jobWatch.subscribers.slice().forEach(function (handler) {
         try { handler(event); } catch (_error) { /* 一个订阅者出错不拖垮其他订阅者。*/ }
       });
@@ -85,6 +100,7 @@
   global.MEFinderAlignmentJobs = Object.freeze({
     watch: watch,
     subscribe: subscribe,
+    onProgress: onProgress,
     running: running,
     configure: configure
   });

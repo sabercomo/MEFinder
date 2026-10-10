@@ -333,7 +333,7 @@ const assert = require('assert/strict');
 const vm = require('vm');
 const fs = require('fs');
 const urls = [];
-const replies = [{status:202, ok:true, payload:{}}, {status:200, ok:true, payload:{ok:true}}];
+const replies = [{status:202, ok:true, payload:{progress:{stage:'embedding',percent:42,eta_seconds:120}}}, {status:200, ok:true, payload:{ok:true}}];
 const context = {
   setTimeout(resolve){resolve();},
   MEFinderApi: {fetch: async url => { urls.push(url); const r = replies.shift(); return {status:r.status, ok:r.ok, json:async()=>r.payload}; }}
@@ -343,20 +343,26 @@ vm.createContext(context);
 vm.runInContext(fs.readFileSync(0,'utf8'), context);
 const jobs = context.MEFinderAlignmentJobs;
 assert.equal(Object.isFrozen(jobs), true);
-assert.deepEqual(Object.keys(jobs).sort(), ['configure','running','subscribe','watch']);
+assert.deepEqual(Object.keys(jobs).sort(), ['configure','onProgress','running','subscribe','watch']);
 assert.equal(context.MEFinderReader, undefined);
 const events = [];
+const progress = [];
+const stopProgress = jobs.onProgress(event => progress.push(event));
 const stop = jobs.subscribe(event => events.push(event));
 jobs.subscribe(() => { throw new Error('bad subscriber'); });
 (async()=>{
   jobs.watch('J9', {origin:'works', groupId:'G', key:'A|B'});
-  assert.deepEqual({...jobs.running()}, {jobId:'J9', origin:'works', groupId:'G', key:'A|B'});
+  assert.deepEqual({...jobs.running()}, {jobId:'J9', origin:'works', groupId:'G', key:'A|B',progress:null});
   for (let i=0;i<5 && !events.length;i++) await new Promise(setImmediate);
   assert.equal(events.length, 1);
+  assert.equal(progress.length, 1);
+  assert.equal(progress[0].progress.percent, 42);
+  assert.equal(progress[0].progress.eta_seconds, 120);
   assert.equal(events[0].outcome, 'ok');
   assert.deepEqual(urls, ['/api/text-alignments/status?job_id=J9', '/api/text-alignments/status?job_id=J9']);
   assert.equal(jobs.running(), null);
   stop();
+  stopProgress();
 })().catch(error=>{console.error(error);process.exit(1);});
 """
         result = subprocess.run(

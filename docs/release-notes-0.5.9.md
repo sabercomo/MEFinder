@@ -1,3 +1,5 @@
+2026-10-10：对齐阶段百分比、进度条与当前阶段预计剩余时间可本机试用；独立 Windows 开发程序已构建核验，关闭原程序后启动 `dist/MEFinder-progress-20261010/文献原句定位器.exe` 即可使用原文献库。现有 release / macOS 包不含此功能，尚未正式发布。
+
 2026-10-10：作品弹窗中文输入、下拉宽度和对齐启动失败提示已修复，本机 Windows 开发程序已重建并核验；现有 Windows 双包与 macOS arm64 包为 10-07 构建，尚未正式发布。
 
 2026-10-07：v0.5.9 Windows 与 macOS arm64 包均已本机打包并通过自动化门禁，尚未正式发布；macOS Intel（x86_64）包未打，安装 / 升级 / 卸载与安装后人工验收未做。
@@ -6,6 +8,7 @@
 
 # v0.5.9 迭代说明
 
+- 生成对齐时显示当前阶段的真实百分比、进度条和预计剩余时间；样本不足时显示正在估算，缓存完整命中时跳过文本计算，支持刷新后恢复。剩余时间仅指当前阶段，见 [任务进度契约](contracts/v0.5.9-alignment-jobs.md)。
 - 新建作品的文献搜索保留活动输入框，修复中文组合输入被中断和中间编辑光标跳到末尾；加入作品的下拉菜单恢复到触发器宽度。
 - 对齐计算进程在能力探测阶段退出时，提示重新安装计算组件。本机旧路径启动器已离线修复并完成真实 E5 小样本计算；《异化》整书对齐尚未重跑，见 [问题记录](issues/works-dialog-ime-and-alignment-runtime.md) 和 [核验报告](../reports/works-dialog-runtime-2026-10-10.md)。
 - 文献库单篇与批量导出的文档包统一使用 `.mefinder` 后缀，内部仍是原有 ZIP 容器和 `mefinder.document.v1` 数据，不重解析、不改变页码与原 PDF。Windows 不再自动按 ZIP 浏览它及 Mac 创建的同名 `._` 辅助文件。
@@ -15,6 +18,8 @@
 - 实际 U 盘证据与复现测试见 [问题记录](issues/usb-appledouble-zip-dialog.md) 和 [核验报告](../reports/usb-document-package-2026-10-06.md)。先前怀疑强制 ZIP64，经实际文件核验后不采用该修改。
 
 ## Windows 本地交付
+
+2026-10-10（对齐进度）：源码 2,750 项通过（27 跳过，227.212 秒）、Chrome 9 项通过（29.791 秒）、跟踪 Python 的 Ruff(F) 零告警。官方 `build_windows_dist.cmd` 在完整独立检出通过 2,750 项（45 跳过，224.745 秒）、Node 语法、主程序 / MCP 打包、FTS5 与 MCP 冒烟。交付到 `dist/MEFinder-progress-20261010/`；资产、worker 源码、主程序 PYZ 及原数据目录指针核验通过，包内 worker 使用既有 E5 模型实际完成进度上报小样本。原 `dist/MEFinder/` 和运行中的桌面 / MCP 会话保留，`release/` 双包未重打。见 [核验报告](../reports/alignment-progress-2026-10-10.md)。
 
 2026-10-10：`build_windows_dist.cmd` 重建 `dist/MEFinder/文献原句定位器.exe` 与 MCP 侧车，全量 2,745 项通过（26 项跳过，212.176 秒）；前端文件、主程序编译后的错误分类 / 提示和原数据目录指针均核验通过。源码全量 2,745 项通过，真实 Chrome 回归 8 项通过，Ruff(F) 零告警。重建后既有 E5 模型小样本计算再次通过。此轮更新本机开发程序，`release/` 双包未重打。
 

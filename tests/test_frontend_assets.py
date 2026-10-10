@@ -692,9 +692,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.5.9：文档包改用 .mefinder，导入兼容旧 ZIP 并忽略 macOS 辅助文件。
     # 作品弹窗搜索保留中文组合输入节点，固定定位菜单按触发器宽度显示。
     BASELINE_SHA256 = (
-        "46380e0ae174f756f9d47f2d6dad6ee11a422b7ddf524292ea06897cdf47da62"
+        "6391d42703ed064d5a446c9537859b025a827010e2256d9b669d24819a0d8aaf"
     )
-    BASELINE_BYTES = 1516647
+    BASELINE_BYTES = 1519152
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

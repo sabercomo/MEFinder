@@ -255,6 +255,7 @@ def run_in_process(
     source_language: str = "und",
     target_language: str = "und",
     reviewed_body_ranges: Dict[str, List[int]] | None = None,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> ComputeResult:
     """Run the compute phase in this process (imports NumPy lazily)."""
 
@@ -272,6 +273,7 @@ def run_in_process(
         source_language=source_language,
         target_language=target_language,
         reviewed_body_ranges=reviewed_body_ranges,
+        progress_callback=progress_callback,
     )
 
 
@@ -493,6 +495,7 @@ class SubprocessAlignmentComputeRunner:
         source_language: str = "und",
         target_language: str = "und",
         reviewed_body_ranges: Dict[str, List[int]] | None = None,
+        progress_callback: Callable[[dict], None] | None = None,
     ) -> ComputeResult:
         if embedding_provider is not None:
             raise AlignmentComputeError(
@@ -536,7 +539,8 @@ class SubprocessAlignmentComputeRunner:
                             PROTOCOL_INCOMPATIBLE, "对齐计算进程协议不兼容。"
                         )
                 elif kind == "progress":
-                    continue
+                    if progress_callback:
+                        progress_callback(message)
                 elif kind == "error":
                     raise AlignmentComputeError(
                         str(message.get("code") or COMPUTE_FAILED),

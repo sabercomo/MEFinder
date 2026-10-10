@@ -283,7 +283,7 @@
     if (works.running) {
       watchAlignmentJob(
         works.running.job_id, 'works', works.running.document_group_id,
-        works.running.pivot_source_file_id, works.running.target_source_file_id
+        works.running.pivot_source_file_id, works.running.target_source_file_id, works.running.progress
       );
     }
   }
@@ -753,7 +753,22 @@
       if (rest) node.appendChild(document.createTextNode(' · ' + rest));
       if (title) node.title = title;
     }
-    if (status.status === 'running') put('生成中', '', 'running');
+    if (status.status === 'running') {
+      var current = global.MEFinderAlignmentJobs.running();
+      var progress = current && current.progress;
+      var labels = {preparing: '准备文本', loading: '加载模型', embedding: '文本计算',
+        matching: '段落匹配', checking: '检查对应关系', saving: '保存结果'};
+      var detail = progress ? labels[progress.stage] || '生成中' : '准备文本';
+      if (progress && progress.percent != null) {
+        detail += ' ' + progress.percent + '%';
+        detail += ' · 本阶段' + (progress.eta_seconds == null ? '剩余时间正在估算…' : localOCREstimatedWait(progress.eta_seconds));
+      }
+      put('生成中', detail, 'running');
+      if (progress && progress.percent != null) {
+        node.appendChild(el('progress', {className: 'tw-alignment-progress', max: 100,
+          value: progress.percent, 'aria-label': labels[progress.stage] + '进度'}));
+      }
+    }
     else if (status.status === 'queued') put('等待重新对齐', '', 'queued');
     else if (status.stale_reason === 'algorithm_unreadable') put('需重新对齐', '算法已更新，旧结果不可读', 'stale');
     else if (status.stale_reason === 'model_changed') put('需重新对齐', '模型已更换，旧结果可读', 'stale');
@@ -847,11 +862,12 @@
 
   // 对齐任务只有一个监听器 MEFinderAlignmentJobs（15-alignment-jobs.js）。
   // 作品页只认领任务并订阅结局：两份轮询会让同一个任务弹两次提示、刷两次视图。
-  function watchAlignmentJob(jobId, origin, groupId, pivotId, targetId) {
+  function watchAlignmentJob(jobId, origin, groupId, pivotId, targetId, progress) {
     global.MEFinderAlignmentJobs.watch(jobId, {
       origin: origin,
       groupId: groupId || '',
-      key: pivotId && targetId ? pairKey(pivotId, targetId) : ''
+      key: pivotId && targetId ? pairKey(pivotId, targetId) : '',
+      progress: progress || null
     });
   }
 
@@ -1543,6 +1559,12 @@
     if (!global.MEFinderReader) return;
     global.MEFinderAlignmentJobs.subscribe(function (event) {
       onAlignmentJobEnd(event).catch(function () { /* 刷新失败不影响任务结局。*/ });
+    });
+    global.MEFinderAlignmentJobs.onProgress(function () {
+      if (currentPage !== 'works' || !works.running) return;
+      var group = groupById(works.running.document_group_id);
+      var node = document.querySelector('.tw-pair-line .tw-state.is-running');
+      if (group && node) node.replaceWith(statusLine(group, {status: 'running'}));
     });
     global.MEFinderReader.configure({
       onOpenChange: onReaderOpenChange,

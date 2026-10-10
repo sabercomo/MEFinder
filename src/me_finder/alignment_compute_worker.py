@@ -93,7 +93,18 @@ def _run_compute(request: dict, result_path: Path, control: IO[str]) -> int:
     folio_candidates = [_deserialize_folio(c) for c in inputs["folio_candidates"]]
     reusable = tuple(tuple(seq) for seq in inputs["reusable_sequences"])
 
-    _emit(control, type="progress", task_id=request.get("task_id"), stage="compute-start")
+    last_stage = ""
+    last_emit = 0.0
+
+    def report_progress(progress: dict) -> None:
+        nonlocal last_stage, last_emit
+        now = time.monotonic()
+        stage = progress["stage"]
+        if stage != last_stage or now - last_emit >= 0.25 or progress.get("completed") == progress.get("total"):
+            _emit(control, type="progress", task_id=request.get("task_id"), **progress)
+            last_stage, last_emit = stage, now
+
+    report_progress({"stage": "loading"})
     computed = run_in_process(
         list(inputs["source_texts"]),
         list(inputs["target_texts"]),
@@ -105,6 +116,7 @@ def _run_compute(request: dict, result_path: Path, control: IO[str]) -> int:
         source_language=inputs["source_language"],
         target_language=inputs["target_language"],
         reviewed_body_ranges=inputs["reviewed_body_ranges"],
+        progress_callback=report_progress,
     )
 
     # Recompute the identity from what we actually received and computed on, so

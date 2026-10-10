@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
@@ -55,6 +56,9 @@ class TextAlignmentController:
         self._job_id: str | None = None
         self._job_payload: Dict[str, object] | None = None
         self._job_response: AlignmentResponse | None = None
+        self._job_progress: Dict[str, object] = {"stage": "preparing", "percent": None, "eta_seconds": None}
+        self._progress_stage_started = 0.0
+        self._progress_initial_completed = 0
 
     @staticmethod
     def _valid_body_ranges(value: object) -> bool:
@@ -112,6 +116,9 @@ class TextAlignmentController:
             self._job_id = uuid.uuid4().hex
             self._job_payload = dict(payload)
             self._job_response = None
+            self._job_progress = {"stage": "preparing", "percent": None, "eta_seconds": None}
+            self._progress_stage_started = time.monotonic()
+            self._progress_initial_completed = 0
             self._job_thread = threading.Thread(
                 target=self._generate_job, args=(dict(payload),), daemon=True,
             )
@@ -120,7 +127,7 @@ class TextAlignmentController:
 
     def _generate_job(self, payload: Dict[str, object]) -> None:
         try:
-            response = self.generate(payload)
+            response = self.generate(payload, progress_callback=self._update_progress)
         except (OSError, sqlite3.Error, RuntimeError, ValueError):
             # Surface worker failures to the polling client instead of leaving
             # a dead worker permanently displayed as running.
@@ -128,6 +135,27 @@ class TextAlignmentController:
             response = 500, {"error": "自动对齐发生错误，请查看运行日志"}
         with self._job_lock:
             self._job_response = response
+
+    def _update_progress(self, progress: dict) -> None:
+        with self._job_lock:
+            now = time.monotonic()
+            stage = progress["stage"]
+            completed = progress.get("completed", 0)
+            total = progress.get("total", 0)
+            if stage != self._job_progress["stage"]:
+                self._progress_stage_started = now
+                self._progress_initial_completed = completed
+            elapsed = now - self._progress_stage_started
+            processed = completed - self._progress_initial_completed
+            eta = ((total - completed) * elapsed / processed
+                   if total and processed > 0 and elapsed >= 1 else None)
+            self._job_progress = {
+                "stage": stage,
+                "completed": completed,
+                "total": total,
+                "percent": min(100, int(completed * 100 / total)) if total else None,
+                "eta_seconds": eta,
+            }
 
     def status(self, params: Mapping[str, Sequence[object]]) -> AlignmentResponse:
         """Return the active or most recently finished background run."""
@@ -137,13 +165,13 @@ class TextAlignmentController:
         with self._job_lock:
             if self._job_id is None or job_ids[0] != self._job_id:
                 return 404, {"error": "对齐任务不存在，请刷新作品组查看已保存的结果"}
-            return self._job_response or (202, {"job_id": self._job_id, "status": "running"})
+            return self._job_response or (202, {"job_id": self._job_id, "status": "running",
+                                              "progress": dict(self._job_progress)})
 
     def current(self, _params: object = None) -> AlignmentResponse:
         """Report the in-flight run, so a reloaded page can show it again.
 
-        Only the run's identity is known here; the compute worker does not
-        report batch progress, so no percentage is invented.
+        Includes the latest measured progress for page reloads.
         """
         with self._job_lock:
             if self._job_id is None or self._job_response is not None:
@@ -156,9 +184,10 @@ class TextAlignmentController:
                 "pivot_source_file_id": payload.get("pivot_source_file_id"),
                 "target_source_file_id": payload.get("target_source_file_id"),
                 "force": bool(payload.get("force", False)),
+                "progress": dict(self._job_progress),
             }
 
-    def generate(self, payload: object) -> AlignmentResponse:
+    def generate(self, payload: object, *, progress_callback: Callable[[dict], None] | None = None) -> AlignmentResponse:
         """Generate synchronously for existing API clients and the worker."""
         if not self._valid_generate_payload(payload):
             return 400, {"error": "自动对齐请求字段无效。"}
@@ -177,6 +206,7 @@ class TextAlignmentController:
                 force=payload.get("force", False),
                 reviewed_body_ranges=payload.get("reviewed_body_ranges"),
                 expected_segment_set_ids=payload.get("expected_segment_set_ids"),
+                **({"progress_callback": progress_callback} if progress_callback else {}),
             )
         except TextAlignmentCancelled:
             LOGGER.info("text alignment cancelled by user")

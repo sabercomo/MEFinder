@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Callable, Dict, List, Sequence, Tuple
 
 from .alignment_anchors import HeadingAnchor
 from .alignment_regions import alignment_body_bounds
@@ -52,6 +52,7 @@ def align_segment_sequences(
     source_language: str = "und",
     target_language: str = "und",
     reviewed_body_ranges: Dict[str, List[int]] | None = None,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> Tuple[List[SemanticLink], list]:
     """Return chapter-anchored semantic links and the anchors used."""
     import numpy as np
@@ -65,6 +66,7 @@ def align_segment_sequences(
             cache_dir,
             reusable_sequences=reusable_sequences,
             model_id=embedding_model_id,
+            progress_callback=progress_callback,
         )
         embeddings = np.vstack([source_vectors, target_vectors])
     else:
@@ -106,6 +108,7 @@ def align_segment_sequences(
         target_language=target_language,
         thresholds=active_thresholds,
         structural_anchors=structural_anchors,
+        progress_callback=progress_callback,
     )
     aligned = [
         replace(link,

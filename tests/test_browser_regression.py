@@ -356,7 +356,7 @@ class BrowserRegressionTests(unittest.TestCase):
             if job["done"]:
                 route.fulfill(json={"ok": True})
             else:
-                route.fulfill(status=202, json={"ok": True, "running": True})
+                route.fulfill(status=202, json={"ok": True, "running": True, "progress": job.get("progress")})
 
         self.page.route("**/api/text-alignment/models", ready_models)
         self.page.route("**/api/text-alignments/start", start)
@@ -365,6 +365,27 @@ class BrowserRegressionTests(unittest.TestCase):
         self.page.wait_for_load_state("networkidle")
         self.navigate("译本对照")
         return job
+
+    def test_alignment_progress_updates_and_clears_without_replacing_cancel(self) -> None:
+        job = self.fake_alignment_jobs()
+        line = self.pair_line(r"^English EPUB.*德文")
+        line.get_by_role("button", name="生成对齐").click()
+        cancel = line.get_by_role("button", name="取消")
+        cancel.wait_for()
+        cancel.focus()
+        job["progress"] = {"stage": "embedding", "percent": 42, "eta_seconds": 120}
+        line.get_by_text("文本计算 42%", exact=False).wait_for()
+        self.assertIn("本阶段预计剩余约 2 分钟", line.inner_text())
+        self.assertEqual(line.locator("progress").get_attribute("value"), "42")
+        self.assertTrue(cancel.evaluate("node => node === document.activeElement"))
+        job["progress"] = {"stage": "matching", "percent": 12, "eta_seconds": None}
+        line.get_by_text("段落匹配 12%", exact=False).wait_for()
+        self.assertIn("正在估算", line.inner_text())
+        job["progress"] = {"stage": "saving", "percent": None, "eta_seconds": None}
+        line.get_by_text("保存结果", exact=False).wait_for()
+        self.assertEqual(line.locator("progress").count(), 0)
+        job["done"] = True
+        cancel.wait_for(state="detached")
 
     def test_running_alignment_disables_other_generate_actions_until_it_ends(self) -> None:
         job = self.fake_alignment_jobs()

@@ -10,7 +10,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Protocol, Sequence, Tuple
+from typing import Callable, Dict, List, Protocol, Sequence, Tuple
 
 from typing import TYPE_CHECKING
 
@@ -162,6 +162,7 @@ class EmbeddingProvider(Protocol):
 class FastEmbedEmbeddingProvider:
     model: EmbeddingModelConfig
     local_files_only: bool = True
+    progress_callback: Callable[[dict], None] | None = None
 
     def __call__(self, texts: Sequence[str], cache_dir: Path) -> np.ndarray:
         import numpy as np
@@ -192,6 +193,8 @@ class FastEmbedEmbeddingProvider:
         # E5's large ONNX activations at batch 64 can exhaust desktop RAM.
         batch_size = 4 if self.model.prefix_mode == "query" else 64
         collected: List[np.ndarray] = []
+        if self.progress_callback:
+            self.progress_callback({"stage": "embedding", "completed": 0, "total": len(texts)})
         # FastEmbed yields per document; the generator hands control back to
         # Python between ONNX batches, which is the only point a cooperative
         # cancel can interrupt the otherwise all-native inference.
@@ -199,6 +202,8 @@ class FastEmbedEmbeddingProvider:
             if embedding_cancel_requested():
                 raise SemanticAlignmentCancelled("已取消译本对齐。")
             collected.append(np.asarray(vector, dtype=np.float32))
+            if self.progress_callback and (len(collected) % batch_size == 0 or len(collected) == len(texts)):
+                self.progress_callback({"stage": "embedding", "completed": len(collected), "total": len(texts)})
         vectors = (
             np.stack(collected, axis=0)
             if collected
@@ -229,6 +234,7 @@ def embed_texts(
     *,
     model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
     local_files_only: bool = True,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> np.ndarray:
     """Embed text with FastEmbed's CPU ONNX multilingual model."""
 
@@ -238,7 +244,7 @@ def embed_texts(
     # shutdown from failing an unrelated later run.
     begin_embedding_run()
     try:
-        return FastEmbedEmbeddingProvider(embedding_model_config(model_id), local_files_only)(
+        return FastEmbedEmbeddingProvider(embedding_model_config(model_id), local_files_only, progress_callback)(
             texts, cache_dir
         )
     except SemanticAlignmentCancelled:
@@ -274,6 +280,7 @@ def embed_text_sequences(
     *,
     reusable_sequences: Sequence[Sequence[str]] = (),
     model_id: str = DEFAULT_EMBEDDING_MODEL_ID,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> List[np.ndarray]:
     """Cache document vectors and reuse unchanged segments after re-segmentation."""
     import numpy as np
@@ -312,7 +319,8 @@ def embed_text_sequences(
         )
         if uncached_texts:
             uncached_vectors = embed_texts(
-                uncached_texts, cache_dir, model_id=model_id
+                uncached_texts, cache_dir, model_id=model_id,
+                **({"progress_callback": progress_callback} if progress_callback else {}),
             )
             vectors_by_text.update(zip(uncached_texts, uncached_vectors))
         for index in missing:
@@ -813,6 +821,7 @@ def _align_partition(
     source_groups: Dict[int, np.ndarray],
     target_groups: Dict[int, np.ndarray],
     low_confidence_threshold: float,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> List[SemanticLink]:
     import numpy as np
     source_count = source_end - source_offset
@@ -845,6 +854,9 @@ def _align_partition(
         return max(0, expected - band), min(target_count, expected + band)
 
     for source_index in range(source_count + 1):
+        if progress_callback and source_index % 32 == 0:
+            progress_callback({"stage": "matching", "completed": source_offset + source_index,
+                               "total": len(source_lengths)})
         row_start, row_end = bounds(source_index)
         row_bounds.append((row_start, row_end))
         costs = [math.inf] * (row_end - row_start + 1)
@@ -1053,6 +1065,7 @@ def _align_monotonic_sequences(
     anchor_registry: AnchorExtractorRegistry | None = DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     thresholds: AlignmentThresholds = _DEFAULT_THRESHOLDS,
     structural_anchors: Sequence[HeadingAnchor] | None = None,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
     import numpy as np
     source_count = len(source_texts)
@@ -1172,6 +1185,7 @@ def _align_monotonic_sequences(
                 source_groups,
                 target_groups,
                 thresholds.low,
+                progress_callback=progress_callback,
             )
         )
         if anchor.key.startswith("folio:"):
@@ -1213,6 +1227,7 @@ def _align_monotonic_sequences(
             source_groups,
             target_groups,
             thresholds.low,
+            progress_callback=progress_callback,
         )
     )
     return links, anchors
@@ -1606,12 +1621,15 @@ def align_semantic_sequences(
     anchor_registry: AnchorExtractorRegistry | None = DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     thresholds: AlignmentThresholds = _DEFAULT_THRESHOLDS,
     structural_anchors: Sequence[HeadingAnchor] | None = None,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> Tuple[List[SemanticLink], List[HeadingAnchor]]:
     """Align segments with structural links and partition-only folio boundaries."""
     import numpy as np
 
     source_count = len(source_texts)
     target_count = len(target_texts)
+    if progress_callback:
+        progress_callback({"stage": "matching", "completed": 0, "total": source_count})
     if not source_count or not target_count:
         raise SemanticAlignmentError("两本文献都必须至少包含一个 Segment。")
     normalized = _normalized_rows(np.asarray(embeddings, dtype=np.float32))
@@ -1628,7 +1646,11 @@ def align_semantic_sequences(
         anchor_registry=anchor_registry,
         thresholds=thresholds,
         structural_anchors=structural_anchors,
+        progress_callback=progress_callback,
     )
+    if progress_callback:
+        progress_callback({"stage": "matching", "completed": source_count, "total": source_count})
+        progress_callback({"stage": "checking"})
     overrides = _note_override_links(
         source_texts, target_texts, source_vectors, target_vectors, thresholds
     )

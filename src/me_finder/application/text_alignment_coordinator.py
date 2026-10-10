@@ -6,6 +6,7 @@ import sqlite3
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Callable
 
 from ..embedding_models import (
     model_component_installed,
@@ -136,6 +137,7 @@ class TextAlignmentCoordinator:
         force: bool = False,
         reviewed_body_ranges=None,
         expected_segment_set_ids=None,
+        progress_callback: Callable[[dict], None] | None = None,
     ):
         preferences = read_preferences(
             resolve_preferences_path(self._paths.runtime_root)
@@ -196,6 +198,7 @@ class TextAlignmentCoordinator:
                         reviewed_body_ranges=reviewed_body_ranges,
                         expected_segment_set_ids=expected_segment_set_ids,
                         compute_runner=runner,
+                        progress_callback=progress_callback,
                     )
             except (SemanticAlignmentCancelled, DurableOperationClosedError) as exc:
                 # Both mean "the run stopped because the app is shutting down or

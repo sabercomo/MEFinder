@@ -69,8 +69,10 @@ class TranslationWorksFrontendTests(unittest.TestCase):
         combined = WORKS_JS + reader_js_source()
         self.assertNotIn("覆盖率", combined)
         self.assertNotIn("准确率", combined)
-        # 没有真实批次进度，不显示百分比。
-        self.assertNotRegex(status, r"生成中[^']*%")
+        # 百分比仅来自真实批次，未上报分母的阶段不伪造进度。
+        self.assertIn("progress.percent != null", status)
+        self.assertIn("progress.percent + '%'", status)
+        self.assertIn("本阶段", status)
 
     def test_every_pair_shows_its_alignment_state_without_picking(self) -> None:
         # 对齐状态逐对常显：不再要求先勾选两个版本、也没有底部对照栏。
