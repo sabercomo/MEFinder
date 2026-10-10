@@ -1236,6 +1236,45 @@
       busy: false
     };
     var dialog = openDialog(el('div'), 'tw-assign-title');
+    function pickList() {
+      var query = state.query.trim().toLowerCase();
+      var listSources = catalogSources().filter(function (source) {
+        if (state.selected.indexOf(source.source_file_id) >= 0) return true;
+        if (!query) return false;
+        return [source.title, source.author, source.file_name].join(' ').toLowerCase().indexOf(query) >= 0;
+      }).sort(function (x, y) {
+        return (state.selected.indexOf(y.source_file_id) >= 0) - (state.selected.indexOf(x.source_file_id) >= 0);
+      }).slice(0, 60);
+      var list = el('div', {className: 'tw-pick-list', role: 'group', 'aria-label': '文献'});
+      listSources.forEach(function (source) {
+        var id = source.source_file_id;
+        var checked = state.selected.indexOf(id) >= 0;
+        var other = groupForSource(id);
+        var box = el('input', {
+          type: 'checkbox', className: 'tw-check', id: 'tw-pick-' + id, checked: checked,
+          onchange: function () {
+            var index = state.selected.indexOf(id);
+            if (index >= 0) state.selected.splice(index, 1);
+            else {
+              state.selected.push(id);
+              if (!state.name) state.name = sourceTitle(id).replace(/[（(].*$/, '').trim();
+            }
+            draw();
+          }
+        });
+        box.checked = checked;
+        list.appendChild(el('label', {className: 'tw-pick-row', for: 'tw-pick-' + id}, [
+          box,
+          el('span', {className: 'tw-pick-main'}, [
+            el('span', {className: 'tw-pick-title', text: sourceTitle(id)}),
+            el('span', {className: 'tw-version-sub', text: [source.author || '作者信息待完善', languageName(source.language_code), sourceFormatLabel(source)].join(' · ')})
+          ]),
+          el('span', {className: 'tw-version-sub', text: other ? '在「' + other.title + '」' : ''})
+        ]));
+      });
+      if (!listSources.length) list.appendChild(el('p', {className: 'tw-note', text: query ? '没有匹配的文献' : '搜索文献库，勾选要加入的书'}));
+      return list;
+    }
     function draw() {
       var focusId = document.activeElement && document.activeElement.id;
       var movers = state.selected.filter(function (id) {
@@ -1283,42 +1322,7 @@
           return menu;
         })()
       ]);
-      var query = state.query.trim().toLowerCase();
-      var listSources = catalogSources().filter(function (source) {
-        if (state.selected.indexOf(source.source_file_id) >= 0) return true;
-        if (!query) return false;
-        return [source.title, source.author, source.file_name].join(' ').toLowerCase().indexOf(query) >= 0;
-      }).sort(function (x, y) {
-        return (state.selected.indexOf(y.source_file_id) >= 0) - (state.selected.indexOf(x.source_file_id) >= 0);
-      }).slice(0, 60);
-      var list = el('div', {className: 'tw-pick-list', role: 'group', 'aria-label': '文献'});
-      listSources.forEach(function (source) {
-        var id = source.source_file_id;
-        var checked = state.selected.indexOf(id) >= 0;
-        var other = groupForSource(id);
-        var box = el('input', {
-          type: 'checkbox', className: 'tw-check', id: 'tw-pick-' + id, checked: checked,
-          onchange: function () {
-            var index = state.selected.indexOf(id);
-            if (index >= 0) state.selected.splice(index, 1);
-            else {
-              state.selected.push(id);
-              if (!state.name) state.name = sourceTitle(id).replace(/[（(].*$/, '').trim();
-            }
-            draw();
-          }
-        });
-        box.checked = checked;
-        list.appendChild(el('label', {className: 'tw-pick-row', for: 'tw-pick-' + id}, [
-          box,
-          el('span', {className: 'tw-pick-main'}, [
-            el('span', {className: 'tw-pick-title', text: sourceTitle(id)}),
-            el('span', {className: 'tw-version-sub', text: [source.author || '作者信息待完善', languageName(source.language_code), sourceFormatLabel(source)].join(' · ')})
-          ]),
-          el('span', {className: 'tw-version-sub', text: other ? '在「' + other.title + '」' : ''})
-        ]));
-      });
-      if (!listSources.length) list.appendChild(el('p', {className: 'tw-note', text: query ? '没有匹配的文献' : '搜索文献库，勾选要加入的书'}));
+      var list = pickList();
       var ready = state.selected.length > 0 && (state.target !== 'new' || state.name.trim());
       var moverAlignments = movers.reduce(function (sum, id) {
         return sum + memberAlignmentCount(groupForSource(id), id);
@@ -1348,7 +1352,11 @@
             el('input', {
               id: 'tw-assign-query', type: 'search', placeholder: '搜索文献库', 'aria-label': '搜索文献库',
               value: state.query, autocomplete: 'off',
-              oninput: function (event) { state.query = event.target.value; draw(); }
+              oninput: function (event) {
+                state.query = event.target.value;
+                // 只更新结果列表，保留输入框、输入法组合状态和光标位置。
+                dialog.querySelector('.tw-pick-list').replaceWith(pickList());
+              }
             })
           ]),
           list,

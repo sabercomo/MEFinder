@@ -210,6 +210,47 @@ class BrowserRegressionTests(unittest.TestCase):
         )
 
     # ── scenarios ──────────────────────────────────────────────────
+    def test_assign_search_keeps_ime_input_and_caret(self) -> None:
+        self.navigate("译本对照")
+        self.page.get_by_role("button", name="新建作品", exact=True).click()
+        field = self.page.locator("#tw-assign-query")
+        field.focus()
+        self.page.evaluate("window.assignInput = document.getElementById('tw-assign-query')")
+        cdp = self.context.new_cdp_session(self.page)
+        self.addCleanup(cdp.detach)
+        cdp.send("Input.imeSetComposition", {
+            "text": "jingshen", "selectionStart": 8, "selectionEnd": 8,
+        })
+        self.assertTrue(self.page.evaluate(
+            "window.assignInput === document.activeElement && window.assignInput.isConnected"
+        ), "composition must keep the original input")
+        cdp.send("Input.insertText", {"text": "精神"})
+        self.assertEqual(field.input_value(), "精神")
+        self.assertGreater(self.page.locator(".tw-pick-row").count(), 0)
+        # Editing in the middle must retain the same node and insertion point.
+        self.page.keyboard.press("Home")
+        self.page.keyboard.insert_text("现象")
+        self.assertEqual(field.input_value(), "现象精神")
+        self.assertEqual(field.evaluate("node => node.selectionStart"), 2)
+        self.assertTrue(self.page.evaluate("window.assignInput === document.activeElement"))
+
+    def test_assign_menu_stays_at_trigger_width(self) -> None:
+        self.navigate("译本对照")
+        self.page.get_by_role("button", name="新建作品", exact=True).click()
+        trigger = self.page.locator("#tw-assign-target .app-select-trigger")
+        trigger.click()
+        menu = self.page.locator(".tw-select-menu")
+        menu.wait_for(state="visible")
+        self.page.wait_for_timeout(200)  # wait for the existing entrance transition
+        bounds = menu.bounding_box()
+        anchor = trigger.bounding_box()
+        self.assertAlmostEqual(bounds["width"], max(anchor["width"], 240), delta=1)
+        self.assertAlmostEqual(bounds["x"], anchor["x"], delta=1)
+        self.assertLessEqual(bounds["x"] + bounds["width"], 1280)
+        menu.get_by_role("option", name="精神现象学").click()
+        self.assertEqual(trigger.inner_text().strip(), "精神现象学")
+        self.assertEqual(trigger.get_attribute("aria-expanded"), "false")
+
     def test_every_main_view_keeps_hidden_elements_off_screen(self) -> None:
         for label in ("文献检索", "文献库", "译本对照", "文献导入", "设置"):
             with self.subTest(view=label):

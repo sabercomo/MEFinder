@@ -471,7 +471,7 @@ class SubprocessAlignmentComputeRunner:
                         str(message.get("message") or "对齐计算进程无法启动。"),
                     )
             raise AlignmentComputeError(
-                WORKER_CRASHED,
+                WORKER_START_FAILED,
                 f"对齐计算进程未返回能力应答(exit={process.poll() if process else None})。",
             )
         finally:

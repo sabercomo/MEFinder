@@ -235,6 +235,15 @@ class WorkerProtocolTests(unittest.TestCase):
 
 
 class RunnerFailureTests(unittest.TestCase):
+    def test_probe_exit_before_hello_is_a_start_failure(self) -> None:
+        runner = ac.SubprocessAlignmentComputeRunner(
+            task_id="broken-runtime", launch_command=[sys.executable, "-c", "raise SystemExit(1)"]
+        )
+        with self.assertRaises(ac.AlignmentComputeError) as ctx:
+            runner.probe()
+        self.assertEqual(ctx.exception.code, ac.WORKER_START_FAILED)
+        self.assertIn("exit=1", str(ctx.exception))
+
     @unittest.skipIf(os.name == "nt", "POSIX worker can ignore SIGTERM")
     def test_forced_termination_reaps_running_worker(self) -> None:
         import signal

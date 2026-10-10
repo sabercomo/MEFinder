@@ -66,7 +66,7 @@ _COMPONENT_CODES = {COMPONENT_MISSING, PROTOCOL_INCOMPATIBLE, WORKER_START_FAILE
 _COMPONENT_MESSAGES = {
     COMPONENT_MISSING: "对齐计算运行时未安装：请安装包含对齐组件的版本后再生成。",
     PROTOCOL_INCOMPATIBLE: "对齐计算进程版本不兼容，请更新应用后再生成。",
-    WORKER_START_FAILED: "对齐计算进程无法启动：请检查应用安装是否完整。",
+    WORKER_START_FAILED: "对齐计算运行时无法启动：请在设置 → 译本对齐中重新安装计算组件。",
 }
 
 

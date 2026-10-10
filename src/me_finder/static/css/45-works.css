@@ -362,7 +362,7 @@
 .tw-push-left { margin-right: auto; }
 .tw-assign-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; }
 .tw-select .app-select-trigger { width: 100%; height: 36px; }
-.tw-select-menu { min-width: 100%; max-height: min(320px, 50vh); overflow-y: auto; }
+.tw-select-menu { min-width: 0; max-height: min(320px, 50vh); overflow-y: auto; }
 .tw-select-menu .app-select-option { gap: 12px; }
 .tw-option-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tw-select-menu small { flex: none; font-size: 12px; font-weight: 400; color: var(--text-tertiary); }

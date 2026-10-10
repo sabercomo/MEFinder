@@ -15,6 +15,7 @@ from src.me_finder.alignment_compute import (
     CANCELLED,
     COMPONENT_MISSING,
     WORKER_CRASHED,
+    WORKER_START_FAILED,
 )
 from src.me_finder.application.text_alignment_coordinator import (
     TextAlignmentCancelled,
@@ -301,6 +302,17 @@ class TextAlignmentCoordinatorProbeTests(unittest.TestCase):
         with self.assertRaises(TextAlignmentFailed) as ctx:
             coordinator.generate("group", "a", "b")
         self.assertNotIsInstance(ctx.exception, TextAlignmentComponentUnavailable)
+
+    def test_probe_start_failure_instructs_reinstalling_compute_runtime(self) -> None:
+        coordinator = TextAlignmentCoordinator(
+            self.paths, _IndexRuntime(), _DurableOperations(),
+            compute_runner_factory=lambda **kw: _RaisingProbeRunner(
+                AlignmentComputeError(WORKER_START_FAILED, "exit=1")
+            ),
+        )
+        with self.assertRaises(TextAlignmentComponentUnavailable) as ctx:
+            coordinator.generate("group", "a", "b")
+        self.assertIn("重新安装计算组件", str(ctx.exception))
 
     def test_probe_is_inside_durable_operation_and_cancellable(self) -> None:
         # A real gate: while the probe runs it must count as an active durable
