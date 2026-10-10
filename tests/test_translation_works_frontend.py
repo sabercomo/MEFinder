@@ -331,6 +331,79 @@ const showToast=message=>errors.push(message), render=()=>{renders++;}, invalida
         self.assertIn("invalidate();", _function_body(WORKS_JS, "function onReaderOpenChange(open, savedPosition)"))
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_completed_import_refreshes_version_metadata_on_visible_and_hidden_works(self) -> None:
+        imports = (STATIC / "js" / "80-import.js").read_text(encoding="utf-8")
+        search = (STATIC / "js" / "20-search.js").read_text(encoding="utf-8")
+        bodies = "\n".join(_function_body(WORKS_JS, signature) for signature in (
+            "function catalogSources()", "function sourceById(sourceId)",
+            "function sourceLanguageCode(groupId, sourceId)", "function cleanTitle(value)",
+            "function sourceTitle(sourceId)", "function sourceFormat(sourceId)",
+            "function publicationText(sourceId)", "function pageSource(member)",
+            "async function ensureCatalog(force)",
+        ))
+        start = WORKS_JS.index("  var loadInflight = null;")
+        end = WORKS_JS.index("  async function refreshAvailability()", start)
+        bodies += "\n" + WORKS_JS[start:end]
+        bodies += "\n" + _function_body(search, "function invalidateLibraryCatalog()")
+        bodies += "\n" + _function_body(search, "function fetchLibraryCatalog(force)")
+        bodies += "\n" + _function_body(imports, "function pollImportJob(id)")
+        script = r"""
+const assert=require('assert/strict');
+const sourceId='new-chinese-pdf';
+const fresh={items:[{source_file_id:sourceId,title:'中文译本',source_type:'pdf',
+ language_code:'zh-Hans',publisher:'出版社',publish_year:'2025',mapping_method:'ocr_sequence'}]};
+const old={items:[]}, works={loaded:true,loadSerial:0,currentId:'G',hiddenGroupIds:new Set(),
+ catalog:old,languagesByGroup:{},positions:{G:null}};
+const searchStore={},libraryStore={},importStore={queue:[]},calTransientStatus={};
+let currentPage='import',terminal='completed',summaryRequests=0;
+const global={MEFinder:{works:{invalidate,load},library:{
+ load:async()=>{await fetchLibraryCatalog();},renderList:()=>{}}}};
+const MEFinderApi={fetch:async url=>{
+ if(url.startsWith('/api/import-status')) return {json:async()=>({status:terminal,source_file_id:sourceId})};
+ assert.equal(url,'/api/library?view=summary');summaryRequests++;
+ return {ok:true,json:async()=>fresh};
+}};
+const ensureSearchDocuments=async()=>{await fetchLibraryCatalog();};
+const importStepsFor=()=>[],renderImportQueue=()=>{},updateSearchDocumentLabel=()=>{};
+const showToast=message=>{throw new Error(message);};
+const renderSidebarEntry=()=>{},syncLibraryAssignButton=()=>{},render=()=>{};
+const visibleGroups=()=>[],groupById=()=>({document_group_id:'G'}),entryVisible=()=>true;
+const loadAvailability=async()=>{},loadGroupsAndOverview=async()=>{},loadPosition=()=>{};
+const sourceFormatLabel=source=>source.source_type.toUpperCase(),mappingMethodLabel=method=>method;
+(async()=>{
+ for(const page of ['import','library','works']) {
+  currentPage=page;works.loaded=true;works.catalog=old;
+  searchStore.libraryCatalog=old;searchStore.libraryCatalogPromise=null;
+  importStore.queue=[{id:'I',jobId:'J',status:'processing',type:'pdf'}];
+  const requestsBefore=summaryRequests;
+  pollImportJob('I');await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(importStore.queue[0].status,'done');
+  assert.equal(works.loaded,true,'hidden works must refresh too, keeping library assignment available');
+  assert.equal(works.catalog,fresh,'import must replace the old version catalog before reopening works');
+  currentPage='works';await load();
+  assert.equal(sourceTitle(sourceId),'中文译本','new source title must replace the raw id');
+  assert.equal(sourceLanguageCode('G',sourceId),'zh-Hans','language must be available before alignment');
+  assert.equal(publicationText(sourceId),'出版社 · 2025');
+  assert.equal(sourceFormat(sourceId),'PDF');
+  assert.equal(pageSource({source_file_id:sourceId}).label,'ocr_sequence');
+  assert.equal(summaryRequests-requestsBefore,1,'works and library must share the refresh request');
+ }
+ terminal='failed';currentPage='import';works.loaded=true;works.catalog=old;
+ const requestsBefore=summaryRequests;
+ importStore.queue=[{id:'I',jobId:'J',status:'processing',type:'pdf'}];
+ pollImportJob('I');await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(importStore.queue[0].status,'error');
+ assert.equal(works.loaded,true,'failed imports must not invalidate the unchanged library');
+ assert.equal(summaryRequests,requestsBefore);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", bodies + "\n" + script],
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_close_handoff_wins_over_an_inflight_position_read(self) -> None:
         bodies = "\n".join(_function_body(WORKS_JS, signature) for signature in (
             "async function loadPosition(groupId)",
