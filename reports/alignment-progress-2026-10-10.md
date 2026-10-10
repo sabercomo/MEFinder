@@ -22,7 +22,7 @@
 
 官方 `build_windows_dist.cmd` 在完整独立检出通过：2,750 项测试，45 项条件跳过，224.745 秒；逐文件 Node 语法、桌面主程序与 MCP 侧车打包、空库 FTS5 / 短词索引、MCP 冒烟均通过。
 
-交付目录：`dist/MEFinder-progress-20261010/`，主程序为 `文献原句定位器.exe`。`data_root.txt` 与原 `dist/MEFinder/` 逐字节一致，仍指向 `D:/ME_Finder/dist/MEFinderData`；原程序与活动桌面 / MCP 进程保留。先关闭旧程序，再启动新程序使用原文献库。
+最终交付目录：原 `dist/MEFinder/`，主程序为 `文献原句定位器.exe`。另建进度目录的交付方式已按用户要求纠正：原路径两份 EXE 和 592 份内部文件逐文件哈希等于已核验的新版；`data_root.txt`、`data/`、`config/` 中的 4 份文件保持替换前哈希，指针仍为 `D:/ME_Finder/dist/MEFinderData`。替换前核验两目录均无活动进程；原路径侧车在构建用空库上 MCP 冒烟通过。多建的进度目录已移回 `.codex-tmp/alignment-progress-20261010/build-repo/dist/MEFinder/`，原 `dist/` 下已无该目录；旧 EXE 回退副本仅保存在同一临时区的 `original-exe-backup/`。
 
 包内 3 份前端资产与 7 份相关 worker 源文件逐字节等于已测源码；主程序 PYZ 中的控制器包含 `_update_progress`、`progress_callback` 与状态快照。主程序 SHA-256：`586be5e4cfa54eb9f6940baae0360453bf6eee73f736ca7a13dc066b05693cca`。
 
