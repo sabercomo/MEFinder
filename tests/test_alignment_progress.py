@@ -42,7 +42,7 @@ class AlignmentProgressTests(unittest.TestCase):
             status, body = controller.status({"job_id": [job["job_id"]]})
             self.assertEqual(status, 202)
             self.assertEqual(body["progress"]["percent"], 25)
-            self.assertEqual(body["progress"]["eta_seconds"], 30)
+            self.assertAlmostEqual(body["progress"]["eta_seconds"], 30)
             self.assertEqual(controller.current()[1]["progress"], body["progress"])
             controller._update_progress({"stage": "matching", "completed": 0, "total": 40})
             self.assertIsNone(controller.current()[1]["progress"]["eta_seconds"])

@@ -1,11 +1,11 @@
-2026-10-07：v0.5.9 可本机试用，未正式发布。文档包使用 `.mefinder` 后缀，兼容旧包，避免 Mac 辅助文件被 Windows 当作 ZIP 后反复弹窗。源码及两个官方 Windows 构建脚本各自通过 2,741 项 unittest，Ruff、前端、MCP 与制品完整性核验通过；macOS arm64 包同日在官方 `build_macos.sh` 上通过同一套全量门禁（2,741 项、34 项环境跳过）与签名 / 侧车 / 制品校验。Windows 安装 / 升级 / 卸载自动冒烟、两平台安装后的人工验收、macOS Intel（x86_64）0.5.9 包尚未进行。详见 [0.5.9 说明](release-notes-0.5.9.md)。
+2026-10-12：v0.5.9 macOS arm64 安装包已更新，可本机试用，未正式发布。按 `6afed73` 重建，包含作品弹窗修复、对齐阶段百分比与剩余时间、导入后的版本信息刷新，以及此前的 `.mefinder` 文档包后缀修复。官方构建全量 unittest 2,751 项通过（37 项环境跳过），真实 Chrome 回归 9 项、Ruff、Node、签名、五阶段 MCP 与 ZIP / DMG 完整性核验通过；远端 CI 浮点数精确比较误报改为近似断言，产品行为不变。下表 macOS arm64 为本次更新包；Windows 双包仍为 10-07 构建，不含 10-10 的新功能与修复。Windows 安装 / 升级 / 卸载自动冒烟、安装后的人工验收、macOS Intel（x86_64）0.5.9 包尚未进行。详见 [0.5.9 说明](release-notes-0.5.9.md)。
 
 | 本机文件（`release/`） | SHA-256 |
 | --- | --- |
 | `MEFinder-v0.5.9-windows-setup.exe` | `f42c9c53ed60ffbf36597a45ee4d82e90a4d67b3ba7d0c528c404b20f74a496b` |
 | `MEFinder-v0.5.9-windows-portable.zip` | `d6d5a98a119ba9d6c5b0cf8f47dff2e36261ab4a9f7fe3fc2f8a13def6a8cf2d` |
-| `MEFinder-v0.5.9-macos-arm64.zip` | `315b721016365fe24d7751628385f410401bde24d74bee786ab1327f70ab3d55` |
-| `MEFinder-v0.5.9-macos-arm64.dmg` | `11f03656c2d6696fd08bd4b83a4aec24ceb48c80552eceef1a151614184a72cf` |
+| `MEFinder-v0.5.9-macos-arm64.zip` | `c8a7a2ab1a85ae32a25b4e8e58c7ee2aabfee06eee4ee591359d5b8944c0522d` |
+| `MEFinder-v0.5.9-macos-arm64.dmg` | `d512c11a62a31dd2a097292177737a4ebea93c4e15aea419642614667f60bf52` |
 
 > **2026-10-03：v0.5.8 正式发布。Windows x64 与 macOS arm64 / x86_64 安装文件已上传 GitHub Release，构建与测试门禁通过；Windows 安装 / 升级 / 卸载自动冒烟及安装后的人工验收仍待进行。**
 

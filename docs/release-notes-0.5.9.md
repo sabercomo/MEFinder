@@ -1,3 +1,5 @@
+2026-10-12：macOS arm64 安装包已按 `6afed73` 重建，包含作品弹窗、对齐进度与导入刷新更新，全量与浏览器门禁通过，可本机试用；尚未正式发布。
+
 2026-10-10：导入后的译本对照页刷新遗漏已修复，全量门禁通过；原 `dist/MEFinder/` 外置资源已同步，重启即可生效。现有 release / macOS 包不含此修复，尚未正式发布。
 
 2026-10-10：对齐阶段百分比、进度条与当前阶段预计剩余时间可本机试用；已在原 `dist/MEFinder/` 替换为核验后的新版，原启动路径、文献库指针、数据与配置保留。多建的进度目录已移回临时构建区，`dist/` 不再保留它。现有 release / macOS 包不含此功能，尚未正式发布。
@@ -40,6 +42,23 @@
 两个 `.sha256.txt` 文件同目录。构建与核验日志在 `.codex-tmp/windows-v059-20261006/`。未替换当前安装或开发程序；安装 / 升级 / 卸载未验证，未上传 GitHub Release 或正式发布。未启动额外云端构建。（该轮 macOS 0.5.9 尚未构建，已于同日在 mac 本机补打，见下节。）
 
 ## macOS 本地交付
+
+### 2026-10-12 更新包（当前本地制品）
+
+从 `79bc362` 快进拉取远端至 `6afed73`，沿用 0.5.9 版本号和官方 `build_macos.sh`，仅重建 Apple Silicon（arm64）DMG / ZIP。包内包含作品弹窗中文输入与菜单宽度修复、对齐启动失败提示、对齐阶段百分比 / 当前阶段预计剩余时间，以及导入后的译本对照版本信息刷新。
+
+Python 3.12.10 / SQLite 3.49.1，官方构建全量 unittest 2,751 项通过（37 项环境跳过，167.930 秒）；另启用真实 Chrome 回归 9 项通过（28.258 秒），`ruff check . --extend-exclude .codex-tmp` 零告警。修复远端 Linux CI 的浮点数精确比较误报：`test_http_progress_estimates_only_observed_stage_and_survives_reload` 的预计秒数改用 `assertAlmostEqual`；固定时钟起点 `6.004` 时旧断言失败（`29.999999999999996 != 30`），修改后通过，产品计算与显示行为保持原样。
+
+官方脚本的逐文件 Node 语法、五阶段 17 工具 MCP STDIO 冒烟、严格签名、PDFKit / CA / 隐私文件检查、ZIP 无 AppleDouble 条目、DMG 挂载 / 拖出副本与校验和门禁全部通过。追加解包核对：两个可执行文件均为纯 arm64，版本 0.5.9、最低 macOS 14.0；225 个 worker 源文件、78 个静态资源与当前源码逐文件相等；7 个改动的产品模块冻结字节码与源码编译结果相等；337 个构建输入文件在构建前后哈希一致。
+
+| 文件（`release/`） | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.5.9-macos-arm64.zip` | 96,211,583 | `c8a7a2ab1a85ae32a25b4e8e58c7ee2aabfee06eee4ee591359d5b8944c0522d` |
+| `MEFinder-v0.5.9-macos-arm64.dmg` | 104,598,191 | `d512c11a62a31dd2a097292177737a4ebea93c4e15aea419642614667f60bf52` |
+
+两个同名 `.sha256.txt` 文件同目录，构建与浏览器日志在本地 `.codex-tmp/macos-v059-20261012/`。本轮更新安装文件，未替换 `/Applications/MEFinder.app`（实查版本为 0.5.9，覆盖了下方 10-07 的旧本机状态记录），未启动冻结 GUI 或做安装后人工验收；包为 ad-hoc 签名、未公证。未重打 macOS Intel 或 Windows 发布包，未创建 tag 或上传 GitHub Release。正式发布门禁仍按下方历史记录中的未完成项执行。
+
+### 2026-10-07 首次打包（历史记录，制品已被本轮覆盖）
 
 Apple Silicon 本机构建，解释器 `.venv-macos312-arm64`（Python 3.12.10 / SQLite 3.49.1），`PYTHONUTF8=1 MEFINDER_PYTHON=.venv-macos312-arm64/bin/python ./build_macos.sh`：官方构建内置全量 unittest 2,741 项通过（34 项环境跳过，173.676 秒）；仓库外另跑 `ruff check src tests scripts` 零告警。构建脚本自身门禁全过：逐文件 Node 语法；PyInstaller 主应用与 MCP 侧车；17 工具契约的侧车 STDIO 冒烟在构建后 / 签名后 / ZIP 解包 / DMG 挂载 / 拖出副本五个阶段各跑一次；严格 `codesign --verify --deep --strict`；包内含 PyObjC PDFKit 桥与 certifi CA 且不含 `preferences.json` / `mineru_api.local.json` / `desktop.log` 等本机或生成态；ZIP 条目无 AppleDouble `._` 元数据；DMG 含 `/Applications` 快捷方式且 `hdiutil verify` 校验和有效；两个制品的 SHA-256 与同目录 sidecar 一致。
 
