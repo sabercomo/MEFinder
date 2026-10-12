@@ -1,3 +1,5 @@
+2026-10-12（夜）：macOS arm64 安装包已按 `2e6ded1` 重建，含重复导入复用原任务与取消状态保留；全量、Chrome、Ruff 与官方脚本制品门禁全过。本机 `/Applications/MEFinder.app` 已与本次构建制品逐文件相同并启动冒烟通过（应用实际服务的新代码），文献库数据根未受影响。尚未正式发布，macOS Intel 与最新 Windows 发布包仍未打。
+
 2026-10-12：重复导入误报与取消任务提前消失已修复，本机 Windows 原 `dist/MEFinder/` 程序已更新，完整门禁、浏览器与制品核验通过；现有安装 / 便携 / macOS 包尚不含本轮修复。
 
 2026-10-12：macOS arm64 安装包已按 `6afed73` 重建，包含作品弹窗、对齐进度与导入刷新更新，全量与浏览器门禁通过，可本机试用；尚未正式发布。
@@ -48,7 +50,24 @@
 
 ## macOS 本地交付
 
-### 2026-10-12 更新包（当前本地制品）
+### 2026-10-12 夜更新包（当前本地制品）
+
+从 `7c39966` 快进拉取远端至 `2e6ded1`，沿用 0.5.9 版本号和官方 `build_macos.sh`，仅重建 Apple Silicon（arm64）DMG / ZIP。相比上一轮包，新增重复上传同一 PDF 时复用已有导入任务、取消中任务持续显示“正在停止”并在后台清理完成后移除的修复。
+
+Python 3.12.10 / SQLite 3.49.1，官方构建全量 unittest 2,758 项通过（37 项环境跳过，168.595 秒）；另启用真实 Chrome 回归 9 项通过（27.707 秒），`ruff check . --extend-exclude .codex-tmp` 零告警。逐文件 Node 语法、构建后 / 签名后 / ZIP 解包 / DMG 挂载 / 拖出副本五阶段 MCP STDIO 冒烟、严格 `codesign --verify --deep --strict`、PDFKit / CA / 隐私文件检查、ZIP 无 AppleDouble 条目、DMG 含 `/Applications` 快捷方式与 `hdiutil verify`、两个制品 SHA-256 与 sidecar 复算一致，全部通过。
+
+追加解包核对：两个可执行文件均为纯 arm64，版本 0.5.9、最低 macOS 14.0；包内交付的 225 个 `me_finder` 源文件与 78 个静态资源与 `2e6ded1` 工作树逐文件相同（`diff -rq` 无差异）。
+
+| 文件（`release/`） | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.5.9-macos-arm64.zip` | 96,215,990 | `a8085b5d6849ad8ac2417e430e66e22c86c95d3fb6035e669f59cb72b8cd9fa9` |
+| `MEFinder-v0.5.9-macos-arm64.dmg` | 104,571,055 | `6f6eb129bec8b08bec85953f4d4be7ac8528ab0a86fbb7d4878988a49f3e29b6` |
+
+两个同名 `.sha256.txt` 文件同目录，构建与浏览器日志在本地 `.codex-tmp/macos-v059-20261012b/`。远端 CI 已核对：`7c39966` run 38156029907 与 `2e6ded1` run 38267651616 均为 success。
+
+本机应用：`/Applications/MEFinder.app` 的整棵树与上表 ZIP 解包结果 `diff -rq` 无差异，`codesign --verify --deep --strict` 通过；23:25 启动后日志显示数据根 `/Applications/MEFinder/runtime`、索引正常加载，页面装配已含本轮新增的“正在停止后台解析”与 `already_running` 处理分支。需要说明的口径：该目录内文件的写入时间戳为 23:14，与本轮构建窗口重叠，本机没有执行覆盖安装动作，写入者未核实；因此“已部署”这一结论依据的是逐文件一致性与启动冒烟实测，而不是一次由本轮发起的安装。仍未在冻结 GUI 里做导入与取消交互的人工验收；包为 ad-hoc 签名、未公证。未重打 macOS Intel 或 Windows 发布包，未创建 tag 或上传 GitHub Release。
+
+### 2026-10-12 早些时候更新包（历史记录，制品已被本轮覆盖）
 
 从 `79bc362` 快进拉取远端至 `6afed73`，沿用 0.5.9 版本号和官方 `build_macos.sh`，仅重建 Apple Silicon（arm64）DMG / ZIP。包内包含作品弹窗中文输入与菜单宽度修复、对齐启动失败提示、对齐阶段百分比 / 当前阶段预计剩余时间，以及导入后的译本对照版本信息刷新。
 
