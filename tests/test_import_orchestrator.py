@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import io
 import tempfile
 import threading
 import unittest
@@ -12,6 +13,7 @@ from unittest import mock
 
 from src.me_finder.app_context import AppPaths
 from src.me_finder.application.backup_coordinator import BackupCoordinator
+from src.me_finder.application.document_import_coordinator import DocumentImportCoordinator
 from src.me_finder.application.import_job_store import (
     ImportJobCancelled as StoreImportJobCancelled,
     ImportJobStore,
@@ -165,6 +167,81 @@ class ImportOrchestratorTests(unittest.TestCase):
         else:
             target.write_bytes(b"document-body")
         return target
+
+    def test_duplicate_upload_tracks_active_job_and_cleans_only_new_copy(self) -> None:
+        for status in ("processing", "cancelling"):
+            with self.subTest(status=status):
+                store = ImportJobStore()
+                orchestrator = self._orchestrator(job_store=store)
+                source_id = "pdf-legacy-book"
+                payload = b"same PDF contents"
+                target = self.root / "corpus" / "raw_pdf" / "original.pdf"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(payload)
+                self.runtime.sources = [{
+                    "source_file_id": source_id,
+                    "source_type": "pdf",
+                    "sha256": sha256_file(target),
+                }]
+                job = {
+                    "job_id": "import-existing",
+                    "source_file_id": source_id,
+                    "status": status,
+                    "parse_route": "local_ocr",
+                    "provider_id": "local-ocr",
+                    "detected_pdf_type": "broken_text",
+                }
+                store.restore_job(job["job_id"], job, {"target": target, "is_pdf": True})
+                coordinator = DocumentImportCoordinator(
+                    self.paths, orchestrator,
+                    detect_pdf=lambda _path: {"detected_pdf_type": "broken_text"},
+                )
+                try:
+                    result = coordinator.import_stream(
+                        "renamed.pdf", len(payload), io.BytesIO(payload),
+                        pdf_parse_mode="mineru",
+                    )
+                finally:
+                    coordinator.close()
+
+                self.assertEqual(result["job_id"], "import-existing")
+                self.assertTrue(result["already_running"])
+                self.assertEqual(result["status"], status)
+                self.assertEqual(result["source_file_id"], source_id)
+                self.assertEqual(result["parse_route"], "local_ocr")
+                self.assertEqual(result["provider_id"], "local-ocr")
+                self.assertEqual(self.queue.tasks, [])
+                self.assertEqual(store.job_snapshot("import-existing"), job)
+                self.assertEqual(list(target.parent.glob("*.pdf")), [target])
+                self.assertEqual(target.read_bytes(), payload)
+                self.assertFalse((self.root / "config" / "pdf_imports.json").exists())
+
+    def test_upload_can_start_after_previous_cancellation_finishes(self) -> None:
+        store = ImportJobStore()
+        orchestrator = self._orchestrator(job_store=store)
+        payload = b"cancelled PDF contents"
+        target = self._target("cancelled.pdf")
+        target.write_bytes(payload)
+        source_id = f"pdf-import-{sha256_file(target)[:16]}"
+        store.restore_job("cancelled", {
+            "job_id": "cancelled", "source_file_id": source_id,
+            "status": "cancelling",
+        }, {"target": target, "is_pdf": True})
+        store.finish_cancelled_job("cancelled")
+        coordinator = DocumentImportCoordinator(
+            self.paths, orchestrator,
+            detect_pdf=lambda _path: {"detected_pdf_type": "scanned", "pdf_page_count": 1},
+        )
+        try:
+            result = coordinator.import_stream(
+                "retry.pdf", len(payload), io.BytesIO(payload), pdf_parse_mode="mineru",
+            )
+        finally:
+            coordinator.close()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["source_file_id"], source_id)
+        self.assertEqual(len(self.queue.tasks), 1)
+        self.assertEqual(store.job_snapshot(result["job_id"])["status"], "processing")
 
     def test_startup_restores_without_submitting_work(self) -> None:
         target = self._target()

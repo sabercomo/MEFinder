@@ -19,6 +19,14 @@ class ImportJobCancelled(RuntimeError):
     """Raised cooperatively after the user stops a background import."""
 
 
+class ImportJobAlreadyRunning(MinerUError):
+    """Carry the active job when duplicate document ingress is rejected."""
+
+    def __init__(self, job: Job) -> None:
+        super().__init__("同一文献已有解析任务正在运行。")
+        self.job = deepcopy(job)
+
+
 class ImportJobStore:
     """Own import-job state and keep compound transitions atomic."""
 
@@ -369,11 +377,12 @@ class ImportJobStore:
             raise MinerUError("该文献正在删除，不能开始解析。")
         if source_file_id in self._pending_source_ids:
             raise MinerUError("同一文献正在准备导入。")
-        if self._job_for_source_locked(
+        running = self._job_for_source_locked(
             source_file_id,
             statuses=("processing", "cancelling"),
-        ):
-            raise MinerUError("同一文献已有解析任务正在运行。")
+        )
+        if running is not None:
+            raise ImportJobAlreadyRunning(running)
         self._pending_source_ids.add(source_file_id)
 
     def _resumable_job_locked(

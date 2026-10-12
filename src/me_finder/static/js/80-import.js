@@ -723,6 +723,7 @@
       remove.dataset.action = 'removeImport';
       remove.dataset.id = q.id;
       remove.title = '移除';
+      remove.disabled = !!q.cancelRequested && q.status === 'processing';
       header.appendChild(remove);
       item.appendChild(header);
       var stepList = importNode('div', 'import-steps');
@@ -777,7 +778,7 @@
 
   function cancellableImportQueue() {
     return importStore.queue.filter(function(item) {
-      return item.status !== 'done';
+      return item.status !== 'done' && !(item.cancelRequested && item.status === 'processing');
     });
   }
 
@@ -844,7 +845,7 @@
     if (failedCount) {
       showToast('有 ' + failedCount + ' 个导入任务取消失败，请重试', 'warning');
     } else {
-      showToast('已取消 ' + pending.length + ' 个导入任务', 'success');
+      showToast('已请求取消 ' + pending.length + ' 个导入任务', 'success');
     }
   }
 
@@ -882,8 +883,16 @@
         });
         var data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data.error || '移除任务失败');
-        if (data.state === 'cancelling' && !options.silent) {
-          showToast('已停止继续提交页面；当前请求结束后即可重新导入', 'success');
+        if (data.state === 'cancelling') {
+          var restartPolling = q.status !== 'processing';
+          q.cancelRequested = true;
+          q.status = 'processing';
+          q.canResume = false;
+          q.message = '正在停止后台解析，停止完成后即可重新导入…';
+          if (!options.silent) showToast(q.message, 'success');
+          if (!options.deferRender) renderImportQueue();
+          if (restartPolling) pollImportJob(q.id);
+          return true;
         }
       } catch (e) {
         if (!options.silent) showToast('移除导入任务失败：' + e.message);
@@ -977,6 +986,11 @@
       uploadId = null;
       q.uploadId = null;
       q.jobId = data.job_id;
+      if (data.already_running) {
+        importStore.queue = importStore.queue.filter(function(item) {
+          return item === q || item.jobId !== q.jobId;
+        });
+      }
       q.providerId = data.provider_id || q.providerId;
       if (q.type === 'pdf' && data.detected_pdf_type) {
         q.detectedType = data.detected_pdf_type;
@@ -990,6 +1004,13 @@
       } else {
         q.step = 1;
         q.message = '文件已保存，正在建立索引…';
+      }
+      if (data.already_running) {
+        q.providerId = data.provider_id || null;
+        q.cancelRequested = data.status === 'cancelling';
+        q.message = q.cancelRequested
+          ? '正在停止后台解析，停止完成后即可重新导入…'
+          : '同一文献已有导入任务，正在跟踪原任务进度…';
       }
       renderImportQueue();
       if (q.jobId) pollImportJob(q.id);
@@ -1017,8 +1038,15 @@
     var q = importStore.queue.find(function(item) { return item.id === id; });
     if (!q || !q.jobId) return;
     MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(q.jobId))
-      .then(function(resp) { return resp.json(); })
+      .then(function(resp) {
+        if (resp.status === 404 && q.cancelRequested) {
+          importStore.queue = importStore.queue.filter(function(item) { return item !== q; });
+          return null;
+        }
+        return resp.json();
+      })
       .then(function(data) {
+        if (data === null) { renderImportQueue(); return; }
         if (data.error) throw new Error(data.error);
         if (data.parse_route) q.route = data.parse_route;
         if (data.provider_id) q.providerId = data.provider_id;
@@ -1041,6 +1069,8 @@
         else if (data.phase === 'rebuilding_index' || data.phase === 'metadata_recognition') q.step = steps.indexOf('建立索引');
         else if (data.status === 'completed') q.step = steps.length;
         q.message = data.message || q.message;
+        if (data.status === 'cancelling') q.cancelRequested = true;
+        if (q.cancelRequested) q.message = '正在停止后台解析，停止完成后即可重新导入…';
         if (data.status === 'completed') {
           q.status = 'done';
           q.message = data.message || '导入完成，已自动更新索引';
@@ -1053,6 +1083,7 @@
             : ensureSearchDocuments();
           refreshPromise.then(updateSearchDocumentLabel);
         } else if (data.status === 'failed') {
+          q.cancelRequested = false;
           q.status = 'error';
           q.message = data.message || '导入失败';
           if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
@@ -1139,6 +1170,7 @@
           detectedType: job.detected_pdf_type || null,
           message: job.message || '正在导入…',
           canResume: false,
+          cancelRequested: job.status === 'cancelling',
           fromJournal: true
         });
         pollImportJob('active-' + job.job_id);

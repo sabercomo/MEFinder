@@ -45,6 +45,7 @@ from ..mineru_local_settings import mineru_local_config_summary
 from ..local_ocr_settings import local_ocr_available
 from ..pdf_import_service import detect_imported_pdf
 from ..vision_api import VisionAPIError
+from .import_job_store import ImportJobAlreadyRunning
 
 
 class ImportJobsPort(Protocol):
@@ -822,14 +823,28 @@ class DocumentImportCoordinator:
                     upload_id,
                     profile.get("detected_pdf_type"),
                 )
-                (
-                    _document,
-                    source_file_id,
-                    target,
-                ) = self._jobs.register_pdf_for_import(
-                    target,
-                    original_file_name=filename,
-                )
+                try:
+                    (
+                        _document,
+                        source_file_id,
+                        target,
+                    ) = self._jobs.register_pdf_for_import(
+                        target,
+                        original_file_name=filename,
+                    )
+                except ImportJobAlreadyRunning as exc:
+                    running = exc.job
+                    return {
+                        "ok": True,
+                        "already_running": True,
+                        "job_id": running["job_id"],
+                        "status": running["status"],
+                        "file_name": Path(filename).name,
+                        "source_file_id": running["source_file_id"],
+                        "detected_pdf_type": running.get("detected_pdf_type"),
+                        "parse_route": running.get("parse_route"),
+                        "provider_id": running.get("provider_id"),
+                    }
                 reserved_source_id = source_file_id
             else:
                 source_format = target.suffix.lower().lstrip(".")
