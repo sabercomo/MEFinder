@@ -34,6 +34,7 @@ from .database import (
 )
 from .indexer import DEFAULT_INDEX_PATH, load_index
 from .persistence.short_gram_index import short_gram_prefilter_ready
+from .persistence.structured_reader_reads import read_pdf_page_payload
 from .search_assembly import format_passage, format_result, highlight_html, paragraph_context
 from .search_citation import hit_page
 from .search_contract import SEARCH_MODES
@@ -252,11 +253,7 @@ class SearchEngine:
             return self._pdf_page_cache[key]
         page: Optional[Dict[str, object]] = None
         if self.db is not None:
-            row = self.db.execute(
-                "SELECT payload_json FROM pdf_pages "
-                "WHERE source_file_id = ? AND pdf_page_index = ? LIMIT 1",
-                (source_file_id, page_index),
-            ).fetchone()
+            row = read_pdf_page_payload(self.db, source_file_id, page_index)
             if row is not None:
                 try:
                     payload = json.loads(row[0])

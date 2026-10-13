@@ -111,6 +111,38 @@ def read_all_pdf_page_payloads(connection: sqlite3.Connection, source_id: str) -
     ).fetchall()
 
 
+def iter_outline_pdf_pages(connection: sqlite3.Connection, source_id: str) -> sqlite3.Cursor:
+    """Stream PDF pages for each of the outline's two passes."""
+
+    return connection.execute(
+        "SELECT pdf_page_index, payload_json FROM pdf_pages "
+        "WHERE source_file_id = ? ORDER BY pdf_page_index",
+        (source_id,),
+    )
+
+
+def iter_outline_paragraphs(connection: sqlite3.Connection, source_id: str) -> sqlite3.Cursor:
+    """Stream stored text and styles in the outline's natural reading order."""
+
+    return connection.execute(
+        "SELECT paragraph_id, paragraph_index, text_raw, payload_json FROM paragraphs "
+        "WHERE source_file_id = ? ORDER BY paragraph_index",
+        (source_id,),
+    )
+
+
+def read_pdf_page_payload(
+    connection: sqlite3.Connection, source_id: str, page_index: int
+) -> Optional[sqlite3.Row]:
+    """Return the first matching page payload without parsing or caching it."""
+
+    return connection.execute(
+        "SELECT payload_json FROM pdf_pages "
+        "WHERE source_file_id = ? AND pdf_page_index = ? LIMIT 1",
+        (source_id, page_index),
+    ).fetchone()
+
+
 def read_paragraph_positions(
     connection: sqlite3.Connection, source_id: str, paragraph_id: str
 ) -> List[sqlite3.Row]:

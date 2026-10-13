@@ -24,13 +24,11 @@ SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
     "data_location.py",
     "document_deletion.py",
     "document_export_service.py",
-    "document_outline.py",
     "edition_folio_anchors.py",
     "index_publisher.py",
     "indexer.py",
     "large_document/job_ledger.py",
     "parser_statistics.py",
-    "search.py",
     "search_assembly.py",
     "search_recall.py",
 }

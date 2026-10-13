@@ -8,6 +8,7 @@ import re
 
 from .database import open_database
 from .markdown_export_normalize import build_page_artifact_profile, reader_heading_spans
+from .persistence import structured_reader_reads as reader_reads
 from .structured_reader import (
     SourceNotFound, StructuredReaderError, UnsupportedSourceType, _validate_source_id,
 )
@@ -20,28 +21,23 @@ def get_document_outline(db_path: Path, source_id: str) -> dict[str, object]:
         raise StructuredReaderError(f"索引数据库不存在：{db_path}")
     connection = open_database(db_path)
     try:
-        source = connection.execute(
-            "SELECT source_type FROM source_files WHERE source_file_id = ?", (source_id,)
-        ).fetchone()
+        source = reader_reads.read_source_row(connection, source_id)
         if source is None:
             raise SourceNotFound(f"未找到文献：{source_id}")
         entries = []
         if source["source_type"] == "pdf":
-            query = "SELECT pdf_page_index, payload_json FROM pdf_pages WHERE source_file_id = ? ORDER BY pdf_page_index"
             # Two streaming passes keep full-book text out of the response and memory.
             profile = build_page_artifact_profile(
-                (json.loads(row["payload_json"]) for row in connection.execute(query, (source_id,)))
+                json.loads(row["payload_json"])
+                for row in reader_reads.iter_outline_pdf_pages(connection, source_id)
             )
-            for row in connection.execute(query, (source_id,)):
+            for row in reader_reads.iter_outline_pdf_pages(connection, source_id):
                 page = json.loads(row["payload_json"])
                 for heading in reader_heading_spans(page, profile=profile):
                     entries.append({**heading, "item_index": row["pdf_page_index"],
                                     "anchor_id": page.get("pdf_page_id")})
         elif source["source_type"] == "word":
-            for row in connection.execute(
-                "SELECT paragraph_id, paragraph_index, text_raw, payload_json FROM paragraphs "
-                "WHERE source_file_id = ? ORDER BY paragraph_index", (source_id,)
-            ):
+            for row in reader_reads.iter_outline_paragraphs(connection, source_id):
                 payload = json.loads(row["payload_json"])
                 style = str(payload.get("style_name") or "").strip().lower()
                 level = re.fullmatch(r"(?:h|heading\s*|标题\s*)([12])", style)
