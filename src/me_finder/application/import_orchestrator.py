@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import (
+    Callable,
+    Collection,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+)
 
 from ..app_context import AppPaths
 from ..bibliographic_metadata import metadata_missing_fields
@@ -84,6 +95,18 @@ class TaskQueuePort(Protocol):
         ...
 
 
+class ParserJobLedgerPort(Protocol):
+    """Parser-job bookkeeping that must not outlive its import job."""
+
+    def cancel_open_document_jobs(
+        self,
+        *,
+        source_file_id: Optional[str] = None,
+        keep_source_ids: Collection[str] = (),
+    ) -> List[str]:
+        ...
+
+
 class ImportOrchestrator:
     """Coordinate durable import workflows with the live index."""
 
@@ -102,6 +125,7 @@ class ImportOrchestrator:
         persist_metadata: MetadataPersister,
         parse_with_local_ocr: Optional[Parser] = None,
         job_store: Optional[ImportJobStore] = None,
+        parser_jobs: Optional[ParserJobLedgerPort] = None,
     ) -> None:
         self._paths = paths
         self._root = paths.runtime_root
@@ -120,6 +144,7 @@ class ImportOrchestrator:
         self._detect_metadata = detect_metadata
         self._persist_metadata = persist_metadata
         self._job_store = job_store if job_store is not None else ImportJobStore()
+        self._parser_jobs = parser_jobs
         self._job_lifecycle = ImportJobLifecycle(
             self._job_journal,
             self._job_store,
@@ -155,6 +180,44 @@ class ImportOrchestrator:
         self._job_lifecycle.restore_startup_jobs(
             self.infer_import_failure_stage,
         )
+        # Nothing is parsing yet, so an unfinished parser job whose import
+        # journal is gone can never be polled again; cancel it so it stops
+        # occupying a MinerU credential slot.
+        self._release_parser_jobs(
+            keep_source_ids=self._job_store.known_source_ids()
+        )
+
+    def _release_parser_jobs(
+        self,
+        *,
+        source_file_id: Optional[str] = None,
+        keep_source_ids: Collection[str] = (),
+    ) -> None:
+        if self._parser_jobs is None:
+            return
+        try:
+            cancelled = self._parser_jobs.cancel_open_document_jobs(
+                source_file_id=source_file_id,
+                keep_source_ids=keep_source_ids,
+            )
+        except Exception:
+            logging.warning(
+                "failed to release parser jobs for %s",
+                source_file_id or "orphaned imports",
+                exc_info=True,
+            )
+            return
+        if cancelled:
+            logging.info(
+                "cancelled %d abandoned parser job(s) for %s",
+                len(cancelled),
+                source_file_id or "orphaned imports",
+            )
+
+    def _job_source_id(self, job_id: str) -> Optional[str]:
+        job = self._job_store.job_snapshot(job_id)
+        source_file_id = str((job or {}).get("source_file_id") or "")
+        return source_file_id or None
 
     def register_background_job(self, job: Mapping[str, object]) -> None:
         """Register a non-durable task shown through the shared job UI."""
@@ -242,7 +305,12 @@ class ImportOrchestrator:
         self._job_lifecycle.ensure_not_cancelled(job_id)
 
     def finish_cancelled_import_job(self, job_id: str) -> None:
-        self._job_lifecycle.finish_cancelled_job(job_id)
+        source_file_id = self._job_source_id(job_id)
+        try:
+            self._job_lifecycle.finish_cancelled_job(job_id)
+        finally:
+            if source_file_id:
+                self._release_parser_jobs(source_file_id=source_file_id)
 
     def switch_import_job_route(
         self,
@@ -1116,7 +1184,16 @@ class ImportOrchestrator:
         return transition.job
 
     def dismiss_import_job(self, job_id: str) -> str:
-        return self._job_lifecycle.dismiss_job(job_id)
+        source_file_id = self._job_source_id(job_id)
+        result = self._job_lifecycle.dismiss_job(job_id)
+        # A cancelling job releases its parser jobs once the worker stops.
+        if (
+            result == "dismissed"
+            and source_file_id
+            and source_file_id not in self._job_store.known_source_ids()
+        ):
+            self._release_parser_jobs(source_file_id=source_file_id)
+        return result
 
     def begin_source_deletion(self, source_file_id: str) -> None:
         """Atomically reject imports while a document deletion is in flight."""

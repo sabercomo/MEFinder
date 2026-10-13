@@ -135,6 +135,7 @@ def assemble_import(context: AppContext) -> ImportAssembly:
         parse_with_mineru=parse_pdf_with_mineru,
         parse_with_provider=parse_pdf_with_provider,
         parse_with_local_ocr=parse_pdf_with_local_ocr,
+        parser_jobs=mineru_job_ledger,
         extract_pdf=extract_pdf_source,
         detect_metadata=document_queries.detect_bibliographic_metadata,
         persist_metadata=(

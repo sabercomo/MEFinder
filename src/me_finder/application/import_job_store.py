@@ -197,6 +197,16 @@ class ImportJobStore:
                 and job.get("source_file_id")
             }
 
+    def known_source_ids(self) -> set[str]:
+        """Source ids referenced by any tracked job, whatever its status."""
+
+        with self._lock:
+            return {
+                str(item["source_file_id"])
+                for item in (*self._jobs.values(), *self._contexts.values())
+                if item.get("source_file_id")
+            }
+
     def has_active_jobs(self) -> bool:
         with self._lock:
             return any(

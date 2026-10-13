@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional
+from typing import Collection, Dict, Iterable, Iterator, List, Optional
 
 from ..persistence.connection import PROJECT_BUSY_TIMEOUT_MS, connect_index
 from .slicing import SliceDescriptor
@@ -129,6 +129,12 @@ SCHEMA_V3 = """
 UPDATE parser_credentials
 SET daily_page_budget = NULL, pages_used_today = 0, usage_date = NULL;
 """
+
+
+# Document jobs that may still hold remote tasks and credential slots.
+_OPEN_DOCUMENT_STATUS_SQL = (
+    "'preparing', 'queued', 'running', 'waiting', 'retryable_failure'"
+)
 
 
 def _now() -> str:
@@ -687,6 +693,76 @@ class JobLedger:
             if cursor.rowcount != 1:
                 raise KeyError(credential_id)
         return self.get_credential(credential_id)
+
+    def cancel_open_document_jobs(
+        self,
+        *,
+        source_file_id: Optional[str] = None,
+        keep_source_ids: Collection[str] = (),
+    ) -> List[str]:
+        """Cancel unfinished jobs whose import is gone and free their credentials.
+
+        With ``source_file_id`` only that source's jobs are cancelled; without
+        it every unfinished job outside ``keep_source_ids`` is treated as
+        orphaned.  Remote tasks of a cancelled job are never polled again, so
+        the in-flight slots they hold must be released here or the credential
+        stays busy forever.
+        """
+
+        keep = {str(item) for item in keep_source_ids}
+        now = _now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                f"""
+                SELECT id, source_file_id FROM document_jobs
+                WHERE status IN ({_OPEN_DOCUMENT_STATUS_SQL})
+                """
+            ).fetchall()
+            job_ids = [
+                str(row[0])
+                for row in rows
+                if (
+                    str(row[1]) == source_file_id
+                    if source_file_id is not None
+                    else str(row[1]) not in keep
+                )
+            ]
+            for job_id in job_ids:
+                held = connection.execute(
+                    """
+                    SELECT credential_id, COUNT(*) FROM slice_jobs
+                    WHERE document_job_id = ? AND credential_id IS NOT NULL
+                      AND remote_task_id IS NOT NULL
+                      AND status IN ('submitted', 'waiting', 'retryable_failure')
+                    GROUP BY credential_id
+                    """,
+                    (job_id,),
+                ).fetchall()
+                for credential_id, count in held:
+                    connection.execute(
+                        """
+                        UPDATE parser_credentials
+                        SET current_in_flight = MAX(0, current_in_flight - ?),
+                            updated_at = ? WHERE id = ?
+                        """,
+                        (int(count), now, credential_id),
+                    )
+                connection.execute(
+                    """
+                    UPDATE slice_jobs SET status = 'cancelled', updated_at = ?
+                    WHERE document_job_id = ?
+                      AND status NOT IN ('completed', 'permanent_failure', 'cancelled')
+                    """,
+                    (now, job_id),
+                )
+                connection.execute(
+                    "UPDATE document_jobs SET status = 'cancelled', updated_at = ? "
+                    "WHERE id = ?",
+                    (now, job_id),
+                )
+            connection.commit()
+        return job_ids
 
     def active_remote_counts(self, provider_id: str) -> Dict[str, int]:
         with self._connect() as connection:
