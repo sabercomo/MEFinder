@@ -331,9 +331,10 @@ const showToast=message=>errors.push(message), render=()=>{renders++;}, invalida
         self.assertIn("invalidate();", _function_body(WORKS_JS, "function onReaderOpenChange(open, savedPosition)"))
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
-    def test_completed_import_refreshes_version_metadata_on_visible_and_hidden_works(self) -> None:
+    def test_import_and_zotero_refresh_version_metadata_on_visible_and_hidden_pages(self) -> None:
         imports = (STATIC / "js" / "80-import.js").read_text(encoding="utf-8")
         search = (STATIC / "js" / "20-search.js").read_text(encoding="utf-8")
+        zotero = (STATIC / "js" / "62-zotero.js").read_text(encoding="utf-8")
         bodies = "\n".join(_function_body(WORKS_JS, signature) for signature in (
             "function catalogSources()", "function sourceById(sourceId)",
             "function sourceLanguageCode(groupId, sourceId)", "function cleanTitle(value)",
@@ -346,7 +347,9 @@ const showToast=message=>errors.push(message), render=()=>{renders++;}, invalida
         bodies += "\n" + WORKS_JS[start:end]
         bodies += "\n" + _function_body(search, "function invalidateLibraryCatalog()")
         bodies += "\n" + _function_body(search, "function fetchLibraryCatalog(force)")
+        bodies += "\n" + _function_body(LIBRARY_JS, "async function refreshLibraryData()")
         bodies += "\n" + _function_body(imports, "function pollImportJob(id)")
+        bodies += "\n" + _function_body(zotero, "async function loadStatus()")
         script = r"""
 const assert=require('assert/strict');
 const sourceId='new-chinese-pdf';
@@ -356,30 +359,42 @@ const old={items:[]}, works={loaded:true,loadSerial:0,currentId:'G',hiddenGroupI
  catalog:old,languagesByGroup:{},positions:{G:null}};
 const searchStore={},libraryStore={},importStore={queue:[]},calTransientStatus={};
 let currentPage='import',terminal='completed',summaryRequests=0;
-const global={MEFinder:{works:{invalidate,load},library:{
- load:async()=>{await fetchLibraryCatalog();},renderList:()=>{}}}};
+const global={invalidateLibraryCatalog,MEFinder:{works:{invalidate,load},library:{
+ refreshAfterChange:refreshLibraryData,load:async()=>{await ensureSearchDocuments();libraryStore.loaded=true;},renderList:()=>{}}}};
 const MEFinderApi={fetch:async url=>{
  if(url.startsWith('/api/import-status')) return {json:async()=>({status:terminal,source_file_id:sourceId})};
  assert.equal(url,'/api/library?view=summary');summaryRequests++;
  return {ok:true,json:async()=>fresh};
 }};
-const ensureSearchDocuments=async()=>{await fetchLibraryCatalog();};
-const importStepsFor=()=>[],renderImportQueue=()=>{},updateSearchDocumentLabel=()=>{};
+const ensureSearchDocuments=async()=>{searchStore.sourceFiles=(await fetchLibraryCatalog()).items;searchStore.documentsLoaded=true;};
+let labelUpdates=0,optionsUpdates=0;
+const importStepsFor=()=>[],renderImportQueue=()=>{},updateSearchDocumentLabel=()=>{labelUpdates++;};
+const renderSearchDocumentOptions=()=>{optionsUpdates++;};
 const showToast=message=>{throw new Error(message);};
 const renderSidebarEntry=()=>{},syncLibraryAssignButton=()=>{},render=()=>{};
 const visibleGroups=()=>[],groupById=()=>({document_group_id:'G'}),entryVisible=()=>true;
 const loadAvailability=async()=>{},loadGroupsAndOverview=async()=>{},loadPosition=()=>{};
 const sourceFormatLabel=source=>source.source_type.toUpperCase(),mappingMethodLabel=method=>method;
+const state={catalogStamp:null},statusRequest={begin:()=>1,isCurrent:()=>true};
+const getJSON=async()=>({phase:'idle',documents:{linked:1}});
+const document={getElementById:()=>null};
+const renderStatus=()=>{},setTimeout=()=>1,clearTimeout=()=>{};
 (async()=>{
- for(const page of ['import','library','works']) {
+ for(const trigger of ['import','zotero']) for(const page of ['import','library','works','search']) {
   currentPage=page;works.loaded=true;works.catalog=old;
   searchStore.libraryCatalog=old;searchStore.libraryCatalogPromise=null;
   importStore.queue=[{id:'I',jobId:'J',status:'processing',type:'pdf'}];
-  const requestsBefore=summaryRequests;
-  pollImportJob('I');await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(importStore.queue[0].status,'done');
+  const requestsBefore=summaryRequests,labelsBefore=labelUpdates,optionsBefore=optionsUpdates;
+  if(trigger==='import') pollImportJob('I');
+  else {state.catalogStamp=null;await loadStatus();}
+  await new Promise(resolve=>setImmediate(resolve));
+  if(trigger==='import') assert.equal(importStore.queue[0].status,'done');
   assert.equal(works.loaded,true,'hidden works must refresh too, keeping library assignment available');
-  assert.equal(works.catalog,fresh,'import must replace the old version catalog before reopening works');
+  assert.equal(works.catalog,fresh,trigger+' must replace the old version catalog before reopening works');
+  assert.equal(searchStore.sourceFiles,fresh.items,'search must receive the same new catalog');
+  assert.equal(labelUpdates-labelsBefore,1,'refresh the selected search scope label');
+  assert.equal(optionsUpdates-optionsBefore,1,'refresh an already open search dropdown');
+  assert.equal(libraryStore.loaded,page==='library','hidden library remains invalidated until opened');
   currentPage='works';await load();
   assert.equal(sourceTitle(sourceId),'中文译本','new source title must replace the raw id');
   assert.equal(sourceLanguageCode('G',sourceId),'zh-Hans','language must be available before alignment');

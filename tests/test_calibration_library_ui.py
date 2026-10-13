@@ -618,10 +618,10 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         )
 
     def test_completed_import_refreshes_an_open_library_without_restart(self) -> None:
-        self.assertIn("var refreshPromise = currentPage === 'library'", HTML)
-        self.assertIn("? global.MEFinder.library.load()", HTML)
-        self.assertIn(": ensureSearchDocuments();", HTML)
-        self.assertIn("refreshPromise.then(updateSearchDocumentLabel);", HTML)
+        self.assertIn("global.MEFinder.library.refreshAfterChange()", HTML)
+        self.assertIn("async function refreshLibraryData()", HTML)
+        self.assertIn("currentPage === 'library' ? global.MEFinder.library.load() : ensureSearchDocuments()", HTML)
+        self.assertIn("refreshAfterChange: refreshLibraryData,", HTML)
 
     def test_sidebar_can_collapse_to_an_icon_rail_and_persists(self) -> None:
         # Toggle control, handler, and persisted state.

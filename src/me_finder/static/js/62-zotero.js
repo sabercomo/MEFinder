@@ -346,8 +346,7 @@
         : stamp !== state.catalogStamp;
       state.catalogStamp = stamp;
       if (changed) {
-        global.invalidateLibraryCatalog();
-        if (currentPage === 'library') await global.MEFinder.library.load();
+        await global.MEFinder.library.refreshAfterChange();
       }
     } catch (e) {
       if (!statusRequest.isCurrent(token)) return;

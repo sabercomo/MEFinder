@@ -31,6 +31,7 @@ global.currentPage = 'library';
 global.settingsStore = {};
 global.searchStore = {};
 global.libraryStore = {};
+global.buildVolumeIndex = () => new Map();
 global.MEFinderActions = {register: noop, registerInline: noop};
 const timers = new Map();
 let timerId = 0;
@@ -77,10 +78,16 @@ global.MEFinder = {library: {async load() {
   await fetchLibraryCatalog();
   libraryStore.loaded = true;
 }}, imports: {normalizePdfParseMode: x => x, renderPdfParseMode: noop},
-  visionProviders: {}, parserRuntime: {}, works: {load: async () => {}}};
+  visionProviders: {}, parserRuntime: {}, works: {
+    invalidate: () => {}, load: async () => {await fetchLibraryCatalog();}
+  }};
 function load(name) { eval.call(global, fs.readFileSync(path.join(process.argv[1], name), 'utf8')); }
 load('14-task-state.js');
 load('20-search.js');
+const libraryStub = MEFinder.library;
+load('30-library.js');
+MEFinder.library = {...libraryStub, refreshAfterChange: MEFinder.library.refreshAfterChange,
+  loadDocumentGroups: async () => {}};
 load('62-zotero.js');
 function cacheOldCatalog() {
   searchStore.libraryCatalog = {items: [{id: 'old'}]};
@@ -176,10 +183,9 @@ function cacheOldCatalog() {
   cacheOldCatalog();
   status.documents.linked = 1;
   await tick();
-  assert.equal(searchStore.libraryCatalog, null);
-  assert.equal(searchStore.libraryCatalogPromise, null);
+  assert.equal(searchStore.libraryCatalog.items[0].id, 'new');
   assert.equal(libraryStore.loaded, false);
-  assert.equal(searchStore.documentsLoaded, false);
+  assert.equal(searchStore.documentsLoaded, true, 'visible search is refreshed immediately');
   assert.equal(libraryCalls, 0);
   cacheOldCatalog();
   status.last_success_at = '2026-10-03T01:00:00Z';

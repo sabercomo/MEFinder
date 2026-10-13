@@ -210,6 +210,43 @@ class BrowserRegressionTests(unittest.TestCase):
         )
 
     # ── scenarios ──────────────────────────────────────────────────
+    def test_zotero_refreshes_search_library_and_versions_across_page_changes(self) -> None:
+        catalog = self.context.request.get(self.base_url + "/api/library?view=summary").json()
+        source = next(item for item in catalog["items"] if item["source_file_id"] == "pdf-zh")
+        status = {"phase": "idle", "rows": [], "documents": {"linked": 0}}
+        requests = []
+
+        def summary(route: Route) -> None:
+            requests.append(route.request.url)
+            route.fulfill(json=catalog)
+
+        self.page.route("**/api/library?view=summary", summary)
+        self.page.route("**/api/zotero/status", lambda route: route.fulfill(json=status))
+        self.page.evaluate("searchStore.documentId = 'pdf-zh'")
+        for count, label in enumerate(("文献检索", "译本对照", "文献库", "文献导入"), 1):
+            with self.subTest(view=label):
+                self.navigate(label)
+                self.page.wait_for_load_state("networkidle")
+                title = f"同步后的中文译本 {count}"
+                source["title"] = title
+                status["documents"]["linked"] = count
+                before = len(requests)
+                self.page.evaluate("() => MEFinder.zotero.start()")
+                self.assertEqual(len(requests) - before, 1, "all views share one catalog request")
+                self.navigate("文献检索")
+                self.assertEqual(self.page.locator("#document-select-label").inner_text(), title)
+                self.page.locator("#document-select-trigger").click()
+                self.assertIn(title, self.page.locator("#document-options").inner_text())
+                self.page.locator("#document-select-trigger").click()
+                self.navigate("译本对照")
+                self.wait_until(
+                    lambda: any(title in text for text in self.page.locator(".tw-version-sub").all_text_contents()),
+                    "version metadata should update after Zotero completion",
+                )
+                self.navigate("文献库")
+                self.page.wait_for_load_state("networkidle")
+                self.assertIn(title, self.page.locator("#library-list").inner_text())
+
     def test_assign_search_keeps_ime_input_and_caret(self) -> None:
         self.navigate("译本对照")
         self.page.get_by_role("button", name="新建作品", exact=True).click()

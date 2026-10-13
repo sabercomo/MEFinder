@@ -94,6 +94,18 @@
     }
   }
 
+  // 导入与来源同步共用的刷新入口；所有页面仍共享同一份摘要请求。
+  async function refreshLibraryData() {
+    invalidateLibraryCatalog();
+    global.MEFinder.works.invalidate();
+    await Promise.all([
+      global.MEFinder.works.load(),
+      currentPage === 'library' ? global.MEFinder.library.load() : ensureSearchDocuments()
+    ]);
+    updateSearchDocumentLabel();
+    if (searchStore.documentsLoaded) renderSearchDocumentOptions();
+  }
+
   // 作品（作品组）列表供检索范围与文献行的作品链接使用；管理在「译本对照」页。
   async function loadDocumentGroups() {
     try {
@@ -1341,6 +1353,7 @@
       updateHelp: updateMarkdownPageHelp},
     applyCatalog: applyLibraryCatalog,
     load: loadLibrary,
+    refreshAfterChange: refreshLibraryData,
     loadDocumentGroups: loadDocumentGroups,
     ensureDetail: ensureLibraryDetail,
     syncDefaultLanguageControl: syncLibDefaultLanguageControl,

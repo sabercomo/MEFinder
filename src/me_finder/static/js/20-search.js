@@ -187,17 +187,23 @@
     if (force) invalidateLibraryCatalog();
     if (searchStore.libraryCatalog) return Promise.resolve(searchStore.libraryCatalog);
     if (searchStore.libraryCatalogPromise) return searchStore.libraryCatalogPromise;
-    searchStore.libraryCatalogPromise = MEFinderApi.fetch('/api/library?view=summary').then(function(response) {
+    var request = MEFinderApi.fetch('/api/library?view=summary').then(function(response) {
       return response.json().then(function(data) {
         if (!response.ok || data.error) throw new Error(data.error || '文献库加载失败');
-        searchStore.libraryCatalog = data;
         return data;
       });
-    }).catch(function(error) {
+    }).then(function(data) {
+      // 数据变化后的旧请求跟随当前请求，不能回填旧目录或交给等待中的页面。
+      if (searchStore.libraryCatalogPromise !== request) return fetchLibraryCatalog();
+      searchStore.libraryCatalog = data;
+      return data;
+    }, function(error) {
+      if (searchStore.libraryCatalogPromise !== request) return fetchLibraryCatalog();
       searchStore.libraryCatalogPromise = null;
       throw error;
     });
-    return searchStore.libraryCatalogPromise;
+    searchStore.libraryCatalogPromise = request;
+    return request;
   }
 
 

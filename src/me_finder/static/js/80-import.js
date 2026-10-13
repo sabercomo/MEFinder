@@ -1075,13 +1075,9 @@
           q.status = 'done';
           q.message = data.message || '导入完成，已自动更新索引';
           if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
-          invalidateLibraryCatalog();
-          global.MEFinder.works.invalidate();
-          global.MEFinder.works.load();
-          var refreshPromise = currentPage === 'library'
-            ? global.MEFinder.library.load()
-            : ensureSearchDocuments();
-          refreshPromise.then(updateSearchDocumentLabel);
+          global.MEFinder.library.refreshAfterChange().catch(function(error) {
+            showToast('文献数据刷新失败：' + error.message, 'danger');
+          });
         } else if (data.status === 'failed') {
           q.cancelRequested = false;
           q.status = 'error';
