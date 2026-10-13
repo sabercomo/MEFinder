@@ -127,7 +127,7 @@ const body = source.slice(source.indexOf('  function handleFileSelect('),
 const uploaded = [];
 const queue = [];
 const context = {
-  importStore: {queue}, parserStore: {visionConfig: {providers: []}},
+  importJobs: {add: item=>queue.push(item), snapshot: ()=>queue.slice()}, parserStore: {visionConfig: {providers: []}},
   selectedPdfParseMode: () => 'auto', selectedVisionProviderId: () => '',
   document: {getElementById: () => ({value: ''})},
   renderImportQueue: () => {}, uploadImport: id => uploaded.push(id),

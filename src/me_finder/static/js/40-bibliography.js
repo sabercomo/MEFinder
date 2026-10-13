@@ -1017,60 +1017,13 @@
       {title:'重新解析 PDF？', confirmText:'上传并重新解析', tone:'warning'}
     )) return;
     var source = (libraryStore.sources || []).find(function(item) { return item.source_file_id === sourceId; }) || {};
-    var queueItem = {
-      id: 'mineru-reparse-' + Date.now(),
-      sourceFileId: sourceId,
-      name: source.file_name || source.title || '未命名 PDF',
-      size: Number(source.size_bytes || 0),
-      type: 'pdf',
-      parseMode: 'mineru',
-      status: 'processing',
-      step: 2,
-      route: 'mineru',
-      detectedType: source.pdf_profile && source.pdf_profile.detected_pdf_type,
-      message: '正在提交 MinerU 在线解析…'
-    };
-    importStore.queue.push(queueItem);
+    var submitted = global.MEFinder.importJobs.reparse(sourceId, source);
     navigateTo('import');
-    global.MEFinder.imports.renderQueue();
     requestAnimationFrame(function() {
       var queue = document.getElementById('import-queue');
       if (queue) queue.scrollIntoView({behavior: 'smooth', block: 'start'});
     });
-    try {
-      var resp = await MEFinderApi.fetch('/api/mineru-reparse', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({source_id: sourceId})
-      });
-      var data = await resp.json();
-      if (!resp.ok || !data.ok) throw new Error(data.error || '提交失败');
-      var tracked = importStore.queue.find(function(item) {
-        return item !== queueItem && item.jobId === data.job_id;
-      });
-      if (tracked) {
-        importStore.queue = importStore.queue.filter(function(item) { return item !== queueItem; });
-        tracked.status = 'processing';
-        tracked.route = 'mineru';
-        tracked.message = 'MinerU 解析已在进行中…';
-        global.MEFinder.imports.renderQueue();
-        global.MEFinder.imports.pollJob(tracked.id);
-        return;
-      }
-      queueItem.jobId = data.job_id;
-      queueItem.detectedType = data.detected_pdf_type || queueItem.detectedType;
-      queueItem.message = data.already_running
-        ? 'MinerU 解析已在进行中，正在读取进度…'
-        : '已提交 MinerU，正在等待解析进度…';
-      calTransientStatus[sourceId] = 'mapping';
-      global.MEFinder.imports.renderQueue();
-      global.MEFinder.imports.pollJob(queueItem.id);
-    } catch(e) {
-      queueItem.status = 'error';
-      queueItem.message = '提交 MinerU 解析失败：' + e.message;
-      global.MEFinder.imports.renderQueue();
-      showToast('提交 MinerU 解析失败：' + e.message, 'danger');
-    }
+    await submitted;
   }
 
   async function acceptAutoMapping(sourceId) {

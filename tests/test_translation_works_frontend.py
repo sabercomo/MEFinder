@@ -357,7 +357,7 @@ const fresh={items:[{source_file_id:sourceId,title:'中文译本',source_type:'p
  language_code:'zh-Hans',publisher:'出版社',publish_year:'2025',mapping_method:'ocr_sequence'}]};
 const old={items:[]}, works={loaded:true,loadSerial:0,currentId:'G',hiddenGroupIds:new Set(),
  catalog:old,languagesByGroup:{},positions:{G:null}};
-const searchStore={},libraryStore={},importStore={queue:[]},calTransientStatus={};
+const searchStore={},libraryStore={};
 let currentPage='import',terminal='completed',summaryRequests=0;
 const global={invalidateLibraryCatalog,MEFinder:{works:{invalidate,load},library:{
  refreshAfterChange:refreshLibraryData,load:async()=>{await ensureSearchDocuments();libraryStore.loaded=true;},renderList:()=>{}}}};
@@ -379,16 +379,20 @@ const state={catalogStamp:null},statusRequest={begin:()=>1,isCurrent:()=>true};
 const getJSON=async()=>({phase:'idle',documents:{linked:1}});
 const document={getElementById:()=>null};
 const renderStatus=()=>{},setTimeout=()=>1,clearTimeout=()=>{};
+const window=global;
+__IMPORT_JOBS__
+const importJobs=global.MEFinder.importJobs;
+importJobs.configure({changed:renderImportQueue,completed:()=>{refreshLibraryData();},settled:()=>{}});
 (async()=>{
  for(const trigger of ['import','zotero']) for(const page of ['import','library','works','search']) {
   currentPage=page;works.loaded=true;works.catalog=old;
   searchStore.libraryCatalog=old;searchStore.libraryCatalogPromise=null;
-  importStore.queue=[{id:'I',jobId:'J',status:'processing',type:'pdf'}];
+  if(trigger==='import') importJobs.add({id:page,jobId:'J-'+page,status:'processing',type:'pdf'});
   const requestsBefore=summaryRequests,labelsBefore=labelUpdates,optionsBefore=optionsUpdates;
-  if(trigger==='import') pollImportJob('I');
+  if(trigger==='import') pollImportJob(page);
   else {state.catalogStamp=null;await loadStatus();}
   await new Promise(resolve=>setImmediate(resolve));
-  if(trigger==='import') assert.equal(importStore.queue[0].status,'done');
+  if(trigger==='import') assert.equal(importJobs.snapshot().find(item=>item.id===page).status,'done');
   assert.equal(works.loaded,true,'hidden works must refresh too, keeping library assignment available');
   assert.equal(works.catalog,fresh,trigger+' must replace the old version catalog before reopening works');
   assert.equal(searchStore.sourceFiles,fresh.items,'search must receive the same new catalog');
@@ -405,15 +409,15 @@ const renderStatus=()=>{},setTimeout=()=>1,clearTimeout=()=>{};
  }
  terminal='failed';currentPage='import';works.loaded=true;works.catalog=old;
  const requestsBefore=summaryRequests;
- importStore.queue=[{id:'I',jobId:'J',status:'processing',type:'pdf'}];
+ importJobs.add({id:'I',jobId:'J',status:'processing',type:'pdf'});
  pollImportJob('I');await new Promise(resolve=>setImmediate(resolve));
- assert.equal(importStore.queue[0].status,'error');
+ assert.equal(importJobs.snapshot().find(item=>item.id==='I').status,'error');
  assert.equal(works.loaded,true,'failed imports must not invalidate the unchanged library');
  assert.equal(summaryRequests,requestsBefore);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
         result = subprocess.run(
-            [shutil.which("node"), "-e", bodies + "\n" + script],
+            [shutil.which("node"), "-e", bodies + "\n" + script.replace("__IMPORT_JOBS__", (STATIC / "js/78-import-jobs.js").read_text(encoding="utf-8"))],
             capture_output=True, text=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

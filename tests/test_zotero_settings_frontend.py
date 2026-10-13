@@ -390,7 +390,9 @@ global.MEFinderApi = {
   fetch() { return Promise.resolve({ok: true, json: async () => ({pdf_parse_mode: 'mineru'})}); }
 };
 global.showToast = () => {};
+global.showAppConfirm = async () => true;
 eval(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]), '14-task-state.js'), 'utf8'));
+eval(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]), '78-import-jobs.js'), 'utf8'));
 eval(fs.readFileSync(process.argv[1], 'utf8'));
 eval(fs.readFileSync(process.argv[2], 'utf8'));
 (async () => {

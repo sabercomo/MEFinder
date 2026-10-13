@@ -510,7 +510,7 @@
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '保存失败');
       renderMineruLocalSettings(data);
-      importStore.queue.filter(function(item) {
+      global.MEFinder.importJobs.snapshot().filter(function(item) {
         return item.jobId && (item.status === 'failed' || item.status === 'paused');
       }).forEach(function(item) { global.MEFinder.imports.pollJob(item.id); });
       if (hint) hint.textContent = data.enabled ? '已保存；导入时可直接选择「本地 MinerU」' : '已关闭本地部署选项';

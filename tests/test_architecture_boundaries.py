@@ -424,6 +424,18 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         }
         self.assertEqual(internal, set())
 
+    def test_import_queue_has_one_private_owner(self) -> None:
+        scripts = PACKAGE / "static/js"
+        owner = scripts / "78-import-jobs.js"
+        for path in scripts.glob("*.js"):
+            if path != owner:
+                self.assertNotIn("importStore", path.read_text(encoding="utf-8"), path.name)
+        source = owner.read_text(encoding="utf-8")
+        for dependency in ("document.", "libraryStore", "parserStore", "calTransientStatus"):
+            self.assertNotIn(dependency, source)
+        self.assertLessEqual(len(source.splitlines()), 620)
+        self.assertLessEqual(len((scripts / "80-import.js").read_text(encoding="utf-8").splitlines()), 950)
+
     def test_frontend_core_state_is_grouped_by_domain(self) -> None:
         state = (PACKAGE / "static" / "js" / "00-state.js").read_text(
             encoding="utf-8"
@@ -433,7 +445,6 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "libraryStore",
             "parserStore",
             "settingsStore",
-            "importStore",
         ):
             self.assertIn(f"const {store} =", state)
 

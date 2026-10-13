@@ -458,6 +458,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "static/js/70-vision.js": 23,
             "static/js/71-vision-providers.js": 10,
             "static/js/72-vision-stats.js": 4,
+            "static/js/78-import-jobs.js": 1,
             "static/js/79-import-batch.js": 6,
             "static/js/80-import.js": 13,
             # 0.5.6 Zotero 来源同步：只经 MEFinder.zotero 命名 API 暴露（唯一直接赋值是
@@ -695,9 +696,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 重复导入复用运行任务，取消中的任务保留可见直到后台停止。
     # 导入与 Zotero 共用文献刷新入口，过期摘要请求跟随当前请求。
     BASELINE_SHA256 = (
-        "b921e29a0cd46fe2d79343bdc8ad757595947f034dd048036e32e2ffb978d87f"
+        "59df3ecbce86f06499f788c846d2165d3e50480e6fd614b92ffefda067d03b61"
     )
-    BASELINE_BYTES = 1521380
+    BASELINE_BYTES = 1524551
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

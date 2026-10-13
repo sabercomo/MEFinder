@@ -158,7 +158,6 @@ const settingsStore = {
 // 可扩展主题引擎（阶段 3-6）：外观模式 + 浅/深各自独立的主题选择 + 自定义主题。
 // 首帧仍由服务端注入的 data-theme 决定；载入偏好后 applyAppearance() 校正。
 const desktopShell = document.documentElement.dataset.desktopShell || '';
-const importStore = { queue: [] };
 
 // —— 引用样式的 localStorage 读取器 ——
 // 移到 00-state（全局作用域）：00-state 顶层初始化即调用它们，而其原文件

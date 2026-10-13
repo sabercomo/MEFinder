@@ -473,10 +473,10 @@
     if (!container) return;
     var providers = configuredVisionProviders();
     var current = container.dataset.value || '';
-    var recoveryJob = Array.isArray(importStore.queue) ? importStore.queue.find(function(item) {
+    var recoveryJob = global.MEFinder.importJobs.snapshot().find(function(item) {
       return item && item.status === 'error' && item.type === 'pdf'
         && item.failureStage !== 'index' && item.retryProviderId;
-    }) : null;
+    });
     var preferred = (recoveryJob && recoveryJob.retryProviderId) || parserStore.visionConfig.default_provider_id || '';
     var panel = document.getElementById('import-recovery-panel');
     var preferFailedJob = panel && !panel.hidden && container.dataset.userSelected !== 'true';

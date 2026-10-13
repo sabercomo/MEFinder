@@ -1443,15 +1443,16 @@ return val('author');
 
 
 def _import_eval(tail):
-    """在 06-pure.js + 80-import.js 同一 eval 里跑 tail（可注入 DOM 桩与 return）。
+    """在纯函数、任务服务与导入界面装配后执行框选助手。
 
     框选 marquee 生命周期助手 begin/end 触碰 document/window，无法当纯函数测；
-    用 tail 注入极小 DOM 桩驱动，回吐可断言的副作用摘要。80-import.js 顶层无执行
-    语句，单独 eval 只登记函数声明，只调这两个助手不牵动其它模块。"""
+    用 tail 注入极小 DOM 桩驱动，保留真实任务服务的装配与 configure 接线。"""
 
     imp = ROOT / "src" / "me_finder" / "static" / "js" / "80-import.js"
-    expr = "(function(){%s\n%s\n%s})()" % (
+    jobs = imp.with_name("78-import-jobs.js")
+    expr = "(function(){%s\nfunction showToast() {}\nasync function showAppConfirm() {}\n%s\n%s\n%s})()" % (
         _FRONTEND_STORE_STUB,
+        jobs.read_text(encoding="utf-8"),
         imp.read_text(encoding="utf-8"),
         tail,
     )

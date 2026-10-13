@@ -1,6 +1,8 @@
-/* IIFE 包裹：导入队列状态与实现保持私有，仅导出动态事件入口和命名模块 API。
+/* 导入界面：扫描、文件选择与渲染；任务状态只从 importJobs 快照读取。
    node 白盒测试走 module.exports；IIFE 实参在 node 下退回 globalThis。 */
 (function (global) {  // module: 80-import.js
+  var importJobs = global.MEFinder.importJobs;
+
   /* ═══ Import ═══ */
   function importNode(tag, className, text) {
     var node = document.createElement(tag);
@@ -31,7 +33,7 @@
   }
 
   function importQueueNeedsRecoverySelector() {
-    return importStore.queue.some(function(q) {
+    return importJobs.snapshot().some(function(q) {
       return q && q.type === 'pdf' && q.status === 'error' && q.failureStage !== 'index'
         && (q.canRetryVision || q.needsProviderConfig || q.mineruFailed || q.visionFailed);
     });
@@ -567,7 +569,7 @@
         } else if (job.file_type !== 'pdf') {
           q.step = 1;
         }
-        importStore.queue.push(q);
+        importJobs.add(q);
         pollImportJob(q.id);
       });
       renderImportQueue();
@@ -663,7 +665,7 @@
         return;
       }
       var id = 'import-' + Date.now() + '-' + i;
-      importStore.queue.push({
+      importJobs.add({
         id: id,
         file: file,
         name: file.name,
@@ -684,7 +686,7 @@
     });
     document.getElementById('file-input').value = '';
     renderImportQueue();
-    importStore.queue.filter(function(q) { return q.status === 'queued'; }).forEach(function(q) {
+    importJobs.snapshot().filter(function(q) { return q.status === 'queued'; }).forEach(function(q) {
       uploadImport(q.id);
     });
   }
@@ -692,7 +694,7 @@
   function renderImportQueue() {
     var queueEl = document.getElementById('import-queue');
     var itemsEl = document.getElementById('import-items');
-    if (importStore.queue.length === 0) {
+    if (importJobs.snapshot().length === 0) {
       queueEl.style.display = 'none';
       syncImportRecoveryPanel();
       syncResumeAllButton();
@@ -701,7 +703,7 @@
     queueEl.style.display = 'block';
     syncImportRecoveryPanel();
     itemsEl.replaceChildren();
-    importStore.queue.forEach(function(q) {
+    importJobs.snapshot().forEach(function(q) {
       var typeCls = q.type === 'pdf' ? 'pdf' : q.type === 'document_package' ? 'package' : 'word';
       var typeLabel = q.type === 'pdf' ? 'PDF' : q.type === 'epub' ? 'EPUB' : q.type === 'document_package' ? '文档包' : 'DOCX';
       var retryProvider = visionRetryProviderFor(q);
@@ -770,14 +772,14 @@
 
   // 队列里可继续的任务多于一个时，才值得给一个「全部继续导入」的批量入口。
   function resumableImportQueue() {
-    return importStore.queue.filter(function(item) {
+    return importJobs.snapshot().filter(function(item) {
       return item.jobId && item.canResume
         && (item.status === 'paused' || item.status === 'error');
     });
   }
 
   function cancellableImportQueue() {
-    return importStore.queue.filter(function(item) {
+    return importJobs.snapshot().filter(function(item) {
       return item.status !== 'done' && !(item.cancelRequested && item.status === 'processing');
     });
   }
@@ -849,470 +851,30 @@
     }
   }
 
-  async function removeImport(id, options) {
-    options = options || {};
-    var q = importStore.queue.find(function(item) { return item.id === id; });
-    if (q && q.jobId && q.status === 'processing' && !options.skipConfirm) {
-      var serviceName = q.route === 'local_ocr' ? (q.providerName || '本地 OCR') : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
-      if (!await showAppConfirm(
-        '将停止 ' + serviceName + ' 后台解析；当前请求完成后不会再提交新页面',
-        {title:'停止并移除任务？', confirmText:'停止任务', tone:'danger'}
-      )) return false;
-    }
-    if (q && q.uploadId) {
-      var activeUploadIds = [q.uploadId];
-      q.uploadId = null;
-      for (var uploadIndex = 0; uploadIndex < activeUploadIds.length; uploadIndex += 1) {
-        try {
-          await MEFinderApi.fetch('/api/import-upload/cancel', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({upload_id: activeUploadIds[uploadIndex]})
-          });
-        } catch (cancelError) {
-          console.warn('cancel chunked upload failed:', cancelError);
-        }
-      }
-    }
-    if (q && q.jobId && ['processing', 'paused', 'error'].indexOf(q.status) >= 0) {
-      try {
-        var resp = await MEFinderApi.fetch('/api/import-resume-dismiss', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({job_id: q.jobId})
-        });
-        var data = await resp.json();
-        if (!resp.ok || data.error) throw new Error(data.error || '移除任务失败');
-        if (data.state === 'cancelling') {
-          var restartPolling = q.status !== 'processing';
-          q.cancelRequested = true;
-          q.status = 'processing';
-          q.canResume = false;
-          q.message = '正在停止后台解析，停止完成后即可重新导入…';
-          if (!options.silent) showToast(q.message, 'success');
-          if (!options.deferRender) renderImportQueue();
-          if (restartPolling) pollImportJob(q.id);
-          return true;
-        }
-      } catch (e) {
-        if (!options.silent) showToast('移除导入任务失败：' + e.message);
-        return false;
-      }
-    }
-    importStore.queue = importStore.queue.filter(function(item) { return item.id !== id; });
-    if (!options.deferRender) renderImportQueue();
-    return true;
-  }
+  function removeImport(id, options) { return importJobs.remove(id, options); }
+  function uploadImport(id) { return importJobs.upload(id); }
+  function pollImportJob(id) { return importJobs.pollJob(id); }
+  function loadResumableImports() { return importJobs.loadResumableImports(); }
+  function loadActiveImports() { return importJobs.loadActiveImports(); }
+  function resumeImport(id, options) { return importJobs.resume(id, options); }
+  function retryImportWithVision(id) { return importJobs.retryWithVision(id); }
+  function retryImportWithMinerU(id) { return importJobs.retryWithMinerU(id); }
+  function retryImportWithLocalMinerU(id) { return importJobs.retryWithLocalMinerU(id); }
 
-  var IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES = 4 * 1024 * 1024;
-
-  async function uploadImportFile(q, importKind, progressLabel) {
-    var startResp = await MEFinderApi.fetch('/api/import-upload/start', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        file_name: q.file.name,
-        size: q.file.size,
-        parse_mode: q.parseMode || 'auto',
-        provider_id: q.providerId || '',
-        import_kind: importKind || 'document'
-      })
-    });
-    var startData = await startResp.json();
-    if (!startResp.ok || startData.error) throw new Error(startData.error || '无法开始读取文件');
-    var uploadId = startData.upload_id;
-    if (!uploadId) throw new Error('上传任务编号缺失');
-    q.uploadId = uploadId;
-    try {
-      var totalSize = Number(q.file.size || 0);
-      var chunkSize = Number(startData.chunk_size || IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES);
-      if (!Number.isFinite(chunkSize) || chunkSize <= 0) chunkSize = IMPORT_UPLOAD_FALLBACK_CHUNK_BYTES;
-      chunkSize = Math.min(chunkSize, 8 * 1024 * 1024);
-      var offset = 0;
-      while (offset < totalSize) {
-        var end = Math.min(offset + chunkSize, totalSize);
-        var uploadChunk = q.file.slice(offset, end);
-        var chunkResp = await MEFinderApi.fetch('/api/import-upload/chunk', {
-          method: 'POST',
-          headers: {
-            'Content-Type': q.file.type || 'application/octet-stream',
-            'X-Upload-ID': uploadId,
-            'X-Upload-Offset': String(offset)
-          },
-          body: uploadChunk
-        });
-        var chunkData = await chunkResp.json();
-        if (!chunkResp.ok || chunkData.error) throw new Error(chunkData.error || '读取文件失败');
-        var received = Number(chunkData.received_size);
-        if (!Number.isFinite(received) || received !== end) throw new Error('上传分块位置校验失败');
-        offset = received;
-        q.message = progressLabel + ' ' + (totalSize ? Math.round(offset * 100 / totalSize) : 0) + '%';
-        renderImportQueue();
-      }
-    } catch (error) {
-      try {
-        await MEFinderApi.fetch('/api/import-upload/cancel', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({upload_id: uploadId})
-        });
-      } catch (cancelError) {
-        console.warn('cancel chunked upload failed:', cancelError);
-      }
-      q.uploadId = null;
-      throw error;
-    }
-    return uploadId;
-  }
-
-  async function uploadImport(id) {
-    var q = importStore.queue.find(function(q) { return q.id === id; });
-    if (!q) return;
-    q.status = 'processing';
-    q.step = 0;
-    q.message = '正在读取文件…';
-    renderImportQueue();
-    var uploadId = null;
-    try {
-      uploadId = await uploadImportFile(q, q.importKind || 'document', '正在读取文件…');
-      q.uploadId = uploadId;
-      var resp = await MEFinderApi.fetch('/api/import-upload/finish', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({upload_id: uploadId})
+  importJobs.configure({
+    changed: renderImportQueue,
+    askConfirm: showAppConfirm,
+    toast: showToast,
+    retryProvider: visionRetryProviderFor,
+    openSettings: function() { openVisionSettings(); },
+    settled: function(sourceId) { delete calTransientStatus[sourceId]; },
+    parsing: function(sourceId) { calTransientStatus[sourceId] = 'mapping'; },
+    completed: function() {
+      global.MEFinder.library.refreshAfterChange().catch(function(error) {
+        showToast('文献数据刷新失败：' + error.message, 'danger');
       });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '导入失败');
-      uploadId = null;
-      q.uploadId = null;
-      q.jobId = data.job_id;
-      if (data.already_running) {
-        importStore.queue = importStore.queue.filter(function(item) {
-          return item === q || item.jobId !== q.jobId;
-        });
-      }
-      q.providerId = data.provider_id || q.providerId;
-      if (q.type === 'pdf' && data.detected_pdf_type) {
-        q.detectedType = data.detected_pdf_type;
-        q.route = data.parse_route || (data.detected_pdf_type === 'native_text' ? 'native' : 'mineru');
-        q.step = 2;
-        q.message = '检测结果：' + pdfTypeLabel(data.detected_pdf_type)
-          + (q.route === 'vision' ? '，将使用其他视觉 API'
-            : q.route === 'local_ocr' ? '，将使用本地 OCR'
-            : q.route === 'mineru' && q.providerId === 'mineru-local' ? '，将使用本地 MinerU'
-            : q.route === 'mineru' ? '，将使用 MinerU 在线解析' : '，使用本地快速解析');
-      } else {
-        q.step = 1;
-        q.message = '文件已保存，正在建立索引…';
-      }
-      if (data.already_running) {
-        q.providerId = data.provider_id || null;
-        q.cancelRequested = data.status === 'cancelling';
-        q.message = q.cancelRequested
-          ? '正在停止后台解析，停止完成后即可重新导入…'
-          : '同一文献已有导入任务，正在跟踪原任务进度…';
-      }
-      renderImportQueue();
-      if (q.jobId) pollImportJob(q.id);
-    } catch (e) {
-      var pendingUploadIds = [uploadId].filter(Boolean);
-      for (var pendingIndex = 0; pendingIndex < pendingUploadIds.length; pendingIndex += 1) {
-        try {
-          await MEFinderApi.fetch('/api/import-upload/cancel', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({upload_id: pendingUploadIds[pendingIndex]})
-          });
-        } catch (cancelError) {
-          console.warn('cancel chunked upload failed:', cancelError);
-        }
-      }
-      q.uploadId = null;
-      q.status = 'error';
-      q.message = e.message || '导入失败';
-      renderImportQueue();
     }
-  }
-
-  function pollImportJob(id) {
-    var q = importStore.queue.find(function(item) { return item.id === id; });
-    if (!q || !q.jobId) return;
-    MEFinderApi.fetch('/api/import-status?job_id=' + encodeURIComponent(q.jobId))
-      .then(function(resp) {
-        if (resp.status === 404 && q.cancelRequested) {
-          importStore.queue = importStore.queue.filter(function(item) { return item !== q; });
-          return null;
-        }
-        return resp.json();
-      })
-      .then(function(data) {
-        if (data === null) { renderImportQueue(); return; }
-        if (data.error) throw new Error(data.error);
-        if (data.parse_route) q.route = data.parse_route;
-        if (data.provider_id) q.providerId = data.provider_id;
-        if (data.provider_name) q.providerName = data.provider_name;
-        if (data.source_file_id) q.sourceFileId = data.source_file_id;
-        q.mineruFailed = !!data.mineru_failed;
-        q.visionFailed = !!data.vision_failed;
-        q.mineruInterrupted = !!data.mineru_interrupted;
-        q.canRetryLocalMineru = !!data.can_retry_with_local_mineru;
-        if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.route = 'mineru';
-        else if (data.phase === 'local_ocr_processing') q.route = 'local_ocr';
-        else if (data.phase === 'vision_processing') q.route = 'vision';
-        else if (data.phase === 'text_parsing' && q.type === 'pdf') q.route = 'native';
-        var steps = importStepsFor(q);
-        if (data.phase === 'validating_result') q.step = 1;
-        else if (data.phase === 'mineru_submitting' || data.phase === 'mineru_processing') q.step = steps.indexOf('MinerU 解析');
-        else if (data.phase === 'local_ocr_processing') q.step = steps.indexOf('本地 OCR');
-        else if (data.phase === 'vision_processing') q.step = 2;
-        else if (data.phase === 'text_parsing') q.step = q.type === 'pdf' ? steps.indexOf('本地解析') : steps.indexOf('恢复书目与页码');
-        else if (data.phase === 'rebuilding_index' || data.phase === 'metadata_recognition') q.step = steps.indexOf('建立索引');
-        else if (data.status === 'completed') q.step = steps.length;
-        q.message = data.message || q.message;
-        if (data.status === 'cancelling') q.cancelRequested = true;
-        if (q.cancelRequested) q.message = '正在停止后台解析，停止完成后即可重新导入…';
-        if (data.status === 'completed') {
-          q.status = 'done';
-          q.message = data.message || '导入完成，已自动更新索引';
-          if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
-          global.MEFinder.library.refreshAfterChange().catch(function(error) {
-            showToast('文献数据刷新失败：' + error.message, 'danger');
-          });
-        } else if (data.status === 'failed') {
-          q.cancelRequested = false;
-          q.status = 'error';
-          q.message = data.message || '导入失败';
-          if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
-          q.failureStage = data.failure_stage || null;
-          q.canResume = !!data.can_resume;
-          q.canRetryVision = !!data.can_retry_with_provider;
-          q.retryProviderId = data.retry_provider_id || q.providerId || null;
-          q.retryProviderName = data.retry_provider_name || q.providerName || null;
-          q.needsProviderConfig = !!data.needs_provider_config;
-        } else if (data.status === 'paused') {
-          q.status = 'paused';
-          q.canResume = !!data.can_resume;
-          q.message = data.message || '上次导入已暂停，可继续导入';
-        }
-        renderImportQueue();
-        if (q.status === 'processing') setTimeout(function() { pollImportJob(id); }, 2500);
-      })
-      .catch(function(err) {
-        q.status = 'error';
-        q.message = err.message || '读取导入状态失败';
-        if (q.sourceFileId) delete calTransientStatus[q.sourceFileId];
-        renderImportQueue();
-      });
-  }
-
-  async function loadResumableImports() {
-    try {
-      var resp = await MEFinderApi.fetch('/api/import-resumable');
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '读取恢复任务失败');
-      (data.jobs || []).forEach(function(job) {
-        if (importStore.queue.some(function(item) { return item.jobId === job.job_id; })) return;
-        var isPaused = job.status === 'paused';
-        importStore.queue.push({
-          id: 'resume-' + job.job_id,
-          jobId: job.job_id,
-          name: job.file_name || '未命名文献',
-          size: Number(job.size_bytes || 0),
-          type: job.file_type === 'pdf' ? 'pdf' : job.file_type === 'epub' ? 'epub' : 'docx',
-          status: isPaused ? 'paused' : 'error',
-          step: job.file_type === 'pdf' ? 2 : 1,
-          route: job.parse_route || null,
-          providerId: job.provider_id || null,
-          providerName: job.provider_name || null,
-          detectedType: job.detected_pdf_type || null,
-          message: job.message || (isPaused ? '上次导入已暂停，可继续导入' : '上次导入未完成'),
-          failureStage: job.failure_stage || null,
-          canResume: !!job.can_resume,
-          canRetryVision: !!job.can_retry_with_provider,
-          retryProviderId: job.retry_provider_id || job.provider_id || null,
-          retryProviderName: job.retry_provider_name || job.provider_name || null,
-          needsProviderConfig: !!job.needs_provider_config,
-          mineruFailed: !!job.mineru_failed,
-          visionFailed: !!job.vision_failed,
-          mineruInterrupted: !!job.mineru_interrupted,
-          canRetryLocalMineru: !!job.can_retry_with_local_mineru,
-          fromJournal: true
-        });
-      });
-      renderImportQueue();
-    } catch (e) {
-      console.warn('load resumable imports failed:', e);
-    }
-  }
-
-  async function loadActiveImports() {
-    try {
-      var resp = await MEFinderApi.fetch('/api/import-active');
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '读取在途任务失败');
-      (data.jobs || []).forEach(function(job) {
-        if (importStore.queue.some(function(item) { return item.jobId === job.job_id; })) return;
-        importStore.queue.push({
-          id: 'active-' + job.job_id,
-          jobId: job.job_id,
-          name: job.file_name || '未命名文献',
-          size: Number(job.size_bytes || 0),
-          type: job.file_type === 'pdf' ? 'pdf' : job.file_type === 'epub' ? 'epub' : 'docx',
-          status: 'processing',
-          step: job.file_type === 'pdf' ? 2 : 1,
-          route: job.parse_route || null,
-          providerId: job.provider_id || null,
-          providerName: job.provider_name || null,
-          detectedType: job.detected_pdf_type || null,
-          message: job.message || '正在导入…',
-          canResume: false,
-          cancelRequested: job.status === 'cancelling',
-          fromJournal: true
-        });
-        pollImportJob('active-' + job.job_id);
-      });
-      renderImportQueue();
-    } catch (e) {
-      console.warn('load active imports failed:', e);
-    }
-  }
-
-  async function resumeImport(id, options) {
-    options = options || {};
-    var q = importStore.queue.find(function(item) { return item.id === id; });
-    if (!q || !q.jobId || !q.canResume) return;
-    var serviceName = q.providerId === 'mineru-local' ? '本地 MinerU' : q.route === 'local_ocr' ? (q.providerName || '本地 OCR') : q.route === 'mineru' ? 'MinerU' : (q.providerName || '视觉解析 API');
-    if (!options.skipConfirm && q.failureStage !== 'index' && q.type === 'pdf' && q.route !== 'native'
-        && q.providerId !== 'mineru-local'
-        && q.route !== 'local_ocr'
-        && !await showAppConfirm(
-          '将从上次断点继续调用 ' + serviceName + '，未完成部分可能产生费用',
-          {title:'继续联网解析？', confirmText:'继续任务', tone:'warning'}
-        )) return;
-    try {
-      var resp = await MEFinderApi.fetch('/api/import-resume', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({job_id: q.jobId})
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '继续任务失败');
-      q.status = 'processing';
-      q.canResume = false;
-      q.message = q.failureStage === 'index'
-        ? '正在重新建立索引，不会再次调用解析 API…'
-        : '正在继续导入…';
-      renderImportQueue();
-      pollImportJob(q.id);
-    } catch (e) {
-      showToast((options.silent ? q.name + '：' : '') + '继续导入失败：' + e.message);
-    }
-  }
-
-  async function retryImportWithVision(id) {
-    var q = importStore.queue.find(function(item) { return item.id === id; });
-    if (!q || !q.jobId) return;
-    var provider = visionRetryProviderFor(q);
-    if (!provider) {
-      openVisionSettings();
-      showToast('请先配置一个其他解析 API');
-      return;
-    }
-    var providerId = provider.id;
-    var providerName = provider.name || '其他解析 API';
-    if (!await showAppConfirm(
-      '将改用「' + providerName + '」重新解析这份 PDF，可能产生费用',
-      {title:'切换解析接口？', confirmText:'切换并重试', tone:'warning'}
-    )) return;
-    try {
-      var resp = await MEFinderApi.fetch('/api/import-retry', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({job_id: q.jobId, provider_id: providerId})
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '重试失败');
-      q.jobId = data.job_id;
-      q.status = 'processing';
-      q.route = 'vision';
-      q.providerId = data.provider_id;
-      q.providerName = data.provider_name || providerName;
-      q.step = 2;
-      q.message = '正在切换到 ' + q.providerName + '…';
-      q.canRetryVision = false;
-      q.needsProviderConfig = false;
-      q.visionFailed = false;
-      renderImportQueue();
-      pollImportJob(q.id);
-    } catch (e) {
-      showToast('切换解析接口失败：' + e.message);
-    }
-  }
-
-  async function retryImportWithMinerU(id) {
-    var q = importStore.queue.find(function(item) { return item.id === id; });
-    if (!q || !q.jobId || q.type !== 'pdf') return;
-    if (!await showAppConfirm(
-      '将保留原文件，停止使用当前视觉 API，改由免费 MinerU 解析',
-      {title:'改用 MinerU？', confirmText:'改用 MinerU'}
-    )) return;
-    try {
-      var resp = await MEFinderApi.fetch('/api/import-retry-mineru', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({job_id: q.jobId})
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '切换 MinerU 失败');
-      q.jobId = data.job_id;
-      q.status = 'processing';
-      q.route = 'mineru';
-      q.providerId = null;
-      q.providerName = null;
-      q.step = 2;
-      q.message = '正在切换到 MinerU，不需要重新上传文件…';
-      q.canResume = false;
-      q.canRetryVision = false;
-      q.visionFailed = false;
-      renderImportQueue();
-      pollImportJob(q.id);
-    } catch (e) {
-      showToast('切换 MinerU 失败：' + e.message);
-    }
-  }
-
-  async function retryImportWithLocalMinerU(id) {
-    var q = importStore.queue.find(function(item) { return item.id === id; });
-    if (!q || !q.jobId || q.type !== 'pdf' || !q.canRetryLocalMineru) return;
-    if (!await showAppConfirm(
-      '将保留原文件，停止在线 MinerU 任务，改由你已运行的本地 MinerU 服务重新解析',
-      {title:'切换到本地部署？', confirmText:'切换到本地部署'}
-    )) return;
-    try {
-      var response = await MEFinderApi.fetch('/api/import-retry-mineru-local', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({job_id: q.jobId})
-      });
-      var data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || '切换失败');
-      q.jobId = data.job_id;
-      q.status = 'processing';
-      q.route = 'mineru';
-      q.providerId = 'mineru-local';
-      q.providerName = '本地 MinerU';
-      q.step = 2;
-      q.message = '正在切换到本地 MinerU，不需要重新上传文件…';
-      q.canResume = false;
-      q.canRetryLocalMineru = false;
-      q.mineruFailed = false;
-      q.mineruInterrupted = false;
-      renderImportQueue();
-      pollImportJob(q.id);
-    } catch (error) {
-      showToast('切换到本地部署失败：' + error.message);
-    }
-  }
+  });
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {

@@ -210,6 +210,52 @@ class BrowserRegressionTests(unittest.TestCase):
         )
 
     # ── scenarios ──────────────────────────────────────────────────
+    def test_import_task_survives_navigation_cancels_and_resumes_after_reload(self) -> None:
+        state = {"status": "processing"}
+
+        def status(route: Route) -> None:
+            if state["status"] == "gone":
+                route.fulfill(status=404, json={"error": "导入任务不存在。"})
+            else:
+                route.fulfill(json={**state, "message": "正在处理", "source_file_id": "pdf-zh"})
+
+        self.page.route("**/api/import-status?*", status)
+        self.page.route("**/api/import-active", lambda route: route.fulfill(json={"jobs": [{
+            "job_id": "browser-import", "file_name": "队列验收.pdf", "file_type": "pdf",
+            "status": "processing", "parse_route": "local_ocr",
+        }]}))
+        self.page.route("**/api/import-resume-dismiss", lambda route: route.fulfill(json={"state": "cancelling"}))
+        self.page.evaluate("() => MEFinder.imports.loadActiveImports()")
+        self.navigate("文献导入")
+        row = self.page.locator(".import-item").filter(has_text="队列验收.pdf")
+        row.locator(".import-item-remove").click()
+        self.page.get_by_role("button", name="停止任务", exact=True).click()
+        self.wait_until(lambda: "停止" in row.inner_text(), "cancel must remain visible")
+        self.assertTrue(row.locator(".import-item-remove").is_disabled())
+        self.navigate("文献检索")
+        state["status"] = "gone"
+        self.wait_until(lambda: self.page.evaluate("MEFinder.importJobs.snapshot().length") == 0,
+                        "background polling must finish cancellation away from the import page")
+        self.navigate("文献导入")
+        self.assertFalse(row.is_visible())
+
+        self.page.unroute("**/api/import-active")
+        self.page.route("**/api/import-resumable", lambda route: route.fulfill(json={"jobs": [{
+            "job_id": "browser-resume", "file_name": "恢复验收.pdf", "file_type": "pdf",
+            "status": "paused", "can_resume": True, "failure_stage": "index", "parse_route": "vision",
+        }]}))
+        self.page.route("**/api/import-resume", lambda route: route.fulfill(json={"job_id": "browser-resume"}))
+        state["status"] = "completed"
+        self.page.reload()
+        self.page.wait_for_load_state("networkidle")
+        self.navigate("文献导入")
+        row = self.page.locator(".import-item").filter(has_text="恢复验收.pdf")
+        row.get_by_role("button", name="重新建立索引", exact=True).click()
+        self.wait_until(lambda: self.page.evaluate("MEFinder.importJobs.snapshot()[0].status") == "done",
+                        "resumed task must finish through the task owner")
+        self.assertEqual(row.locator(".import-item-status.done").count(), 1)
+        self.assertEqual(self.page.locator(".app-dialog-backdrop.open").count(), 0)
+
     def test_zotero_refreshes_search_library_and_versions_across_page_changes(self) -> None:
         catalog = self.context.request.get(self.base_url + "/api/library?view=summary").json()
         source = next(item for item in catalog["items"] if item["source_file_id"] == "pdf-zh")
