@@ -694,10 +694,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 导入完成同时失效译本对照页缓存，刷新新版本书目与语言。
     # 重复导入复用运行任务，取消中的任务保留可见直到后台停止。
     # 导入与 Zotero 共用文献刷新入口，过期摘要请求跟随当前请求。
+    # 本机导入进度查询断连时保留原状态并重试，恢复后跟踪真实终态。
     BASELINE_SHA256 = (
-        "b921e29a0cd46fe2d79343bdc8ad757595947f034dd048036e32e2ffb978d87f"
+        "80234fb1a7e1964584c76d8e569faa559600a579761649b80faff6a66590ec23"
     )
-    BASELINE_BYTES = 1521380
+    BASELINE_BYTES = 1521829
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

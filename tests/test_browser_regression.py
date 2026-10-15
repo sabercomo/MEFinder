@@ -210,6 +210,40 @@ class BrowserRegressionTests(unittest.TestCase):
         )
 
     # ── scenarios ──────────────────────────────────────────────────
+    def test_import_progress_recovers_after_local_status_request_disconnects(self) -> None:
+        state = {"calls": 0, "completed": False}
+
+        def status(route: Route) -> None:
+            state["calls"] += 1
+            if state["calls"] == 1:
+                route.abort("connectionreset")
+                return
+            route.fulfill(json={
+                "status": "completed" if state["completed"] else "processing",
+                "phase": "completed" if state["completed"] else "rebuilding_index",
+                "message": "导入完成" if state["completed"] else "正在写入本地 SQLite 索引…",
+                "parse_route": "native",
+            })
+
+        self.page.route("**/api/import-status?job_id=browser-import", status)
+        self.navigate("文献导入")
+        self.page.evaluate("""() => {
+          importStore.queue.push({id: 'browser-import', jobId: 'browser-import',
+            name: 'local.pdf', size: 1024, type: 'pdf', status: 'processing',
+            detectedType: 'native_text', route: 'native', step: 2});
+          MEFinder.imports.pollJob('browser-import');
+        }""")
+        item = self.page.locator('.import-item[data-id="browser-import"]')
+        item.locator(".import-item-status").filter(has_text="重试").wait_for()
+        self.assertEqual(item.locator(".error").count(), 0)
+        self.assertIn("本地解析", item.locator(".import-step.active").inner_text())
+        item.get_by_text("正在写入本地 SQLite 索引…", exact=True).wait_for()
+        self.assertIn("建立索引", item.locator(".import-step.active").inner_text())
+        state["completed"] = True
+        item.locator(".import-item-status.done").wait_for()
+        self.assertEqual(item.locator(".import-item-status").inner_text(), "导入完成")
+        self.assertEqual(item.locator(".error").count(), 0)
+
     def test_zotero_refreshes_search_library_and_versions_across_page_changes(self) -> None:
         catalog = self.context.request.get(self.base_url + "/api/library?view=summary").json()
         source = next(item for item in catalog["items"] if item["source_file_id"] == "pdf-zh")

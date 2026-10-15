@@ -1045,6 +1045,15 @@
         }
         return resp.json();
       })
+      .catch(function(err) {
+        if (!(err instanceof TypeError)) throw err;
+        console.warn('读取导入进度时本机连接中断：', err);
+        q.message = q.cancelRequested
+          ? '正在停止后台解析；暂时无法获取进度，正在重试…'
+          : '暂时无法连接本地服务，正在重试获取导入进度…';
+        setTimeout(function() { pollImportJob(id); }, 2500);
+        return null;
+      })
       .then(function(data) {
         if (data === null) { renderImportQueue(); return; }
         if (data.error) throw new Error(data.error);

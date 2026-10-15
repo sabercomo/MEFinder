@@ -1,3 +1,5 @@
+2026-10-15：导入进度因本机查询断连而误报失败、停止刷新的问题已修复，全量 2,771 项（29 跳过）、Chrome 11 项及 Ruff / 前端守卫通过；原 `dist/MEFinder/` 界面资源已同步，正常重启后生效。现有 release / macOS 包不含此修复，尚未正式发布。
+
 2026-10-13：已取消导入的 MinerU 解析任务长期占用账号、新导入一直“等待可用的 MinerU 账号”已修复，全量门禁通过；原 `dist/MEFinder/` 已按 `f63e683` 更新，下次启动自动释放被占账号。现有 release / macOS 包不含此修复，尚未正式发布。
 
 2026-10-13：普通导入和 Zotero 同步共用文献数据刷新入口，旧摘要响应不再覆盖新目录；源码全量 2,760 项通过（38 跳过）、Chrome 10 项及 Ruff / JS 守卫通过。安装包与本机应用尚未更新，未正式发布。见 [核验报告](../reports/library-refresh-2026-10-13.md)。
@@ -20,6 +22,7 @@
 
 # v0.5.9 迭代说明
 
+- 本机导入进度查询中断时保留原任务状态与步骤并自动重试；恢复连接后继续展示真实进度和终态，不再把一次查询失败当作导入失败。取消中断连、普通 404 和真实解析失败保持各自处理，见 [问题记录](issues/import-progress-local-disconnect.md) 与 [核验报告](../reports/import-progress-reconnect-2026-10-15.md)。
 - 取消或移除导入时同步取消其 MinerU 解析任务并释放账号并发；启动时清扫没有对应导入任务的未结束解析任务。修复被放弃的导入占满全部账号、后续导入永远停在“等待可用的 MinerU 账号”。见 [问题记录](issues/mineru-orphaned-parser-jobs-hold-credentials.md)。
 - 重复上传同一 PDF 时跟踪已有导入任务，保留原解析方式，合并重复队列行；取消中的任务持续显示“正在停止”，后台清理完成后才移除，随后可重新导入。见 [问题记录](issues/import-duplicate-active-task.md) 和 [接口行为](contracts/v0.5.9-import-active-jobs.md)。
 - 导入完成后同步失效译本对照页的旧文献目录，修复新版本的语言显示“未识别”、书名退化成内部 ID、出版与页码信息为空；沿用共享请求，不需重新导入或生成对齐。见 [问题记录](issues/works-import-library-refresh.md)。
@@ -33,6 +36,8 @@
 - 实际 U 盘证据与复现测试见 [问题记录](issues/usb-appledouble-zip-dialog.md) 和 [核验报告](../reports/usb-document-package-2026-10-06.md)。先前怀疑强制 ZIP64，经实际文件核验后不采用该修改。
 
 ## Windows 本地交付
+
+2026-10-15（本机进度查询恢复）：源码全量 2,771 项通过（29 跳过，222.450 秒），Chrome 11 项通过（37.559 秒），前端守卫 251 项、导入状态与译本对照专项 34 项、跟踪 Python 的 Ruff(F) 与 JS 语法通过。仅同步原 `dist/MEFinder/_internal/src/me_finder/static/js/80-import.js`，更新后完整 HTML 与已测源码相同（1,521,829 字节 / SHA-256 `80234fb1a7e1964584c76d8e569faa559600a579761649b80faff6a66590ec23`）；两份 EXE、数据指针与程序目录 data/config 共 6 份文件哈希不变。未中断当前程序或后台导入；正常重启后生效。未重打安装 / 便携 / macOS 包。
 
 2026-10-13（孤儿解析任务）：独立检出 `f63e683` 运行官方 `build_windows_dist.cmd`，全量 2,766 项通过（46 跳过，230.671 秒），打包与 MCP 冒烟通过。按哈希仅同步 12 个应用文件到原 `dist/MEFinder/`（两份 EXE、`base_library.zip`、5 份 Python 源、4 份前端 JS），508 份比对一致；保留原 UCRT/MSVC 运行库与 `data_root.txt` / `data/` / `config/`（哈希不变）。在真实账本与导入日志的副本上演练启动清扫：取消 7 个无导入引用的未结束任务（2 个持有远端任务、5 个无远端任务的历史残留），两账号在途回 0，《精神现象学》任务保留。
 

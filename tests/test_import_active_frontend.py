@@ -24,9 +24,10 @@ class ImportActiveFrontendTests(unittest.TestCase):
         script = """
 const assert = require('node:assert/strict');
 var importStore = {queue: []};
-var timers = [], toasts = [], polls = [];
+var timers = [], toasts = [], polls = [], refreshes = [];
 var MEFinderApi;
-var global = {MEFinder: {works: {invalidate() {}, load() {}}}};
+var global = {MEFinder: {works: {invalidate() {}, load() {}},
+  library: {async refreshAfterChange() { refreshes.push('refresh'); }}}};
 var currentPage = 'import', calTransientStatus = {};
 function renderImportQueue() {}
 function showToast(message) { toasts.push(message); }
@@ -99,13 +100,105 @@ assert.equal(q.message, '导入任务不存在。');
 
     def test_polling_failure_during_cancellation_remains_retryable(self) -> None:
         self.run_js(["function cancellableImportQueue(", "function pollImportJob("], """
-MEFinderApi = {async fetch() {throw new Error('网络暂时不可用');}};
+var disconnected = true;
+MEFinderApi = {async fetch() {
+  if (disconnected) throw new TypeError('Failed to fetch');
+  return {status: 404, async json() {return {error: '导入任务不存在。'};}};
+}};
 var q = {id: 'one', jobId: 'job-one', status: 'processing', cancelRequested: true};
 importStore.queue.push(q);
 pollImportJob(q.id); await flush();
+assert.equal(q.status, 'processing');
+assert.match(q.message, /停止/);
+assert.match(q.message, /重试/);
+assert.equal(q.cancelRequested, true);
+assert.deepEqual(cancellableImportQueue(), []);
+assert.equal(timers.length, 1);
+disconnected = false; timers.shift()(); await flush();
+assert.equal(importStore.queue.length, 0);
+assert.equal(timers.length, 0);
+""")
+
+    def test_disconnected_polling_preserves_progress_and_recovers_to_completion(self) -> None:
+        self.run_js(["function pollImportJob("], """
+var calls = 0;
+MEFinderApi = {async fetch(url) {
+  assert.equal(url, '/api/import-status?job_id=job-one');
+  calls++;
+  if (calls <= 2) throw new TypeError('Failed to fetch');
+  return {status: 200, async json() {return {
+    status: 'completed', message: '导入完成', source_file_id: 'source-one'
+  };}};
+}};
+var q = {id: 'one', jobId: 'job-one', status: 'processing', step: 2, route: 'native',
+  sourceFileId: 'source-one'};
+importStore.queue.push(q);
+calTransientStatus['source-one'] = 'importing';
+pollImportJob(q.id); await flush();
+for (var index = 0; index < 2; index++) {
+  assert.equal(q.status, 'processing', 'query failure must not mark the import failed');
+  assert.equal(q.step, 2);
+  assert.equal(q.route, 'native');
+  assert.equal(calTransientStatus['source-one'], 'importing');
+  assert.match(q.message, /本地/);
+  assert.match(q.message, /重试/);
+  assert.equal(timers.length, 1, 'keep exactly one pending status query');
+  timers.shift()(); await flush();
+}
+assert.equal(calls, 3);
+assert.equal(q.status, 'done');
+assert.equal(q.message, '导入完成');
+assert.equal(calTransientStatus['source-one'], undefined);
+assert.deepEqual(refreshes, ['refresh']);
+assert.equal(timers.length, 0);
+""")
+
+    def test_interrupted_response_body_retries_and_reports_actual_import_failure(self) -> None:
+        self.run_js(["function pollImportJob("], """
+var calls = 0;
+MEFinderApi = {async fetch() {return {status: 200, async json() {
+  if (++calls === 1) throw new TypeError('Failed to fetch');
+  return {status: 'failed', message: '索引写入失败', can_resume: true, failure_stage: 'index'};
+}};}};
+var q = {id: 'one', jobId: 'job-one', status: 'processing', step: 2};
+importStore.queue.push(q);
+pollImportJob(q.id); await flush();
+assert.equal(q.status, 'processing');
+assert.equal(timers.length, 1);
+timers.shift()(); await flush();
 assert.equal(q.status, 'error');
-assert.equal(q.message, '网络暂时不可用');
-assert.deepEqual(cancellableImportQueue(), [q]);
+assert.equal(q.message, '索引写入失败');
+assert.equal(q.canResume, true);
+assert.equal(q.failureStage, 'index');
+assert.deepEqual(refreshes, []);
+assert.equal(timers.length, 0, 'actual import failure must stop polling');
+""")
+
+    def test_invalid_status_json_is_reported_without_retry(self) -> None:
+        self.run_js(["function pollImportJob("], """
+MEFinderApi = {async fetch() {return {status: 200, async json() {
+  throw new SyntaxError('Unexpected token');
+}};}};
+var q = {id: 'one', jobId: 'job-one', status: 'processing'};
+importStore.queue.push(q);
+pollImportJob(q.id); await flush();
+assert.equal(q.status, 'error');
+assert.equal(q.message, 'Unexpected token');
+assert.equal(timers.length, 0);
+""")
+
+    def test_removed_import_does_not_poll_again_after_disconnection(self) -> None:
+        self.run_js(["function pollImportJob("], """
+var calls = 0;
+MEFinderApi = {async fetch() {calls++; throw new TypeError('Failed to fetch');}};
+var q = {id: 'one', jobId: 'job-one', status: 'processing'};
+importStore.queue.push(q);
+pollImportJob(q.id); await flush();
+assert.equal(timers.length, 1);
+importStore.queue = [];
+timers.shift()(); await flush();
+assert.equal(calls, 1);
+assert.equal(timers.length, 0);
 """)
 
     def test_cancel_from_polling_error_restarts_polling_and_exposes_cleanup_failure(self) -> None:
