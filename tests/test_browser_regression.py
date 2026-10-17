@@ -129,6 +129,19 @@ class BrowserRegressionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.assertEqual(self.page_errors, [], "uncaught page errors")
 
+    def test_default_startup_finishes_catalog_before_alignment_overview(self) -> None:
+        events = []
+        self.page.on("request", lambda request: events.append("overview")
+                     if "/api/translation-works/overview?" in request.url else None)
+        self.page.on("requestfinished", lambda request: events.append("summary")
+                     if "/api/library?view=summary" in request.url else None)
+        self.page.goto(self.base_url + "/")
+        self.wait_until(lambda: "overview" in events and "summary" in events,
+                        "startup must load the shared catalog and works")
+        self.assertLess(events.index("summary"), events.index("overview"), events)
+        self.navigate("文献库")
+        self.page.locator("#library-list .library-entry").first.wait_for()
+
     # ── helpers ────────────────────────────────────────────────────
     def navigate(self, label: str) -> None:
         self.page.locator(".sidebar-item", has_text=label).first.click()

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -287,6 +288,37 @@ queue.configure({pairKey, isRunning:()=>!!works.running, canGenerate:()=>true, g
         self.assertIn("requestJSON('/api/translation-works/overview?include_statistics=0')", overview)
         library = _function_body(LIBRARY_JS, "async function loadLibrary(force)")
         self.assertLess(library.index("renderLibraryList();"), library.index("await loadDocumentGroups();"))
+
+    @unittest.skipUnless(shutil.which("node"), "Node unavailable")
+    def test_startup_waits_for_catalog_before_works_on_default_search_page(self) -> None:
+        startup = INIT_JS[INIT_JS.index("(searchStore.libraryCatalogPromise"):]
+        script = r"""
+const assert=require('assert/strict');
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+(async()=>{
+ for(const alreadyRequested of [false,true]) {
+  let release,requests=0;
+  const events=[],pending=new Promise(resolve=>{release=resolve;});
+  const searchStore={libraryCatalogPromise:alreadyRequested?pending:null};
+  const fetchLibraryCatalog=()=>{requests++;searchStore.libraryCatalogPromise=pending;return pending;};
+  const window={requestIdleCallback:run=>{events.push('idle');run();}};
+  const MEFinder={zotero:{start:()=>events.push('zotero')},works:{load:()=>{
+   events.push('overview');return Promise.resolve();
+  }}};
+  eval(STARTUP);
+  await flush();
+  assert.deepEqual(events,[],'background work must wait for the catalog response');
+  assert.equal(requests,alreadyRequested?0:1,'start or reuse one summary request');
+  release();await flush();
+  assert.deepEqual(events,['zotero','idle','overview']);
+ }
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+        result = subprocess.run(
+            [shutil.which("node"), "-e", "const STARTUP=" + json.dumps(startup) + ";\n" + script],
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_pair_statistics_are_scoped_and_obsolete_results_are_ignored(self) -> None:
