@@ -448,9 +448,11 @@ importJobs.configure({changed:renderImportQueue,completed:()=>{refreshLibraryDat
  assert.equal(summaryRequests,requestsBefore);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
+        # Execute the assembled scenario through stdin: Windows limits command-line length.
         result = subprocess.run(
-            [shutil.which("node"), "-e", bodies + "\n" + script.replace("__IMPORT_JOBS__", (STATIC / "js/78-import-jobs.js").read_text(encoding="utf-8"))],
-            capture_output=True, text=True, timeout=15,
+            [shutil.which("node"), "-"],
+            input=bodies + "\n" + script.replace("__IMPORT_JOBS__", (STATIC / "js/78-import-jobs.js").read_text(encoding="utf-8")),
+            capture_output=True, text=True, encoding="utf-8", timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

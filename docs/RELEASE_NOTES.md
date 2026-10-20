@@ -1,3 +1,16 @@
+2026-10-20：v0.5.9 macOS arm64 / x86_64 的 DMG、ZIP 及四个 SHA-256 校验文件已上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-c88f9533375e8073107e)，保持未发布。两种架构同源于 `9fe9b03`，各通过全量 2,790 项 unittest、官方构建及制品核验；Chrome 13 项、Ruff 通过。Windows 资产在本轮期间由并行发布流程更新为 `e51af5b` 构建，已保留最新资产与说明。
+
+| 当前 GitHub 草稿文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.5.9-macos-arm64.dmg` | 104,634,836 | `6273e47f96917177acc013aec6417c67958f7e5482f45d6b6ec74d6db2111d02` |
+| `MEFinder-v0.5.9-macos-arm64.zip` | 96,224,144 | `31ca0c89e4c11055e7c62d32e3b2534813b94d816b2d95d45df2a55d9552f478` |
+| `MEFinder-v0.5.9-macos-x86_64.dmg` | 108,623,817 | `ec35a731f97f84e1c6e0023f41e21e2458d6c8583e3b243f41ac093ebc836a53` |
+| `MEFinder-v0.5.9-macos-x86_64.zip` | 102,759,767 | `4db29659539c3e1d219c12da9824024212bc4b94bdeb644d4ee375623d8c5e17` |
+| `MEFinder-v0.5.9-windows-setup.exe`（并行流程上传） | 82,463,284 | `d816abcab19bd0a40f3b43d0efb265a25cf0a649704b7b422e94765d2d9260ea` |
+| `MEFinder-v0.5.9-windows-portable.zip`（并行流程上传） | 98,215,580 | `3630e12b86b2e0762f4717017f08a22aebb47d0a4f02ffa3fb1b961a24a3d294` |
+
+各文件均附同名校验文件；macOS 包的源码、最低系统和签名状态详见 [0.5.9 说明](release-notes-0.5.9.md)。Windows 安装/升级/卸载与安装后人工验收仍待完成。以下为历史交付记录，同名资产以本节为准。
+
 2026-10-20：v0.5.9 Windows 安装版与便携版已按最新功能提交 `75fbeba` 重建，并连同两个 SHA-256 校验文件上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-ce1309a4173f2cfcd647)；两次官方构建各通过全量 2,773 项 unittest（48 项环境跳过），Chrome 12 项、Ruff 与制品核验通过。macOS 本轮最新包尚未上传；Windows 安装 / 升级 / 卸载与安装后人工验收仍待完成，尚未正式发布。
 
 构建源码：`75fbeba53f6978128cbf30ca8a04fb5b057d8170`，应用版本 0.5.9。安装脚本全量 2,773 项通过（48 跳过，217.439 秒）；便携脚本全量 2,773 项通过（48 跳过，214.715 秒）。Chrome 12 项通过（39.321 秒），全部跟踪 Python 的 Ruff(F)、逐文件 JS 语法、打包后 MCP STDIO 冒烟、空库 / FTS5 与隐私边界检查通过。

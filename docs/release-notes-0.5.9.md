@@ -1,3 +1,5 @@
+2026-10-20：v0.5.9 macOS arm64 / x86_64 的 DMG、ZIP 及四个 SHA-256 校验文件已上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-c88f9533375e8073107e)，保持未发布。两种架构同源于 `9fe9b03`，各通过全量 2,790 项 unittest、官方构建及制品核验；Chrome 13 项、Ruff 通过。Windows 资产在本轮期间由并行发布流程更新为 `e51af5b` 构建，已保留最新资产与说明。
+
 2026-10-20：本地 OCR 安装遇到 Windows Python 版本目录链接错误 448 时，源码现可复用已下载的 Python 自动恢复一次；全量 2,778 项 unittest（30 项环境跳过）、Ruff 及真实 uv 离线验证通过，反馈用户实机仍待验证。现有安装包、便携包和 GitHub 草稿资产尚不含此修复。见[核验报告](../reports/local-ocr-windows448-2026-10-20.md)。
 
 2026-10-20：v0.5.9 Windows 安装版与便携版已按功能提交 `75fbeba` 重建，并连同两个 SHA-256 校验文件上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-ce1309a4173f2cfcd647)；两次官方构建各通过全量 2,773 项 unittest（48 项环境跳过），Chrome 12 项、Ruff 与制品核验通过。macOS 本轮最新包尚未上传；Windows 安装 / 升级 / 卸载与安装后人工验收仍待完成，尚未正式发布。
@@ -91,7 +93,22 @@
 
 ## macOS 本地交付
 
-### 2026-10-13 架构整理更新包（当前本地制品）
+### 2026-10-20 双架构 GitHub 草稿（当前制品）
+
+构建源码：`9fe9b0305a87d519f92954e856fadeb3ebf72dce`，版本 0.5.9；合并本地三项架构整理与远端 `e51af5b` 的全部更新。ARM 官方构建全量 2,790 项通过（41 跳过，173.076 秒）；Intel 经 Rosetta 构建，全量 2,790 项通过（46 跳过，200.694 秒）。Chrome 13 项通过（43.353 秒），跟踪 Python 的 Ruff(F)、逐文件 Node 语法、五阶段 MCP STDIO、严格签名、ZIP 解包、DMG 挂载与拖出副本检查通过。两包各 307 份源码、静态资源、模板和 manifest 与构建前清单逐文件相同。
+
+| 文件（`release/`） | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.5.9-macos-arm64.dmg` | 104,634,836 | `6273e47f96917177acc013aec6417c67958f7e5482f45d6b6ec74d6db2111d02` |
+| `MEFinder-v0.5.9-macos-arm64.zip` | 96,224,144 | `31ca0c89e4c11055e7c62d32e3b2534813b94d816b2d95d45df2a55d9552f478` |
+| `MEFinder-v0.5.9-macos-x86_64.dmg` | 108,623,817 | `ec35a731f97f84e1c6e0023f41e21e2458d6c8583e3b243f41ac093ebc836a53` |
+| `MEFinder-v0.5.9-macos-x86_64.zip` | 102,759,767 | `4db29659539c3e1d219c12da9824024212bc4b94bdeb644d4ee375623d8c5e17` |
+
+八个 macOS 上传文件（四个安装/归档文件及其校验文件）的 GitHub digest、大小与本地实算一致，状态均为 uploaded。[草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-c88f9533375e8073107e) 保持 draft=true，目标提交为 `9fe9b03`，未创建或移动正式 tag。ARM 主应用与侧车均为纯 arm64，最低 macOS 14；Intel 均为纯 x86_64，最低 macOS 12。包为 ad-hoc 签名，未公证；本轮未覆盖本机应用或文献库。Rosetta 运行不替代 Intel 真机验收。
+
+上传期间 Windows 资产由并行流程更新为 `e51af5b` 构建（含 OCR 448 修复）；本轮保留新 Windows 资产和说明，未重新构建 Windows。当前远端 setup / portable 的 SHA-256 分别为 `d816abcab19bd0a40f3b43d0efb265a25cf0a649704b7b422e94765d2d9260ea` / `3630e12b86b2e0762f4717017f08a22aebb47d0a4f02ffa3fb1b961a24a3d294`。跨平台同源与 Windows 安装/升级/卸载、安装后人工验收仍是正式发布前的未完成项。完整证据见 [核验报告](../reports/macos-release-2026-10-20.md)。
+
+### 2026-10-13 架构整理更新包（历史制品，已被 10-20 同名包覆盖）
 
 使用本地 `42462d1` 与官方 `build_macos.sh`，沿用 0.5.9 版本号，重建 Apple Silicon（arm64）DMG / ZIP。包含 `674d5b9`、`dc06729`、`42462d1` 的架构整理，以及合入的 `f63e683` MinerU 取消释放修复。
 
