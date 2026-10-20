@@ -1,3 +1,18 @@
+2026-10-20：v0.5.9 Windows 安装版与便携版已按最新功能提交 `75fbeba` 重建，并连同两个 SHA-256 校验文件上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-ce1309a4173f2cfcd647)；两次官方构建各通过全量 2,773 项 unittest（48 项环境跳过），Chrome 12 项、Ruff 与制品核验通过。macOS 本轮最新包尚未上传；Windows 安装 / 升级 / 卸载与安装后人工验收仍待完成，尚未正式发布。
+
+构建源码：`75fbeba53f6978128cbf30ca8a04fb5b057d8170`，应用版本 0.5.9。安装脚本全量 2,773 项通过（48 跳过，217.439 秒）；便携脚本全量 2,773 项通过（48 跳过，214.715 秒）。Chrome 12 项通过（39.321 秒），全部跟踪 Python 的 Ruff(F)、逐文件 JS 语法、打包后 MCP STDIO 冒烟、空库 / FTS5 与隐私边界检查通过。
+
+便携 ZIP CRC 通过，解包后 80 个界面资源与 225 份 Python 源文件逐文件相同；本版本变更的 15 个冻结模块字节码与源码编译结果一致，包内版本为 0.5.9。四个上传文件的远端 SHA-256 digest 与本地实算一致，资产状态均为 uploaded，草稿保持 draft=true。
+
+| 文件（`release/`） | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.5.9-windows-setup.exe` | 82,465,866 | `f180bd0093a09e580dfb544aa5fd0c4edb80d9062f6667b2a5345af5660eb243` |
+| `MEFinder-v0.5.9-windows-portable.zip` | 98,215,243 | `1d71d90471348357a5d168478a333a7e5e7f819afa8ecfe921043f6314ed3204` |
+
+两个同名 `.sha256.txt` 文件同目录。旧的 10-07 Windows 包已备份至本地 `.codex-tmp/release-0.5.9-20261020/previous-artifacts/`；构建、浏览器与制品核验日志在该任务目录。本轮在完整独立检出中构建，原 `dist/MEFinder/` 与用户文献库未改动。现有 macOS arm64 包仍为 10-12 的 `2e6ded1` 构建，不含之后的修复，未混入本次草稿；Intel 最新包同样待补。未启动额外云端构建，未正式发布。
+
+以下为历史交付记录；同名文件的当前 Windows 哈希以上表为准。
+
 2026-10-12：v0.5.9 macOS arm64 安装包已按 `2e6ded1` 重建，可本机试用，未正式发布。包含重复导入复用原任务与取消状态保留、作品弹窗修复、对齐阶段百分比与剩余时间、导入后的版本信息刷新，以及此前的 `.mefinder` 文档包后缀修复。官方构建全量 unittest 2,758 项通过（37 项环境跳过），真实 Chrome 回归 9 项、Ruff、Node、签名、五阶段 MCP 与 ZIP / DMG 完整性核验通过；包内交付源码与静态资源和 `2e6ded1` 工作树逐文件相同。本机 `/Applications/MEFinder.app` 已与本次构建制品逐文件一致并启动冒烟通过（写入者未核实，本轮未执行覆盖动作，见 0.5.9 说明）。下表 macOS arm64 为本次更新包；Windows 双包仍为 10-07 构建，不含 10-10 之后的新功能与修复。Windows 安装 / 升级 / 卸载自动冒烟、安装后的人工验收、macOS Intel（x86_64）0.5.9 包尚未进行。详见 [0.5.9 说明](release-notes-0.5.9.md)。
 
 | 本机文件（`release/`） | SHA-256 |
