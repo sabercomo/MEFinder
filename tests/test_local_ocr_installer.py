@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -21,6 +22,13 @@ from src.me_finder.local_ocr_installer import (
     load_local_ocr_installer_manifest,
 )
 from src.me_finder.local_ocr_settings import load_local_ocr_config
+
+
+_MINOR_VERSION_LINK_ERROR = (
+    "error: Failed to create Python minor version link directory\n"
+    "  Caused by: The path cannot be traversed because it contains an "
+    "untrusted mount point. (os error 448)"
+)
 
 
 def _test_process_launcher(command, **kwargs):
@@ -52,7 +60,9 @@ class LocalOCRInstallerTests(unittest.TestCase):
         self.runtime_root = self.root / "中文 テスト runtime"
         self.config_path = self.runtime_root / "config/local_ocr.json"
 
-    def _asset(self, *, slow_uv: bool = False) -> tuple[Path, Path]:
+    def _asset(
+        self, *, slow_uv: bool = False, venv_errors: tuple[str, ...] = ()
+    ) -> tuple[Path, Path]:
         source_tree = self.root / "source-tree/test-engine-1.0"
         (source_tree / "src").mkdir(parents=True)
         (source_tree / "resource").mkdir()
@@ -76,12 +86,24 @@ source = Path(sys.argv[sys.argv.index('--sourceimg') + 1])
 
         uv_script = self.root / "uv"
         uv_script.write_text(
-            """#!/usr/bin/env python3
+            f"""#!/usr/bin/env python3
 from pathlib import Path
 import os, sys, time
 if sys.argv[1] == 'venv':
     if os.environ.get('MEFINDER_TEST_SLOW_UV') == '1':
         time.sleep(30)
+    errors = {venv_errors!r}
+    if errors:
+        downloaded = Path(os.environ['UV_PYTHON_INSTALL_DIR']) / '.test-downloaded'
+        if '--no-python-downloads' in sys.argv and not downloaded.is_file():
+            print('No downloaded Python found', file=sys.stderr)
+            raise SystemExit(2)
+        downloaded.parent.mkdir(parents=True, exist_ok=True)
+        attempt = int(downloaded.read_text()) if downloaded.exists() else 0
+        downloaded.write_text(str(attempt + 1))
+        if attempt < len(errors):
+            print(errors[attempt], file=sys.stderr)
+            raise SystemExit(2)
     target = Path(sys.argv[-1])
     (target / 'bin').mkdir(parents=True)
     (target / 'bin/python').symlink_to(sys.executable)
@@ -145,8 +167,12 @@ else:
             os.environ["MEFINDER_TEST_SLOW_UV"] = "1"
         return manifest_path, source_archive
 
-    def _installer(self, *, slow_uv: bool = False) -> LocalOCRInstaller:
-        manifest_path, _archive = self._asset(slow_uv=slow_uv)
+    def _installer(
+        self, *, slow_uv: bool = False, venv_errors: tuple[str, ...] = ()
+    ) -> LocalOCRInstaller:
+        manifest_path, _archive = self._asset(
+            slow_uv=slow_uv, venv_errors=venv_errors
+        )
         return LocalOCRInstaller(
             self.runtime_root,
             self.config_path,
@@ -236,6 +262,98 @@ else:
         self.assertEqual(engine.python_path, final / "venv/bin/python")
         self.assertTrue((final / "installed.json").is_file())
         self.assertTrue((final / "sbom.spdx.json").is_file())
+
+    def test_windows_minor_version_link_error_reuses_downloaded_python(self) -> None:
+        installer = self._installer(venv_errors=(_MINOR_VERSION_LINK_ERROR,))
+        installer.platform = replace(installer.platform, key="win32-x86_64")
+
+        with mock.patch.object(
+            installer, "_run_command", wraps=installer._run_command
+        ) as run:
+            installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+            result = self._wait(installer)
+
+        self.assertEqual(result["state"], "installed", result["error"])
+        self.assertEqual(result["error"], "")
+        venv_calls = [call for call in run.call_args_list if call.args[1][1] == "venv"]
+        self.assertEqual(len(venv_calls), 2)
+        self.assertNotIn("--no-python-downloads", venv_calls[0].args[1])
+        self.assertIn("--no-python-downloads", venv_calls[1].args[1])
+        self.assertIn("--managed-python", venv_calls[1].args[1])
+        self.assertEqual(
+            venv_calls[0].kwargs["environment"]["UV_PYTHON_INSTALL_DIR"],
+            venv_calls[1].kwargs["environment"]["UV_PYTHON_INSTALL_DIR"],
+        )
+        final = installer.component_root / "ndlocr-lite"
+        self.assertIn(
+            _MINOR_VERSION_LINK_ERROR,
+            (final / "install.log").read_text(encoding="utf-8"),
+        )
+        engine = load_local_ocr_config(self.config_path).available_engines[0]
+        self.assertTrue(engine.python_path.is_file())
+        self.assertTrue((final / "installed.json").is_file())
+
+    def test_windows_minor_version_link_recovery_failure_is_not_hidden(self) -> None:
+        installer = self._installer(
+            venv_errors=(_MINOR_VERSION_LINK_ERROR, "No downloaded Python found")
+        )
+        installer.platform = replace(installer.platform, key="win32-x86_64")
+
+        with mock.patch.object(
+            installer, "_run_command", wraps=installer._run_command
+        ) as run:
+            installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+            result = self._wait(installer)
+
+        self.assertEqual(result["state"], "not_installed")
+        self.assertIn("No downloaded Python found", result["error"])
+        self.assertIn(_MINOR_VERSION_LINK_ERROR, result["error"])
+        self.assertEqual(run.call_count, 2)
+        self.assertFalse(self.config_path.exists())
+        self.assertFalse(installer.component_root.exists())
+
+    def test_unrelated_windows_mount_error_is_not_retried(self) -> None:
+        error = "Failed to create cache directory (os error 448)"
+        installer = self._installer(venv_errors=(error,))
+        installer.platform = replace(installer.platform, key="win32-x86_64")
+
+        with mock.patch.object(
+            installer, "_run_command", wraps=installer._run_command
+        ) as run:
+            installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+            result = self._wait(installer)
+
+        self.assertEqual(result["state"], "not_installed")
+        self.assertIn(error, result["error"])
+        self.assertEqual(run.call_count, 1)
+
+    def test_other_minor_version_link_errors_are_not_retried(self) -> None:
+        error = _MINOR_VERSION_LINK_ERROR.replace("os error 448", "os error 5")
+        installer = self._installer(venv_errors=(error,))
+        installer.platform = replace(installer.platform, key="win32-x86_64")
+
+        with mock.patch.object(
+            installer, "_run_command", wraps=installer._run_command
+        ) as run:
+            installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+            result = self._wait(installer)
+
+        self.assertEqual(result["state"], "not_installed")
+        self.assertIn(error, result["error"])
+        self.assertEqual(run.call_count, 1)
+
+    def test_non_windows_minor_version_link_error_is_not_retried(self) -> None:
+        installer = self._installer(venv_errors=(_MINOR_VERSION_LINK_ERROR,))
+
+        with mock.patch.object(
+            installer, "_run_command", wraps=installer._run_command
+        ) as run:
+            installer.perform({"provider_id": "ndlocr-lite", "action": "install"})
+            result = self._wait(installer)
+
+        self.assertEqual(result["state"], "not_installed")
+        self.assertIn(_MINOR_VERSION_LINK_ERROR, result["error"])
+        self.assertEqual(run.call_count, 1)
 
     def test_remote_manifest_refresh_marks_installed_engine_update(self) -> None:
         manifest_path, _archive = self._asset()

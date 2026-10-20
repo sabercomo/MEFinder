@@ -33,6 +33,7 @@
 ## 安装、验证与卸载边界
 
 - Windows 与 macOS 使用同一个设置页入口和同一个安装状态机；平台资产、venv Python 相对路径和 onnxruntime pin 只从 manifest 读取。
+- Windows 创建 Python 版本目录链接报 `Failed to create Python minor version link directory` 且为 `os error 448` 时，复用同一目录已下载的托管 Python，以 `--no-python-downloads` 恢复一次；其他错误仍报错回滚。见 [问题记录](issues/local-ocr-windows-minor-version-link.md) 与 [核验报告](../reports/local-ocr-windows448-2026-10-20.md)。
 - 验证先执行 `<venv-python> <ocr.py> --help`，再把上游自带样图统一为单页 PNG，按 `--sourceimg <png> --output <dir>` 识别并解析 JSON。
 - 下载器优先使用 HTTP Range 续传。codeload 若忽略 Range，安装器保留本地 partial，重新连接后重放并丢弃已有前缀，再从断点追加；这会重复消耗前缀流量，但不丢本地进度，最终仍以完整 bytes + SHA-256 放行。
 - 安装位于机器本地的 `runtime/components/local-ocr/`；不写 PATH、注册表、plist 或系统 Python。

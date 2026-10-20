@@ -1,4 +1,6 @@
-2026-10-20：v0.5.9 Windows 安装版与便携版已按最新功能提交 `75fbeba` 重建，并连同两个 SHA-256 校验文件上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-ce1309a4173f2cfcd647)；两次官方构建各通过全量 2,773 项 unittest（48 项环境跳过），Chrome 12 项、Ruff 与制品核验通过。macOS 本轮最新包尚未上传；Windows 安装 / 升级 / 卸载与安装后人工验收仍待完成，尚未正式发布。
+2026-10-20：本地 OCR 安装遇到 Windows Python 版本目录链接错误 448 时，源码现可复用已下载的 Python 自动恢复一次；全量 2,778 项 unittest（30 项环境跳过）、Ruff 及真实 uv 离线验证通过，反馈用户实机仍待验证。现有安装包、便携包和 GitHub 草稿资产尚不含此修复。见[核验报告](../reports/local-ocr-windows448-2026-10-20.md)。
+
+2026-10-20：v0.5.9 Windows 安装版与便携版已按功能提交 `75fbeba` 重建，并连同两个 SHA-256 校验文件上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-ce1309a4173f2cfcd647)；两次官方构建各通过全量 2,773 项 unittest（48 项环境跳过），Chrome 12 项、Ruff 与制品核验通过。macOS 本轮最新包尚未上传；Windows 安装 / 升级 / 卸载与安装后人工验收仍待完成，尚未正式发布。
 
 2026-10-17：默认首页启动时文献摘要被对齐总览抢先阻塞的时序已修复，全量 2,773 项（30 跳过）、Chrome 12 项及 Ruff / 前端守卫通过；原 `dist/MEFinder/` 界面资源已同步，正常重新打开后生效。现有 release / macOS 包不含此修复，尚未正式发布。见 [核验报告](../reports/library-startup-2026-10-17.md)。
 
