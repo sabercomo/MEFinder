@@ -1,3 +1,11 @@
+2026-10-20：本地 OCR 安装遇到 Windows Python 版本目录链接错误 448 时，源码现可复用已下载的 Python 自动恢复一次；全量 2,778 项 unittest（30 项环境跳过）、Ruff 及真实 uv 离线验证通过，反馈用户实机仍待验证。现有安装包、便携包和 GitHub 草稿资产尚不含此修复。见[核验报告](../reports/local-ocr-windows448-2026-10-20.md)。
+
+2026-10-20：v0.5.9 Windows 安装版与便携版已按功能提交 `75fbeba` 重建，并连同两个 SHA-256 校验文件上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-ce1309a4173f2cfcd647)；两次官方构建各通过全量 2,773 项 unittest（48 项环境跳过），Chrome 12 项、Ruff 与制品核验通过。macOS 本轮最新包尚未上传；Windows 安装 / 升级 / 卸载与安装后人工验收仍待完成，尚未正式发布。
+
+2026-10-17：默认首页启动时文献摘要被对齐总览抢先阻塞的时序已修复，全量 2,773 项（30 跳过）、Chrome 12 项及 Ruff / 前端守卫通过；原 `dist/MEFinder/` 界面资源已同步，正常重新打开后生效。现有 release / macOS 包不含此修复，尚未正式发布。见 [核验报告](../reports/library-startup-2026-10-17.md)。
+
+2026-10-15：导入进度因本机查询断连而误报失败、停止刷新的问题已修复，全量 2,771 项（29 跳过）、Chrome 11 项及 Ruff / 前端守卫通过；原 `dist/MEFinder/` 界面资源已同步，正常重启后生效。现有 release / macOS 包不含此修复，尚未正式发布。
+
 2026-10-13：macOS arm64 安装包已按 `42462d1` 重建，包含三项架构整理和 MinerU 取消释放修复；全量、签名、MCP、ZIP / DMG 与源码一致性门禁通过。仅打包，未安装到本机应用，未正式发布。
 
 2026-10-13：目录与搜索页记录查询已收进持久化读取层，并合入最新 MinerU 取消释放修复；最终工作树全量 2,777 项通过（39 跳过）、Chrome 11 项及 Ruff 通过。三项架构整理均为源码交付，本轮未更新安装包或本机应用。见 [核验报告](../reports/outline-search-reads-2026-10-13.md)。
@@ -26,6 +34,9 @@
 
 # v0.5.9 迭代说明
 
+- 默认首页先取得文献摘要，再预取对齐总览，避免启动时文献列表等待后台总览；缓存未命中的请求排队对照见 [核验报告](../reports/library-startup-2026-10-17.md)。
+- 普通导入与 Zotero 同步共用文献刷新入口，旧摘要响应不再覆盖新目录，见 [核验报告](../reports/library-refresh-2026-10-13.md)。
+- 本机导入进度查询中断时保留原任务状态与步骤并自动重试；恢复连接后继续展示真实进度和终态，不再把一次查询失败当作导入失败。取消中断连、普通 404 和真实解析失败保持各自处理，见 [问题记录](issues/import-progress-local-disconnect.md) 与 [核验报告](../reports/import-progress-reconnect-2026-10-15.md)。
 - 取消或移除导入时同步取消其 MinerU 解析任务并释放账号并发；启动时清扫没有对应导入任务的未结束解析任务。修复被放弃的导入占满全部账号、后续导入永远停在“等待可用的 MinerU 账号”。见 [问题记录](issues/mineru-orphaned-parser-jobs-hold-credentials.md)。
 - 重复上传同一 PDF 时跟踪已有导入任务，保留原解析方式，合并重复队列行；取消中的任务持续显示“正在停止”，后台清理完成后才移除，随后可重新导入。见 [问题记录](issues/import-duplicate-active-task.md) 和 [接口行为](contracts/v0.5.9-import-active-jobs.md)。
 - 导入完成后同步失效译本对照页的旧文献目录，修复新版本的语言显示“未识别”、书名退化成内部 ID、出版与页码信息为空；沿用共享请求，不需重新导入或生成对齐。见 [问题记录](issues/works-import-library-refresh.md)。
@@ -39,6 +50,23 @@
 - 实际 U 盘证据与复现测试见 [问题记录](issues/usb-appledouble-zip-dialog.md) 和 [核验报告](../reports/usb-document-package-2026-10-06.md)。先前怀疑强制 ZIP64，经实际文件核验后不采用该修改。
 
 ## Windows 本地交付
+
+### 2026-10-20 GitHub 草稿
+
+构建源码：`75fbeba53f6978128cbf30ca8a04fb5b057d8170`，应用版本 0.5.9。安装脚本全量 2,773 项通过（48 跳过，217.439 秒）；便携脚本全量 2,773 项通过（48 跳过，214.715 秒）。Chrome 12 项通过（39.321 秒），全部跟踪 Python 的 Ruff(F)、逐文件 JS 语法、打包后 MCP STDIO 冒烟、空库 / FTS5 与隐私边界检查通过。
+
+便携 ZIP CRC 通过，解包后 80 个界面资源与 225 份 Python 源文件逐文件相同；本版本变更的 15 个冻结模块字节码与源码编译结果一致，包内版本为 0.5.9。四个上传文件的远端 SHA-256 digest 与本地实算一致，资产状态均为 uploaded，草稿保持 draft=true。
+
+| 文件（`release/`） | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.5.9-windows-setup.exe` | 82,465,866 | `f180bd0093a09e580dfb544aa5fd0c4edb80d9062f6667b2a5345af5660eb243` |
+| `MEFinder-v0.5.9-windows-portable.zip` | 98,215,243 | `1d71d90471348357a5d168478a333a7e5e7f819afa8ecfe921043f6314ed3204` |
+
+两个同名 `.sha256.txt` 文件同目录。旧的 10-07 Windows 包已备份至本地 `.codex-tmp/release-0.5.9-20261020/previous-artifacts/`；构建、浏览器与制品核验日志在该任务目录。本轮在完整独立检出中构建，原 `dist/MEFinder/` 与用户文献库未改动。现有 macOS arm64 包仍为 10-12 的 `2e6ded1` 构建，不含之后的修复，未混入本次草稿；Intel 最新包同样待补。未启动额外云端构建，未正式发布。
+
+### 此前本地交付记录
+
+2026-10-15（本机进度查询恢复）：源码全量 2,771 项通过（29 跳过，222.450 秒），Chrome 11 项通过（37.559 秒），前端守卫 251 项、导入状态与译本对照专项 34 项、跟踪 Python 的 Ruff(F) 与 JS 语法通过。仅同步原 `dist/MEFinder/_internal/src/me_finder/static/js/80-import.js`，更新后完整 HTML 与已测源码相同（1,521,829 字节 / SHA-256 `80234fb1a7e1964584c76d8e569faa559600a579761649b80faff6a66590ec23`）；两份 EXE、数据指针与程序目录 data/config 共 6 份文件哈希不变。未中断当前程序或后台导入；正常重启后生效。未重打安装 / 便携 / macOS 包。
 
 2026-10-13（孤儿解析任务）：独立检出 `f63e683` 运行官方 `build_windows_dist.cmd`，全量 2,766 项通过（46 跳过，230.671 秒），打包与 MCP 冒烟通过。按哈希仅同步 12 个应用文件到原 `dist/MEFinder/`（两份 EXE、`base_library.zip`、5 份 Python 源、4 份前端 JS），508 份比对一致；保留原 UCRT/MSVC 运行库与 `data_root.txt` / `data/` / `config/`（哈希不变）。在真实账本与导入日志的副本上演练启动清扫：取消 7 个无导入引用的未结束任务（2 个持有远端任务、5 个无远端任务的历史残留），两账号在途回 0，《精神现象学》任务保留。
 

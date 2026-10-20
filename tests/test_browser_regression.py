@@ -129,6 +129,19 @@ class BrowserRegressionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.assertEqual(self.page_errors, [], "uncaught page errors")
 
+    def test_default_startup_finishes_catalog_before_alignment_overview(self) -> None:
+        events = []
+        self.page.on("request", lambda request: events.append("overview")
+                     if "/api/translation-works/overview?" in request.url else None)
+        self.page.on("requestfinished", lambda request: events.append("summary")
+                     if "/api/library?view=summary" in request.url else None)
+        self.page.goto(self.base_url + "/")
+        self.wait_until(lambda: "overview" in events and "summary" in events,
+                        "startup must load the shared catalog and works")
+        self.assertLess(events.index("summary"), events.index("overview"), events)
+        self.navigate("文献库")
+        self.page.locator("#library-list .library-entry").first.wait_for()
+
     # ── helpers ────────────────────────────────────────────────────
     def navigate(self, label: str) -> None:
         self.page.locator(".sidebar-item", has_text=label).first.click()
@@ -210,6 +223,40 @@ class BrowserRegressionTests(unittest.TestCase):
         )
 
     # ── scenarios ──────────────────────────────────────────────────
+    def test_import_progress_recovers_after_local_status_request_disconnects(self) -> None:
+        state = {"calls": 0, "completed": False}
+
+        def status(route: Route) -> None:
+            state["calls"] += 1
+            if state["calls"] == 1:
+                route.abort("connectionreset")
+                return
+            route.fulfill(json={
+                "status": "completed" if state["completed"] else "processing",
+                "phase": "completed" if state["completed"] else "rebuilding_index",
+                "message": "导入完成" if state["completed"] else "正在写入本地 SQLite 索引…",
+                "parse_route": "native",
+            })
+
+        self.page.route("**/api/import-status?job_id=browser-import", status)
+        self.navigate("文献导入")
+        self.page.evaluate("""() => {
+          MEFinder.importJobs.add({id: 'browser-import', jobId: 'browser-import',
+            name: 'local.pdf', size: 1024, type: 'pdf', status: 'processing',
+            detectedType: 'native_text', route: 'native', step: 2});
+          MEFinder.imports.pollJob('browser-import');
+        }""")
+        item = self.page.locator('.import-item[data-id="browser-import"]')
+        item.locator(".import-item-status").filter(has_text="重试").wait_for()
+        self.assertEqual(item.locator(".error").count(), 0)
+        self.assertIn("本地解析", item.locator(".import-step.active").inner_text())
+        item.get_by_text("正在写入本地 SQLite 索引…", exact=True).wait_for()
+        self.assertIn("建立索引", item.locator(".import-step.active").inner_text())
+        state["completed"] = True
+        item.locator(".import-item-status.done").wait_for()
+        self.assertEqual(item.locator(".import-item-status").inner_text(), "导入完成")
+        self.assertEqual(item.locator(".error").count(), 0)
+
     def test_import_task_survives_navigation_cancels_and_resumes_after_reload(self) -> None:
         state = {"status": "processing"}
 

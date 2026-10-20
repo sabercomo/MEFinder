@@ -115,13 +115,86 @@ assert.equal(jobs.snapshot().length,1);assert.equal(item().status,'error');
 assert.equal(item().message,'导入任务不存在。');assert.equal(timers.size,0);
 """)
 
-    def test_polling_failure_during_cancellation_remains_retryable(self) -> None:
+    def test_non_network_polling_error_is_reported(self) -> None:
         self.run_js("""
 global.MEFinderApi={async fetch(){throw Error('网络暂时不可用');}};
 jobs.add({id:'one',jobId:'job-one',status:'processing',cancelRequested:true});
 jobs.pollJob('one');await flush();
 assert.equal(item().status,'error');assert.equal(item().message,'网络暂时不可用');
 assert.equal(item().cancelRequested,true);assert.equal(timers.size,0);
+""")
+
+    def test_polling_failure_during_cancellation_remains_retryable(self) -> None:
+        self.run_js("""
+let disconnected=true;
+global.MEFinderApi={async fetch(){
+ if(disconnected) throw new TypeError('Failed to fetch');
+ return response({error:'导入任务不存在。'},404);
+}};
+jobs.add({id:'one',jobId:'job-one',status:'processing',cancelRequested:true});
+jobs.pollJob('one');await flush();
+assert.equal(item().status,'processing');assert.equal(item().cancelRequested,true);
+assert.match(item().message,/停止/);assert.match(item().message,/重试/);
+assert.equal(timers.size,1);
+disconnected=false;await tick();
+assert.equal(jobs.snapshot().length,0);assert.equal(timers.size,0);
+""")
+
+    def test_disconnected_polling_preserves_progress_and_recovers_to_completion(self) -> None:
+        self.run_js("""
+let calls=0;
+global.MEFinderApi={async fetch(url){
+ assert.equal(url,'/api/import-status?job_id=job-one');
+ if(++calls<=2) throw new TypeError('Failed to fetch');
+ return response({status:'completed',message:'导入完成',source_file_id:'source-one'});
+}};
+jobs.add({id:'one',jobId:'job-one',status:'processing',step:2,route:'native',sourceFileId:'source-one'});
+jobs.pollJob('one');await flush();
+for(let index=0;index<2;index++){
+ assert.equal(item().status,'processing');assert.equal(item().step,2);
+ assert.equal(item().route,'native');assert.equal(settled.length,0);
+ assert.match(item().message,/本地/);assert.match(item().message,/重试/);
+ assert.equal(timers.size,1);await tick();
+}
+assert.equal(calls,3);assert.equal(item().status,'done');assert.equal(item().message,'导入完成');
+assert.deepEqual(settled,['source-one']);assert.deepEqual(completed,[true]);assert.equal(timers.size,0);
+""")
+
+    def test_interrupted_response_body_retries_and_reports_actual_import_failure(self) -> None:
+        self.run_js("""
+let calls=0;
+global.MEFinderApi={async fetch(){return {status:200,async json(){
+ if(++calls===1) throw new TypeError('Failed to fetch');
+ return {status:'failed',message:'索引写入失败',can_resume:true,failure_stage:'index'};
+}};}};
+jobs.add({id:'one',jobId:'job-one',status:'processing',step:2});
+jobs.pollJob('one');await flush();
+assert.equal(item().status,'processing');assert.equal(timers.size,1);await tick();
+assert.equal(item().status,'error');assert.equal(item().message,'索引写入失败');
+assert.equal(item().canResume,true);assert.equal(item().failureStage,'index');
+assert.equal(completed.length,0);assert.equal(timers.size,0);
+""")
+
+    def test_invalid_status_json_is_reported_without_retry(self) -> None:
+        self.run_js("""
+global.MEFinderApi={async fetch(){return {status:200,async json(){throw new SyntaxError('Unexpected token');}};}};
+jobs.add({id:'one',jobId:'job-one',status:'processing'});
+jobs.pollJob('one');await flush();
+assert.equal(item().status,'error');assert.equal(item().message,'Unexpected token');assert.equal(timers.size,0);
+""")
+
+    def test_removed_import_does_not_poll_again_after_disconnection(self) -> None:
+        self.run_js("""
+let calls=0;
+global.MEFinderApi={async fetch(url){
+ if(url==='/api/import-resume-dismiss') return response({state:'dismissed'});
+ calls++;throw new TypeError('Failed to fetch');
+}};
+jobs.add({id:'one',jobId:'job-one',status:'processing'});
+jobs.pollJob('one');await flush();assert.equal(timers.size,1);
+const staleTimer=timers.values().next().value;
+await jobs.remove('one',{skipConfirm:true});assert.equal(timers.size,0);
+staleTimer();await flush();assert.equal(calls,1);
 """)
 
     def test_cancel_from_polling_error_restarts_polling_and_exposes_cleanup_failure(self) -> None:

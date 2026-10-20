@@ -102,8 +102,9 @@ const initialPage = requestedInitialPage === 'calibration' ? 'library' : request
 if (['search','library','import','settings'].indexOf(initialPage) >= 0) navigateTo(initialPage);
 if (currentPage === 'search') document.getElementById('query').focus();
 // 作品状态在首屏摘要回来、浏览器空闲后再预取：总览持有索引锁，冷启动时核对
-// 各版本正文范围要数秒，先发会让文献库排在它后面。进入「译本对照」仍立即加载。
-(searchStore.libraryCatalogPromise || Promise.resolve()).catch(function () {}).then(function () {
+// 各版本正文范围要数秒，先发会让文献库排在它后面。默认搜索页也先发摘要，
+// 不能在尚无摘要请求时跳过等待。进入「译本对照」仍立即加载。
+(searchStore.libraryCatalogPromise || fetchLibraryCatalog()).catch(function () {}).then(function () {
   MEFinder.zotero.start();
   (window.requestIdleCallback || function (run) { return setTimeout(run, 0); })(function () {
     MEFinder.works.load().catch(function () {});

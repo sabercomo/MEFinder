@@ -552,23 +552,43 @@ class LocalOCRInstaller:
                 }
             )
             install_log = staging / "install.log"
-            self._run_command(
-                provider_id,
-                [
-                    str(uv_path),
-                    "venv",
-                    "--python",
-                    self.platform.python,
-                    "--managed-python",
-                    "--relocatable",
-                    str(venv_dir),
-                ],
-                cwd=staging,
-                environment=environment,
-                log_path=install_log,
-                timeout=1800,
-                track_uv_downloads=True,
-            )
+            for attempt in range(2):
+                try:
+                    self._run_command(
+                        provider_id,
+                        [
+                            str(uv_path),
+                            "venv",
+                            "--python",
+                            self.platform.python,
+                            "--managed-python",
+                            "--relocatable",
+                            *(["--no-python-downloads"] if attempt else []),
+                            str(venv_dir),
+                        ],
+                        cwd=staging,
+                        environment=environment,
+                        log_path=install_log,
+                        timeout=1800,
+                        track_uv_downloads=True,
+                    )
+                    break
+                except LocalOCRInstallerError as exc:
+                    if (
+                        attempt
+                        or not self.platform.key.startswith("win32-")
+                        or "Failed to create Python minor version link directory"
+                        not in str(exc)
+                        or "(os error 448)" not in str(exc)
+                    ):
+                        raise
+                    # uv installs Python before creating this optional junction.
+                    # Rediscover it without downloading or creating another link.
+                    self._set_state(
+                        provider_id,
+                        "provisioning",
+                        message="Windows 阻止创建版本链接，正在复用已下载的 Python",
+                    )
             python_path = staging / self.platform.venv_python
             dependencies = (*engine.dependencies, self.platform.onnxruntime)
             self._set_state(
