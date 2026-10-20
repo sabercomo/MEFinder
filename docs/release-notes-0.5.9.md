@@ -1,3 +1,5 @@
+2026-10-20：v0.5.9 正式发布，可直接使用。GitHub Release [`v0.5.9`](https://github.com/sabercomo/MEFinder/releases/tag/v0.5.9) 已上线，tag 指向 `19fa89e`（产品源码 `9fe9b03`，两者 `src/` 逐文件相同，`19fa89e` 另含 Windows 测试入口的命令行长度修复与文档）；12 个资产全部 uploaded，digest 与本地实算一致。本版本没有新的功能方向，除对齐进度显示一处新增的界面信息外，全部是 0.5.8 之后实际用起来才暴露出来的问题修复；数据库结构沿用 v11 无迁移，MCP 仍是 17 个工具，0.5.8 建的库可直接打开。未做的项：Windows 安装 / 升级 / 卸载自动冒烟与安装后人工验收、反馈用户实机验收、Intel 真机验收（包经 Rosetta 构建）。发布文案同步在 [RELEASE_NOTES](RELEASE_NOTES.md) 的 v0.5.9 条目。
+
 2026-10-20：已按 `9fe9b03` 重新构建包含本地 OCR Windows 448 修复的安装版与便携版，替换 [v0.5.9 GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-65703827561537269ea3) 中四个 Windows 文件；两次官方构建各通过全量 2,790 项 unittest，制品与远端 SHA-256 核验通过，草稿保持未发布。反馈用户实机仍待验收。
 
 2026-10-20：v0.5.9 macOS arm64 / x86_64 的 DMG、ZIP 及四个 SHA-256 校验文件已上传 [GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-c88f9533375e8073107e)，保持未发布。两种架构同源于 `9fe9b03`，各通过全量 2,790 项 unittest、官方构建及制品核验；Chrome 13 项、Ruff 通过。Windows 资产在本轮期间由并行发布流程更新为 `e51af5b` 构建，已保留最新资产与说明。
