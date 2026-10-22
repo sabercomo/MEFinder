@@ -697,10 +697,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 导入与 Zotero 共用文献刷新入口，过期摘要请求跟随当前请求。
     # 本机导入进度查询断连时保留原状态并重试，恢复后跟踪真实终态。
     # 默认搜索页启动也先取得共享摘要，再预取持有索引锁的对齐总览。
+    # 关于与更新统一项目链接、Star 入口与 Mac Homebrew 更新命令。
     BASELINE_SHA256 = (
-        "b20eeca80339d70230c8328de3b06a63a5c5413c0d35172f6326e6ceaa1f6a36"
+        "766e50e39abc16a407b28f5d1d54f2b6da94bfc0acdd85336db9806e8eb55683"
     )
-    BASELINE_BYTES = 1525202
+    BASELINE_BYTES = 1530114
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

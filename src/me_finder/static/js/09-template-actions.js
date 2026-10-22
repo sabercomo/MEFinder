@@ -84,7 +84,6 @@
   MEFinderActions.registerInline('templateClick082', function(event, target) { showSettingsCategory('document-transfer-settings'); });
   MEFinderActions.registerInline('templateClick083', function(event, target) { showSettingsCategory('backup-settings'); });
   MEFinderActions.registerInline('templateClick084', function(event, target) { showSettingsCategory('software-update-settings'); });
-  MEFinderActions.registerInline('templateClick085', function(event, target) { showSettingsCategory('macos-update-settings'); });
   MEFinderActions.registerInline('templateClick086', function(event, target) { toggleSearchSelect(event,'pdf-open-select'); });
   MEFinderActions.registerInline('templateChange087', function(event, target) { setPdfOpenMode(this.value); });
   MEFinderActions.registerInline('templateChange088', function(event, target) { MEFinder.readerHost.setEnabled(this.checked); });

@@ -711,7 +711,6 @@ class SearchControlsAndViewsTests(unittest.TestCase):
             "text-alignment-settings",
             "zotero-settings",
             "software-update-settings",
-            "macos-update-settings",
             "data-location-settings",
             "mineru-api-settings",
             "local-ocr-settings",

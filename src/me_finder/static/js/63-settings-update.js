@@ -23,8 +23,10 @@
     if (release) {
       var canOpen = state.status === 'available' && !!state.release_url;
       release.style.display = canOpen ? '' : 'none';
-      if (canOpen) release.href = state.release_url;
-      else release.removeAttribute('href');
+      if (canOpen) {
+        release.href = state.release_url;
+        release.textContent = '下载 v' + state.latest_version + ' DMG';
+      } else release.removeAttribute('href');
     }
   }
 
@@ -87,7 +89,7 @@
       var actionable = !!state.can_self_update && (state.status === 'available' || state.status === 'ready');
       action.style.display = actionable ? '' : 'none';
       action.disabled = busy;
-      action.textContent = state.status === 'ready' ? '退出并安装' : '下载更新';
+      if (actionable) action.textContent = state.status === 'ready' ? '退出并安装' : '下载 v' + state.latest_version;
     }
     if (release) {
       release.style.display = state.release_url ? '' : 'none';
@@ -207,6 +209,15 @@
     }
   }
 
+
+  MEFinderActions.register('copyHomebrewUpdateCommand', async function(event, target) {
+    try {
+      await navigator.clipboard.writeText(document.getElementById('homebrew-update-command').textContent);
+      target.textContent = '已复制';
+    } catch (e) {
+      showToast('复制失败：' + e.message);
+    }
+  });
 
   global.checkMacosUpdate = checkMacosUpdate;
   global.loadUpdateStatus = loadUpdateStatus;

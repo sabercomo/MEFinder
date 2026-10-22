@@ -500,8 +500,7 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
           <button class="settings-nav-item cap-data-location" type="button" role="tab" aria-selected="false" data-target="data-location-settings" data-action="templateClick081"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></svg><span>数据位置</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="document-transfer-settings" data-action="templateClick082"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg><span>文档传输</span></button>
           <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="backup-settings" data-action="templateClick083"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5V19A9 3 0 0 0 21 19V5" /><path d="M3 12A9 3 0 0 0 21 12" /></svg><span>数据备份</span></button>
-          <button class="settings-nav-item plat-win" type="button" role="tab" aria-selected="false" data-target="software-update-settings" data-action="templateClick084"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg><span>软件更新</span></button>
-          <button class="settings-nav-item plat-macos" type="button" role="tab" aria-selected="false" data-target="macos-update-settings" data-action="templateClick085"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg><span>软件更新</span></button>
+          <button class="settings-nav-item" type="button" role="tab" aria-selected="false" data-target="software-update-settings" data-action="templateClick084"><svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span>关于与更新</span></button>
         </nav>
         <div class="settings-content">
         <!-- Single-category panels: the left rail switches which section is active, so new options never lengthen one scroll. -->
@@ -1134,49 +1133,62 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             <p class="settings-footnote" id="backup-last-export">还没有导出过备份</p>
             </div>
           </section>
-          <section class="settings-section windows-update-settings" id="software-update-settings" role="tabpanel">
+          <section class="settings-section" id="software-update-settings" role="tabpanel">
             <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">软件更新</span><span class="settings-section-note">适用于 Windows 安装版</span></span>
-            <span class="settings-status" id="update-status-badge">未检查</span>
+              <span class="settings-section-heading-copy"><span class="settings-section-title">关于与更新</span><span class="settings-section-note">版本信息与项目动态</span></span>
             </div>
             <div class="settings-collapse-body" id="software-update-body">
-            <div class="software-update-card">
-              <div class="software-update-summary">
-                <span class="software-update-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg></span>
-                <div class="software-update-copy">
-                  <strong>当前版本 <span id="update-current-version">v__APP_VERSION__</span></strong>
-                  <small id="update-message">可连接 GitHub Releases 检查新的 Windows 安装版</small>
+              <div class="about-update-card">
+                <div class="about-app-header">
+                  <span class="about-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h9l5 5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V9h5"/><circle cx="9" cy="13.5" r="2.4"/><path d="m10.8 15.3 2.1 2.1"/></svg></span>
+                  <div class="about-app-copy">
+                    <h2>MEFinder</h2>
+                    <p>文献原句定位器</p>
+                    <span class="about-app-version">当前版本 <span id="update-current-version">v__APP_VERSION__</span></span>
+                  </div>
+                </div>
+                <div class="about-platform-windows">
+                  <div class="about-update-row" aria-live="polite">
+                    <div class="about-update-copy"><span class="settings-status" id="update-status-badge">未检查</span><p id="update-message">检查是否有新的 Windows 版本</p></div>
+                    <div class="about-update-actions">
+                      <button class="action-btn" type="button" id="update-check-btn" data-action="templateClick171">检查更新</button>
+                      <button class="action-btn primary" type="button" id="update-action-btn" style="display:none" data-action="templateClick172">下载更新</button>
+                      <a class="action-btn update-release-link" id="update-release-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none">查看发布页</a>
+                    </div>
+                  </div>
+                  <label class="update-auto-option" for="auto-update-enabled">
+                    <input id="auto-update-enabled" type="checkbox" data-action-change="templateChange173">
+                    <span class="update-auto-copy"><strong>启动时自动检查并下载更新</strong><small id="update-auto-description">仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认</small></span>
+                  </label>
+                </div>
+                <div class="about-platform-macos" id="macos-update-settings">
+                  <div id="macos-update-body">
+                    <div class="about-update-row" aria-live="polite">
+                      <div class="about-update-copy"><span id="macos-update-status" class="settings-status">未检查</span><p id="macos-update-message">手动检查新的 Mac 版本，再下载 DMG 安装</p></div>
+                      <div class="about-update-actions">
+                        <button class="action-btn" type="button" id="macos-update-check" data-action="templateClick174">检查更新</button>
+                        <a class="action-btn primary macos-update-release" id="macos-update-release" href="#" target="_blank" rel="noopener noreferrer" style="display:none">下载新版 DMG</a>
+                      </div>
+                    </div>
+                    <p class="about-update-note">不会后台下载或自动替换应用</p>
+                    <div class="about-homebrew">
+                      <div class="about-update-copy"><strong>Homebrew 更新</strong><p>通过 Homebrew 安装时，在终端运行</p></div>
+                      <div class="about-homebrew-command"><code id="homebrew-update-command">brew update &amp;&amp; brew upgrade --cask mefinder</code><button class="action-btn" type="button" data-action="copyHomebrewUpdateCommand">复制命令</button></div>
+                    </div>
+                  </div>
+                </div>
+                <p class="about-platform-browser about-update-note">前往「最近更新」查看最新版本与下载方式</p>
+                <nav class="about-project-links" aria-label="MEFinder 项目链接">
+                  <a class="action-btn" href="https://sabercomo.github.io/MEFinder/" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></svg>官方网站</a>
+                  <a class="action-btn" href="https://github.com/sabercomo/MEFinder/releases" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>更新日志</a>
+                  <a class="action-btn" href="https://github.com/sabercomo/MEFinder/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"/></svg>最近更新</a>
+                </nav>
+                <div class="about-star-banner">
+                  <svg class="about-star-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9Z"/></svg>
+                  <div class="about-star-copy"><strong>GitHub Star</strong><p>如果 MEFinder 帮到了你，欢迎点个 Star 支持项目</p></div>
+                  <a class="action-btn about-star-button" href="https://github.com/sabercomo/MEFinder" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.15.55-.17.55-.38v-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.05-.13-.36-.99.08-2.07 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.73c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.08.13 1.94.08 2.07.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>去点 Star</a>
                 </div>
               </div>
-              <div class="software-update-actions">
-                <button class="action-btn" type="button" id="update-check-btn" data-action="templateClick171">检查更新</button>
-                <button class="action-btn primary" type="button" id="update-action-btn" style="display:none" data-action="templateClick172">下载更新</button>
-                <a class="action-btn update-release-link" id="update-release-link" href="#" target="_blank" rel="noreferrer" style="display:none">查看发布页</a>
-              </div>
-            </div>
-            <label class="update-auto-option" for="auto-update-enabled">
-              <input id="auto-update-enabled" type="checkbox" data-action-change="templateChange173">
-              <span class="update-auto-copy"><strong>启动时自动检查并下载更新</strong><small id="update-auto-description">仅下载带 SHA-256 校验的官方安装包；安装前仍由你确认</small></span>
-            </label>
-            </div>
-          </section>
-          <section class="settings-section macos-update-settings" id="macos-update-settings" role="tabpanel">
-            <div class="settings-section-head">
-            <span class="settings-section-heading-copy"><span class="settings-section-title">软件更新</span><span class="settings-section-note">手动检查新的 Mac DMG</span></span>
-            <span id="macos-update-status" class="settings-status">未检查</span>
-            </div>
-            <div class="settings-collapse-body" id="macos-update-body">
-            <div class="macos-update-card">
-              <span class="macos-update-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg></span>
-              <div class="macos-update-copy">
-                <strong>当前版本 v__APP_VERSION__</strong>
-                <small id="macos-update-message">只检查 GitHub Releases，不会后台下载或自动替换应用</small>
-              </div>
-              <div class="macos-update-actions">
-                <button class="action-btn" type="button" id="macos-update-check" data-action="templateClick174">检查更新</button>
-                <a class="action-btn primary macos-update-release" id="macos-update-release" href="#" target="_blank" rel="noreferrer" style="display:none">打开 Releases 下载 DMG</a>
-              </div>
-            </div>
             </div>
           </section>
         </div>

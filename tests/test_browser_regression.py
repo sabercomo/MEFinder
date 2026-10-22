@@ -142,6 +142,112 @@ class BrowserRegressionTests(unittest.TestCase):
         self.navigate("文献库")
         self.page.locator("#library-list .library-entry").first.wait_for()
 
+    def test_about_links_homebrew_and_platform_visibility(self) -> None:
+        self.page.add_init_script("""localStorage.removeItem('meFinderSidebarCollapsed');
+        Object.defineProperty(navigator, 'clipboard', {value: {
+          writeText: async text => { window.copiedCommand = text; }
+        }});""")
+        self.context.route("**/api/update/status", lambda route: route.fulfill(json={
+            "status": "idle", "current_version": "0.5.9", "can_self_update": True,
+            "message": "尚未检查更新",
+        }))
+        links = {
+            "官方网站": "https://sabercomo.github.io/MEFinder/",
+            "更新日志": "https://github.com/sabercomo/MEFinder/releases",
+            "最近更新": "https://github.com/sabercomo/MEFinder/releases/latest",
+            "去点 Star": "https://github.com/sabercomo/MEFinder",
+        }
+        for shell in ("", "macos", "win32"):
+            with self.subTest(shell=shell):
+                with mock.patch.dict(os.environ, {"ME_FINDER_DESKTOP_SHELL": shell}):
+                    self.page.reload()
+                    self.page.wait_for_load_state("networkidle")
+                self.navigate("设置")
+                self.page.get_by_role("tab", name="关于与更新").click()
+                panel = self.page.locator("#software-update-settings")
+                self.assertEqual(panel.locator(".about-update-card").evaluate("""node => {
+                  const style = getComputedStyle(node);
+                  return [style.borderTopWidth, style.borderTopStyle];
+                }"""), ["1px", "solid"], "about content has a visible frame")
+                for label, url in links.items():
+                    link = panel.get_by_role("link", name=label, exact=True)
+                    self.assertTrue(link.is_visible())
+                    self.assertEqual(link.get_attribute("href"), url)
+                    self.assertEqual(link.get_attribute("target"), "_blank")
+                    self.assertIn("noopener", link.get_attribute("rel"))
+                self.assertEqual(self.page.locator(".about-platform-windows").is_visible(), shell == "win32")
+                self.assertEqual(self.page.locator(".about-platform-macos").is_visible(), shell == "macos")
+                self.assertEqual(self.page.locator(".about-platform-browser").is_visible(), shell == "")
+                if shell == "macos":
+                    panel.get_by_role("button", name="复制命令").click()
+                    self.assertEqual(self.page.evaluate("window.copiedCommand"),
+                                     "brew update && brew upgrade --cask mefinder")
+                    self.assertTrue(panel.get_by_role("button", name="已复制").is_visible())
+                self.page.get_by_role("button", name="收起侧边栏").click()
+                self.wait_until(lambda: self.page.locator(".sidebar").bounding_box()["width"] == 64,
+                                "sidebar collapse must finish before measuring the panel")
+                for width in (320, 375, 414, 768, 1280):
+                    self.page.set_viewport_size({"width": width, "height": 900})
+                    overflow = panel.evaluate("""node => [...node.querySelectorAll('*')]
+                      .filter(child => child.getClientRects().length &&
+                        child.getBoundingClientRect().right > node.getBoundingClientRect().right + 1)
+                      .map(child => child.className.baseVal ?? child.className)""")
+                    self.assertEqual(overflow, [], f"about panel overflow: {shell}/{width}")
+                    self.assertTrue(panel.get_by_role("link", name="去点 Star").evaluate(
+                        "node => node.getBoundingClientRect().right <= innerWidth"))
+                self.assert_hidden_really_hidden("about/" + shell)
+                self.page.get_by_role("button", name="展开侧边栏").click()
+
+    def test_about_macos_update_failure_and_retry(self) -> None:
+        responses = [
+            {"status": "error", "message": "无法连接 GitHub，请稍后重试"},
+            {"status": "available", "latest_version": "0.6.0", "message": "发现新版本 v0.6.0",
+             "release_url": "https://github.com/sabercomo/MEFinder/releases/tag/v0.6.0"},
+            {"status": "up_to_date", "message": "当前已是最新版本"},
+        ]
+        self.context.route("**/api/macos-update", lambda route: route.fulfill(json=responses.pop(0)))
+        with mock.patch.dict(os.environ, {"ME_FINDER_DESKTOP_SHELL": "macos"}):
+            self.page.reload()
+            self.page.wait_for_load_state("networkidle")
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="关于与更新").click()
+        check = self.page.locator("#macos-update-check")
+        release = self.page.locator("#macos-update-release")
+        for label in ("检查失败", "有新版本", "已是最新"):
+            check.click()
+            self.wait_until(lambda: self.page.locator("#macos-update-status").inner_text() == label,
+                            "update state must settle")
+            self.assertTrue(check.is_enabled())
+            self.assertEqual(release.is_visible(), label == "有新版本")
+            if label == "有新版本":
+                self.assertEqual(release.inner_text(), "下载 v0.6.0 DMG")
+                self.assertEqual(release.get_attribute("href"),
+                                 "https://github.com/sabercomo/MEFinder/releases/tag/v0.6.0")
+            else:
+                self.assertIsNone(release.get_attribute("href"))
+
+    def test_about_windows_update_download_and_ready(self) -> None:
+        state = {"status": "idle", "can_self_update": True, "current_version": "0.5.9",
+                 "message": "尚未检查更新"}
+        self.context.route("**/api/update/status", lambda route: route.fulfill(json=state))
+        self.context.route("**/api/update/check", lambda route: route.fulfill(json={
+            **state, "status": "available", "latest_version": "0.6.0", "message": "发现新版本",
+            "release_url": "https://github.com/sabercomo/MEFinder/releases/tag/v0.6.0",
+        }))
+        self.context.route("**/api/update/download", lambda route: route.fulfill(json={
+            **state, "status": "ready", "latest_version": "0.6.0", "message": "更新已校验",
+            "install_token": "test-token",
+        }))
+        with mock.patch.dict(os.environ, {"ME_FINDER_DESKTOP_SHELL": "win32"}):
+            self.page.reload()
+            self.page.wait_for_load_state("networkidle")
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="关于与更新").click()
+        self.page.get_by_role("button", name="检查更新", exact=True).click()
+        self.page.get_by_role("button", name="下载 v0.6.0", exact=True).click()
+        self.page.get_by_role("button", name="退出并安装", exact=True).wait_for()
+        self.assertEqual(self.page.locator("#update-status-badge").inner_text(), "可安装")
+
     # ── helpers ────────────────────────────────────────────────────
     def navigate(self, label: str) -> None:
         self.page.locator(".sidebar-item", has_text=label).first.click()

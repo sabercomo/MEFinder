@@ -521,9 +521,9 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertIn('id="macos-update-body"', HTML)
         self.assertIn("function checkMacosUpdate()", HTML)
         self.assertIn("fetch('/api/macos-update'", HTML)
-        self.assertIn("打开 Releases 下载 DMG", HTML)
+        self.assertIn("下载新版 DMG", HTML)
         self.assertIn("不会后台下载或自动替换应用", HTML)
-        self.assertIn(f"当前版本 v{__version__}", HTML)
+        self.assertIn(f'id="update-current-version">v{__version__}', HTML)
         self.assertNotIn("__APP_VERSION__", HTML)
 
         self.assertIn('id="data-location-settings"', HTML)
@@ -681,7 +681,6 @@ class ThemeMarkupTests(unittest.TestCase):
             "document-transfer-settings": "document-transfer-body",
             "backup-settings": "backup-settings-body",
             "software-update-settings": "software-update-body",
-            "macos-update-settings": "macos-update-body",
         }
         # One left-rail entry per category switches which panel is active.
         self.assertEqual(len(re.findall(r'<button class="settings-nav-item[^>]*data-action="templateClick\d+"', HTML)), len(sections))
@@ -750,8 +749,8 @@ class ThemeMarkupTests(unittest.TestCase):
         self.assertRegex(
             update_markup,
             r'<span class="settings-section-heading-copy">\s*'
-            r'<span class="settings-section-title">软件更新</span>\s*'
-            r'<span class="settings-section-note">适用于 Windows 安装版</span>\s*'
+            r'<span class="settings-section-title">关于与更新</span>\s*'
+            r'<span class="settings-section-note">版本信息与项目动态</span>\s*'
             r'</span>',
         )
         self.assertIn('id="update-status-badge"', update_markup)
