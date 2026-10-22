@@ -304,7 +304,31 @@ function alignmentModelDownloadProgress(model) {
     ratio: ratio,
     percent: percent,
     text: '已下载 ' + decimalBytes(downloaded) + ' / ' + totalLabel + ' · ' + percent + '%'
+      + componentTaskTiming(model)
   };
+}
+
+// 组件下载/安装的速度、剩余与已用时间。速度与剩余沿用本地 OCR / 托管 MinerU
+// 的同一套文案；剩余按近 20 秒速度估算，环境与验证等报不出字节的步骤只给已用时间。
+function formatElapsedTime(seconds) {
+  if (typeof seconds !== 'number' || !isFinite(seconds) || seconds < 0) return '';
+  var whole = Math.floor(seconds);
+  if (whole < 60) return '已用 ' + whole + ' 秒';
+  var rest = whole % 60;
+  return '已用 ' + Math.floor(whole / 60) + ' 分 ' + (rest < 10 ? '0' : '') + rest + ' 秒';
+}
+
+function componentTaskTiming(task) {
+  task = task || {};
+  var parts = [];
+  var speed = Number(task.download_speed_bps) || 0;
+  if (speed > 0) {
+    parts.push(localOCRByteSize(speed) + '/s');
+    if (typeof task.eta_seconds === 'number') parts.push(localOCREstimatedWait(task.eta_seconds));
+  }
+  var elapsed = formatElapsedTime(task.elapsed_seconds);
+  if (elapsed) parts.push(elapsed);
+  return parts.map(function(part) { return ' · ' + part; }).join('');
 }
 
 // 导入队列的处理步骤文案。原在 80-import.js，纯映射，前移以便单测。

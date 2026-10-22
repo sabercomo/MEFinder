@@ -698,10 +698,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 本机导入进度查询断连时保留原状态并重试，恢复后跟踪真实终态。
     # 默认搜索页启动也先取得共享摘要，再预取持有索引锁的对齐总览。
     # 关于与更新统一项目链接、Star 入口与 Mac Homebrew 更新命令。
+    # 译本对齐组件：模型下载显示速度与预计剩余，运行时安装显示第几步与已用时间。
     BASELINE_SHA256 = (
-        "766e50e39abc16a407b28f5d1d54f2b6da94bfc0acdd85336db9806e8eb55683"
+        "ddfcaacee61870211f9c1609e2bb64a4b10d797553b577863fa94394b41fb98c"
     )
-    BASELINE_BYTES = 1530114
+    BASELINE_BYTES = 1531497
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

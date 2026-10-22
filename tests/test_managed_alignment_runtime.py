@@ -452,6 +452,27 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         with self.assertRaises(ManagedAlignmentRuntimeError):
             manager.perform({"action": "install"})
 
+    def test_install_reports_steps_and_elapsed_time_then_clears_them(self) -> None:
+        manager = self._manager()
+        seen = []
+        validate = manager._validate
+
+        def watching_validate(root):
+            seen.append(manager.summary())
+            return validate(root)
+
+        manager._validate = watching_validate
+        manager.perform({"action": "install"})
+        summary = self._wait(manager)
+
+        self.assertTrue(summary["installed"], summary)
+        [during] = seen
+        self.assertEqual((during["state"], during["step"], during["step_total"]), ("validating", 4, 4))
+        self.assertIsInstance(during["elapsed_seconds"], int)
+        self.assertEqual((summary["step"], summary["step_total"]), (0, 0))
+        self.assertIsNone(summary["elapsed_seconds"])
+        self.assertIsNone(summary["eta_seconds"])
+
     def test_install_cleans_stale_staging_directory(self) -> None:
         manager = self._manager()
         manager.component_root.mkdir(parents=True, exist_ok=True)

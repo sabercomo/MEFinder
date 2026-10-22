@@ -59,6 +59,7 @@ from .local_ocr_installer import (
 )
 from .import_resume import atomic_write_json
 from .runtime_location import component_runtime_root
+from .transfer_rate import TransferRate
 
 # Component identifier used in the managed-component registry and HTTP layer.
 COMPONENT_ID = "text-alignment-runtime"
@@ -204,6 +205,12 @@ class _RuntimeState:
     message: str = ""
     error: str = ""
     uninstall_deferred: bool = False
+    # Install/update walk fixed steps; elapsed time is the only honest progress
+    # for the ones that cannot report bytes (environment, packages, check).
+    step: int = 0
+    step_total: int = 0
+    started_at: Optional[float] = None
+    rate: TransferRate = field(default_factory=TransferRate)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     process: Optional[subprocess.Popen] = None
     thread: Optional[threading.Thread] = None
@@ -312,8 +319,10 @@ class ManagedAlignmentRuntime:
         models_component: Optional[object] = None,
         is_compute_active: Optional[Callable[[], bool]] = None,
         worker_context: Optional[Callable[[], tuple[str, Path]]] = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.runtime_root = Path(runtime_root)
+        self._clock = clock
         # Colocate the runtime with the model cache under the stable machine
         # component directory (the models component uses the same wrapper), so
         # switching libraries never relocates or orphans the installed runtime.
@@ -533,6 +542,12 @@ class ManagedAlignmentRuntime:
         with self._lock:
             state = self._state
             receipt = self._receipt()
+            now = self._clock()
+            speed = eta = None
+            if state.total_bytes and state.downloaded_bytes < state.total_bytes:
+                state.rate.observe(now, state.downloaded_bytes)
+                speed = state.rate.bytes_per_second()
+                eta = state.rate.eta_seconds(state.total_bytes)
             result: Dict[str, object] = {
                 "component_id": self.component_id,
                 "supported": self.manifest.configured and self.manifest.platform is not None,
@@ -549,6 +564,13 @@ class ManagedAlignmentRuntime:
                 "progress": state.progress,
                 "downloaded_bytes": state.downloaded_bytes,
                 "total_bytes": state.total_bytes,
+                "download_speed_bps": None if speed is None else int(speed),
+                "eta_seconds": eta,
+                "step": state.step,
+                "step_total": state.step_total,
+                "elapsed_seconds": (
+                    None if state.started_at is None else int(now - state.started_at)
+                ),
                 "uninstall_deferred": state.uninstall_deferred,
                 "message": state.message,
                 "error": state.error,
@@ -616,6 +638,10 @@ class ManagedAlignmentRuntime:
             state.uninstall_deferred = False
             state.message = ""
             state.error = ""
+            state.step = 0
+            state.step_total = 1 if action == "validate" else 0
+            state.started_at = self._clock()
+            state.rate.reset()
             state.cancel_event = threading.Event()
             thread = threading.Thread(
                 target=self._operation_worker,
@@ -657,6 +683,7 @@ class ManagedAlignmentRuntime:
                 message = "对齐计算组件升级完成"
                 final_state = "installed"
             elif action == "validate":
+                self._set_step(1)
                 self._validate(self.runtime_dir)
                 message = "对齐计算组件验证通过"
                 final_state = "installed"
@@ -713,6 +740,7 @@ class ManagedAlignmentRuntime:
         published = False
         staging.mkdir(parents=True)
         try:
+            self._set_step(1, "正在准备安装工具")
             uv_path = self._ensure_uv(platform_manifest)
             # The archive progress covers uv only, not Python/package installation.
             with self._lock:
@@ -721,6 +749,7 @@ class ManagedAlignmentRuntime:
                 self._state.progress = None
             install_log = staging / "install.log"
             venv_dir = staging / "venv"
+            self._set_step(2)
             self._set_state("provisioning", message="正在创建独立 Python 环境")
             self._run_uv_command(
                 [
@@ -739,6 +768,7 @@ class ManagedAlignmentRuntime:
                 cleanup=lambda: self._remove_tree(venv_dir),
             )
             python_path = staging / platform_manifest.venv_python
+            self._set_step(3)
             self._set_state(
                 "provisioning",
                 message=f"正在安装对齐计算依赖（{len(self.manifest.packages)} 个）",
@@ -760,6 +790,7 @@ class ManagedAlignmentRuntime:
             # Validate the *staged* runtime before publishing: the numeric stack
             # must actually import in the isolated interpreter (runtime load),
             # not merely exist on disk.
+            self._set_step(4)
             self._set_state("validating", message="正在验证独立运行时")
             self._validate(staging)
             self._raise_if_cancelled()
@@ -1018,6 +1049,7 @@ class ManagedAlignmentRuntime:
             self._state.total_bytes = expected_size
             self._state.downloaded_bytes = 0
             self._state.progress = None
+            self._state.rate.reset()
         for url in urls:
             try:
                 self._download_one(url, target, expected_size, expected_sha256)
@@ -1233,6 +1265,19 @@ class ManagedAlignmentRuntime:
         if self._state.cancel_event.is_set():
             raise _Cancelled("操作已取消。")
 
+    _INSTALL_STEPS = 4
+
+    def _set_step(self, step: int, message: str = "") -> None:
+        """Mark install/update step ``step`` (validate-only runs have one)."""
+
+        with self._lock:
+            state = self._state
+            if state.step_total != 1:
+                state.step_total = self._INSTALL_STEPS
+            state.step = step
+            if message:
+                state.message = message
+
     def _set_state(
         self,
         new_state: str,
@@ -1246,6 +1291,9 @@ class ManagedAlignmentRuntime:
             state.state = new_state
             if operation != "keep":
                 state.operation = operation  # type: ignore[assignment]
+            if operation is None:
+                state.step = state.step_total = 0
+                state.started_at = None
             if message:
                 state.message = message
             state.error = error

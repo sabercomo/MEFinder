@@ -32,6 +32,7 @@ const context = {
   THEME_BUILTIN_CSS_IDS:[], THEME_PRESET_MAP:{light:{}}, THEME_MODE_DEFAULT:{light:'light'},
   settingsStore:{appearanceState:{mode:'light',light:'light'}, currentAlignmentEmbeddingModel:'minilm-l12-v2'},
   initAppearanceSystemWatch(){}, alignmentModelDownloadProgress(){return null;},
+  componentTaskTiming(task){return task && task.elapsed_seconds != null ? ' · 已用 ' + task.elapsed_seconds + ' 秒' : '';},
   showToast(){}, showAppConfirm:async()=>true,
   document:{getElementById(id){return /^(alignment-|embedding-|text-alignment-)/.test(id) ? node(id) : null;},
     querySelectorAll(){return [];}, querySelector(){return null;}},
@@ -103,6 +104,16 @@ assert.equal(node('alignment-runtime-state').textContent,'读取失败');
 assert.equal(node('alignment-runtime-action').hidden,false);
 runtimeError=false;node('alignment-runtime-action').onclick();await settle();
 assert.equal(node('alignment-runtime-state').textContent,'未安装');
+''')
+
+    def test_install_shows_step_and_elapsed_time(self):
+        self.run_ui(r'''
+await enter();
+runtime={...runtime,state:'provisioning',operation:'install',step:3,step_total:4,
+  elapsed_seconds:42,message:'正在安装对齐计算依赖（3 个）'};
+node('alignment-runtime-action').onclick();await settle();
+assert.equal(node('alignment-runtime-state').textContent,'安装中 · 第 3/4 步');
+assert.equal(node('alignment-runtime-hint').textContent,'正在安装对齐计算依赖（3 个） · 已用 42 秒');
 ''')
 
     def test_old_status_read_cannot_stop_install_polling(self):

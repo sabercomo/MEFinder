@@ -106,6 +106,45 @@ class ManagedEmbeddingModelsTests(unittest.TestCase):
             release.set()
             component.wait_for_idle("multilingual-e5-large")
 
+    def test_downloading_summary_reports_speed_and_time_left(self) -> None:
+        ready = threading.Event()
+        release = threading.Event()
+        now = [100.0]
+        blobs_holder = {}
+
+        def download(_model_id: str, cache_dir: Path) -> None:
+            blobs = cache_dir / "models--qdrant--multilingual-e5-large-onnx" / "blobs"
+            blobs.mkdir(parents=True)
+            blobs_holder["path"] = blobs / "model.onnx_data.incomplete"
+            blobs_holder["path"].write_bytes(b"")
+            ready.set()
+            release.wait(timeout=5)
+
+        def model(component):
+            return next(item for item in component.summary()["models"]
+                        if item["id"] == "multilingual-e5-large")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            component = ManagedEmbeddingModels(
+                Path(temp_dir), downloader=download, clock=lambda: now[0]
+            )
+            component.perform({"model_id": "multilingual-e5-large", "action": "download"})
+            self.assertTrue(ready.wait(timeout=5))
+            first = model(component)
+            self.assertIsNone(first["download_speed_bps"])
+            self.assertIsNone(first["eta_seconds"])
+
+            with blobs_holder["path"].open("wb") as stream:
+                stream.truncate(10_000_000)
+            now[0] += 5
+            second = model(component)
+            self.assertEqual(second["download_speed_bps"], 2_000_000)
+            self.assertEqual(second["eta_seconds"], round((2_253_000_000 - 10_000_000) / 2_000_000))
+
+            release.set()
+            component.wait_for_idle("multilingual-e5-large")
+            self.assertIsNone(model(component)["eta_seconds"])
+
     def test_installed_files_override_stuck_downloading_state(self) -> None:
         """Required files on disk are the source of truth: a download job that
         hangs after the bytes arrive must not keep the model labeled 下载中."""

@@ -249,19 +249,21 @@
       cancelBtn.hidden = false;
       cancelBtn.onclick = function() { manageAlignmentRuntime('cancel', cancelBtn); };
       stateEl.className = 'settings-status';
+      // 第几步 + 已用时间：环境、依赖与验证三步报不出字节，不编百分比。
+      var step = runtime.step_total ? ' · 第 ' + runtime.step + '/' + runtime.step_total + ' 步' : '';
       if (runtime.state === 'provisioning') {
         var pct = showProgress(!runtime.total_bytes);
         var verb = runtime.operation === 'update' ? '升级中' : '安装中';
-        stateEl.textContent = verb + (runtime.total_bytes ? ' ' + pct + '%' : '');
-        hintEl.textContent = runtime.message || '正在准备独立计算环境…';
+        stateEl.textContent = verb + step + (runtime.total_bytes ? ' ' + pct + '%' : '');
+        hintEl.textContent = (runtime.message || '正在准备独立计算环境…') + componentTaskTiming(runtime);
       } else if (runtime.state === 'validating') {
         showProgress(true);
-        stateEl.textContent = '验证中';
-        hintEl.textContent = runtime.message || '正在验证独立运行时…';
+        stateEl.textContent = '验证中' + step;
+        hintEl.textContent = (runtime.message || '正在验证独立运行时…') + componentTaskTiming(runtime);
       } else if (runtime.state === 'cleaning') {
         showProgress(true);
         stateEl.textContent = '卸载中';
-        hintEl.textContent = runtime.message || '正在移除运行时与所属模型…';
+        hintEl.textContent = (runtime.message || '正在移除运行时与所属模型…') + componentTaskTiming(runtime);
       } else if (runtime.state === 'upgrade_pending') {
         showProgress(true);
         stateEl.textContent = '等待升级';

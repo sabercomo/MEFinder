@@ -6,7 +6,7 @@ import json
 import shutil
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, Mapping
 
@@ -18,6 +18,7 @@ from .embedding_models import (
     embedding_model_summaries,
     model_component_installed,
 )
+from .transfer_rate import TransferRate
 
 
 class ManagedEmbeddingModelsError(RuntimeError):
@@ -30,6 +31,7 @@ class _ModelState:
     message: str = ""
     error: str = ""
     thread: threading.Thread | None = None
+    rate: TransferRate = field(default_factory=TransferRate)
 
 
 def download_embedding_model(model_id: str, cache_dir: Path) -> None:
@@ -53,8 +55,10 @@ class ManagedEmbeddingModels:
         runtime_root: Path,
         *,
         downloader: Callable[[str, Path], None] = download_embedding_model,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._runtime_root = runtime_root
+        self._clock = clock
         self._closing = threading.Event()
         self._cache_dir = (
             component_runtime_root(runtime_root) / "components" / "text-alignment" / "models"
@@ -161,6 +165,12 @@ class ManagedEmbeddingModels:
                     if installed
                     else min(downloaded_bytes / total_bytes, 0.99)
                 )
+                speed = eta = None
+                if current_state == "downloading":
+                    # The catalog size is an estimate, so the time left is too.
+                    state.rate.observe(self._clock(), downloaded_bytes)
+                    speed = state.rate.bytes_per_second()
+                    eta = state.rate.eta_seconds(total_bytes)
                 models.append(
                     {
                         **model,
@@ -172,6 +182,8 @@ class ManagedEmbeddingModels:
                         "total_bytes": total_bytes,
                         "total_is_estimate": True,
                         "progress": progress,
+                        "download_speed_bps": None if speed is None else int(speed),
+                        "eta_seconds": eta,
                     }
                 )
             return {
@@ -212,6 +224,7 @@ class ManagedEmbeddingModels:
             state.state = "downloading"
             state.message = "正在下载模型…"
             state.error = ""
+            state.rate.reset()
             state.thread = threading.Thread(
                 target=self._download,
                 args=(model_id,),

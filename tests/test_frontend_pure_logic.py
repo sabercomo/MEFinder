@@ -489,6 +489,39 @@ class AlignmentModelDownloadProgressTests(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
+class ComponentTaskTimingTests(unittest.TestCase):
+    """组件下载/安装的速度、剩余时间与已用时间文案。"""
+
+    def test_download_text_gains_speed_and_time_left(self):
+        self.assertEqual(
+            _call("alignmentModelDownloadProgress", {
+                "downloaded_bytes": 560_000_000, "total_bytes": 2_240_000_000,
+                "total_is_estimate": True, "size": "约 2.24 GB", "progress": 0.25,
+                "download_speed_bps": 4_718_592, "eta_seconds": 470,
+            })["text"],
+            "已下载 560 MB / 约 2.24 GB · 25% · 4.5 MB/s · 预计剩余约 8 分钟",
+        )
+
+    def test_elapsed_time(self):
+        self.assertEqual(_call("formatElapsedTime", 5), "已用 5 秒")
+        self.assertEqual(_call("formatElapsedTime", 65), "已用 1 分 05 秒")
+        self.assertEqual(_call("formatElapsedTime", None), "")
+
+    def test_stalled_download_shows_no_time_left(self):
+        self.assertEqual(
+            _call("componentTaskTiming", {"download_speed_bps": 0, "eta_seconds": None}), ""
+        )
+
+    def test_task_timing_joins_only_known_parts(self):
+        self.assertEqual(
+            _call("componentTaskTiming", {"download_speed_bps": None, "eta_seconds": None,
+                                          "elapsed_seconds": 125}),
+            " · 已用 2 分 05 秒",
+        )
+        self.assertEqual(_call("componentTaskTiming", {}), "")
+
+
+@unittest.skipUnless(NODE, "node 不可用，跳过纯逻辑执行测试")
 class ImportStepsForTests(unittest.TestCase):
     """导入队列的处理步骤文案，随文件类型与解析路线分支。"""
 
