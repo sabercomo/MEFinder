@@ -1142,14 +1142,18 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <div class="about-app-header">
                   <span class="about-app-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5h9l5 5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M14 3.5V9h5"/><circle cx="9" cy="13.5" r="2.4"/><path d="m10.8 15.3 2.1 2.1"/></svg></span>
                   <div class="about-app-copy">
-                    <h2>MEFinder</h2>
+                    <div class="about-app-name"><h2>MEFinder</h2><span class="about-app-version">当前版本 <span id="update-current-version">v__APP_VERSION__</span></span></div>
                     <p>文献原句定位器</p>
-                    <span class="about-app-version">当前版本 <span id="update-current-version">v__APP_VERSION__</span></span>
                   </div>
+                  <nav class="about-project-links" aria-label="MEFinder 项目链接">
+                    <a class="about-link" href="https://sabercomo.github.io/MEFinder/" target="_blank" rel="noopener noreferrer">官方网站<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+                    <a class="about-link" href="https://github.com/sabercomo/MEFinder/releases" target="_blank" rel="noopener noreferrer">更新日志<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+                    <a class="about-link" href="https://github.com/sabercomo/MEFinder/releases/latest" target="_blank" rel="noopener noreferrer">最近更新<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+                  </nav>
                 </div>
                 <div class="about-platform-windows">
                   <div class="about-update-row" aria-live="polite">
-                    <div class="about-update-copy"><span class="settings-status" id="update-status-badge">未检查</span><p id="update-message">检查是否有新的 Windows 版本</p></div>
+                    <div class="about-update-copy"><span class="about-update-title"><strong>软件更新</strong><span class="settings-status" id="update-status-badge">未检查</span></span><p id="update-message">检查是否有新的 Windows 版本</p></div>
                     <div class="about-update-actions">
                       <button class="action-btn" type="button" id="update-check-btn" data-action="templateClick171">检查更新</button>
                       <button class="action-btn primary" type="button" id="update-action-btn" style="display:none" data-action="templateClick172">下载更新</button>
@@ -1164,13 +1168,12 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                 <div class="about-platform-macos" id="macos-update-settings">
                   <div id="macos-update-body">
                     <div class="about-update-row" aria-live="polite">
-                      <div class="about-update-copy"><span id="macos-update-status" class="settings-status">未检查</span><p id="macos-update-message">手动检查新的 Mac 版本，再下载 DMG 安装</p></div>
+                      <div class="about-update-copy"><span class="about-update-title"><strong>软件更新</strong><span id="macos-update-status" class="settings-status">未检查</span></span><p id="macos-update-message">手动检查新的 Mac 版本，再下载 DMG 安装</p><p class="about-update-note">不会后台下载或自动替换应用</p></div>
                       <div class="about-update-actions">
                         <button class="action-btn" type="button" id="macos-update-check" data-action="templateClick174">检查更新</button>
                         <a class="action-btn primary macos-update-release" id="macos-update-release" href="#" target="_blank" rel="noopener noreferrer" style="display:none">下载新版 DMG</a>
                       </div>
                     </div>
-                    <p class="about-update-note">不会后台下载或自动替换应用</p>
                     <div class="about-homebrew">
                       <div class="about-update-copy"><strong>Homebrew 更新</strong><p>通过 Homebrew 安装时，在终端运行</p></div>
                       <div class="about-homebrew-command"><code id="homebrew-update-command">brew update &amp;&amp; brew upgrade --cask mefinder</code><button class="action-btn" type="button" data-action="copyHomebrewUpdateCommand">复制命令</button></div>
@@ -1178,11 +1181,6 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
                   </div>
                 </div>
                 <p class="about-platform-browser about-update-note">前往「最近更新」查看最新版本与下载方式</p>
-                <nav class="about-project-links" aria-label="MEFinder 项目链接">
-                  <a class="action-btn" href="https://sabercomo.github.io/MEFinder/" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></svg>官方网站</a>
-                  <a class="action-btn" href="https://github.com/sabercomo/MEFinder/releases" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>更新日志</a>
-                  <a class="action-btn" href="https://github.com/sabercomo/MEFinder/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"/></svg>最近更新</a>
-                </nav>
                 <div class="about-star-banner">
                   <svg class="about-star-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9Z"/></svg>
                   <div class="about-star-copy"><strong>GitHub Star</strong><p>如果 MEFinder 帮到了你，欢迎点个 Star 支持项目</p></div>

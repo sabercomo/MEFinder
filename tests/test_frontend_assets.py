@@ -700,10 +700,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 关于与更新统一项目链接、Star 入口与 Mac Homebrew 更新命令。
     # 译本对齐组件：模型下载显示速度与预计剩余，运行时安装显示第几步与已用时间。
     # 0.6.0 版本号落库：仅摘要变化。
+    # 关于与更新美化：项目链接并入标题行，更新状态与标题同行，Star 区改中性底。
     BASELINE_SHA256 = (
-        "b0cdaf8b6a27481fd14c52de0f5bc10d8d042ba5088ca139608573d87ef1a073"
+        "223dfe1e1a3db0818087f4d0c86a56e53c28837e80f3e32ffdf7ed4d82d70257"
     )
-    BASELINE_BYTES = 1531497
+    BASELINE_BYTES = 1533323
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
