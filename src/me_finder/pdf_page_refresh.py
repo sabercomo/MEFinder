@@ -5,8 +5,10 @@ of a page sit under the previous page's number.  A refresh re-extracts each
 book from the parser output already on disk (no parser call, no OCR) with the
 current import code, and replaces only its page records and search
 paragraphs.  The book's own records (title, metadata, mapping record, import
-history, audit notes) are written back unchanged.  A book is skipped, never
-re-numbered, when its pages or citation pages would come out different.
+history, audit notes) and reader positions are written back unchanged.  A book
+is skipped, never re-numbered, when its pages or citation pages would come out
+different.  Its alignment runs are removed with the old text (their spans
+point into it) and must be generated again.
 """
 
 from __future__ import annotations
@@ -21,7 +23,11 @@ from typing import Callable, Collection, Dict, List, Mapping, Optional, Sequence
 
 from .database import replace_source_in_database
 from .pdf_extractors import extract_pdf_source, load_pdf_import_config
-from .persistence.source_rows_reads import read_source_rows
+from .persistence.source_rows_reads import read_reading_positions, read_source_rows
+from .persistence.translation_work_store import (
+    save_reading_position_row,
+    workspace_write_transaction,
+)
 
 # Rows a refresh writes back exactly as stored.
 KEPT_SOURCE_TABLES = (
@@ -101,7 +107,9 @@ def refresh_page_text(
             replacement = {table: stored[table] for table in KEPT_SOURCE_TABLES}
             replacement["pdf_pages"] = extracted["pdf_pages"]
             replacement["paragraphs"] = extracted["paragraphs"]
+            positions = read_reading_positions(database_path, source_id)
             replace_source_in_database(replacement, database_path, backup_existing=False)
+            _restore_reading_positions(database_path, positions)
             book["status"] = "refreshed"
         _emit(on_event, book)
     counts: Dict[str, int] = {}
@@ -113,6 +121,30 @@ def refresh_page_text(
         "counts": counts,
         "books": books,
     }
+
+
+def _restore_reading_positions(
+    database_path: Path, positions: Sequence[Mapping[str, object]]
+) -> None:
+    """Write back reader positions the source replacement cascaded away.
+
+    Page indexes do not change in a refresh, so the stored position still
+    points at the same page.
+    """
+
+    if not positions:
+        return
+    with workspace_write_transaction(database_path) as connection:
+        for row in positions:
+            save_reading_position_row(
+                connection,
+                str(row["document_group_id"]),
+                str(row["left_source_file_id"]),
+                row["right_source_file_id"],
+                int(row["item_index"]),
+                int(row["char_offset"]),
+                str(row["updated_at"]),
+            )
 
 
 def _has_parser_results(config: Mapping[str, object]) -> bool:

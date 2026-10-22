@@ -37,3 +37,11 @@
 - 决策（用户确认）：不整库重建，改为只从缓存局部刷新页内文字变化的 MinerU 书；书目记录、映射记录、导入历史原样写回；页码会变的书跳过（科尔施一本先跳过）；刷新前整库备份一次；之后重算受影响的 10 组对齐。
 - 修复：`pdf_extractors.runtime_corpus_path` 把清单里的旧数据根路径改接到当前数据根；`pdf_page_split` 对版面记录覆盖的空白页同样标 `layout_checked`；新增 `pdf_page_refresh` 与命令 `python -m me_finder refresh-page-text --root <数据根> [--apply] [--skip …]`（读旧行在 `persistence/source_rows_reads.read_source_rows`；备份为 `backups/page-refresh-<时间>-index.sqlite3`，不触发 `index-*` 备份轮换）。测试：`tests.test_pdf_page_refresh`、`tests.test_pdf_page_split` 的路径改接与空白页用例。
 
+## 2026-10-22（续二）：本机文献库局部刷新结果
+
+- 事实：`refresh-page-text --apply --skip pdf-import-dcf8799a381753a2` 已对本机库执行：163 本刷新、科尔施一本按约定跳过、7 本无变化、0 失败。刷新前备份 `data/backups/page-refresh-20261022084546-index.sqlite3`。书、页、卷/作品、映射与导入记录条数不变；检索段落 166,876 → 167,643（跨页窗口随正文重算）；`PRAGMA quick_check` 为 ok；科尔施一本逐页与备份相同。《学术与政治》“世界的除魅”句检索引用页由 p.167 变为 p.168；该书 `page_text` 为 358 页核准、2 页未能拆回。
+- 事实（缺陷）：单本替换会级联删除指向该书的对齐运行与阅读位置（`alignment_runs` 等外键 ON DELETE CASCADE）。本次因此删除了受影响 10 组对齐及其历史（174 → 70 条运行）和 5 个作品的“上次读到”位置（6 → 1）。对齐本就需按新文字重算，删除旧对齐可避免错位高亮；但阅读位置不应丢失。已修：`pdf_page_refresh` 替换前读出、替换后写回阅读位置（`persistence/source_rows_reads.read_reading_positions` + `translation_work_store.save_reading_position_row`）；测试 `test_reader_position_survives_the_source_replacement`（去掉修复即失败）。本机已丢的 5 条可从上述备份原样写回（页序号不变），待用户确认。
+- 事实（阻塞）：本机没有可用的对齐计算组件。数据目录里的对齐运行时是 Windows 版（`installed.json` 的 `platform` 为 `win32-x86_64`），两个模型的 HF 快照文件全是 0 字节（从 Windows 拷来的链接失效，实体仍在 `blobs/`）；按现行规则 macOS 组件目录在 `~/Library/Application Support/MEFinder/runtime`，那里原本没有组件。库内 17 组对齐都是在 Windows 上算的。因此 10 组受影响对齐暂不能在本机重算，需先在设置 → 译本对齐安装计算组件并下载模型。
+- 更正：此前说“两个模型都已缓存在 `/Applications/MEFinder/runtime/components/text-alignment/models`”有误，当时只看了目录名。
+- 事实：首次重算尝试因模型加载失败未产生对齐运行，只留下 7 个可复用的分段集；误建的 `~/Library/Application Support/MEFinder/runtime/` 空目录已删除。
+

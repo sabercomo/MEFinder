@@ -11,6 +11,10 @@ from unittest.mock import patch
 from src.me_finder.database import build_database, replace_source_in_database
 from src.me_finder.pdf_extractors import extract_pdf_source
 from src.me_finder.pdf_page_refresh import refresh_page_text
+from src.me_finder.persistence.translation_work_store import (
+    save_reading_position_row,
+    workspace_write_transaction,
+)
 from tests.test_export_page_reconstruction import reconstruction_fixture
 from tests.test_pdf_page_split import PREFIX, TAIL, content_list
 
@@ -115,6 +119,18 @@ class PageTextRefreshTests(unittest.TestCase):
                           f"WHERE source_file_id='book' AND text_raw LIKE '%{TAIL}%' AND paragraph_id NOT LIKE '%CROSS%'")
         self.assertEqual(hit, [(1,)])
         self.assertEqual(self.refresh(apply=True)["books"][0]["status"], "unchanged")
+
+    def test_reader_position_survives_the_source_replacement(self):
+        with workspace_write_transaction(self.index) as connection:
+            connection.execute(
+                "INSERT INTO document_groups(document_group_id, title, base_source_file_id, "
+                "created_at, updated_at) VALUES ('g', '作品', NULL, 't', 't')")
+            save_reading_position_row(connection, "g", "book", None, 1, 3, "2026-09-19T12:00:00+00:00")
+        position = self.stored("SELECT * FROM document_group_reading_positions")
+
+        self.assertEqual(self.refresh(apply=True)["books"][0]["status"], "refreshed")
+
+        self.assertEqual(self.stored("SELECT * FROM document_group_reading_positions"), position)
 
     def test_book_whose_page_numbers_would_change_is_skipped(self):
         with closing(sqlite3.connect(self.index)) as connection, connection:

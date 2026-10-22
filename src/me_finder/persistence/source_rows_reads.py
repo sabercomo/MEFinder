@@ -83,3 +83,30 @@ def read_source_rows(db_path: Path, source_id: str) -> Dict[str, List[Dict[str, 
         return rows
     finally:
         connection.close()
+
+
+def read_reading_positions(db_path: Path, source_id: str) -> List[Dict[str, object]]:
+    """Reader positions that name ``source_id`` on either side.
+
+    Replacing a source cascades these rows away (left side) or clears their
+    right side, so a caller that keeps the source must write them back.
+    """
+
+    connection = connect_index(db_path, row_factory=sqlite3.Row)
+    try:
+        if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'document_group_reading_positions'"
+        ).fetchone() is None:
+            return []
+        return [
+            dict(row)
+            for row in connection.execute(
+                "SELECT document_group_id, left_source_file_id, right_source_file_id, "
+                "item_index, char_offset, updated_at FROM document_group_reading_positions "
+                "WHERE left_source_file_id = ? OR right_source_file_id = ?",
+                (source_id, source_id),
+            )
+        ]
+    finally:
+        connection.close()
