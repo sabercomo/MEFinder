@@ -1,8 +1,10 @@
-"""Export-only reconstruction from exact, pre-merge MinerU span provenance.
+"""Page reconstruction from exact, pre-merge MinerU span provenance.
 
 The first prototype handles ordinary text split over two evidenced pages.
 It does not split notes, media, headings, or blocks with unresolved provenance.
 No marker recognition, neighbour-page search, or database writes live here.
+Import (``pdf_page_split``) applies it once before indexing; export re-runs it
+on private copies for pages indexed before that, skipping blocks already split.
 """
 from __future__ import annotations
 
@@ -130,8 +132,11 @@ def _fragment_plan(page, block, source_index, merged, native, layout_pages, docu
             rendered.append(_span_text(span))
     owners = [origin.local_page_index for origin in origins]
     distinct = list(dict.fromkeys(owners))
-    if len(distinct) != 2 or distinct[0] != block["local_page_idx"] or distinct[1] != distinct[0] + 1:
-        return (), "NOT_TWO_CONSECUTIVE_EVIDENCED_PAGES"
+    local = block["local_page_idx"]
+    # A paragraph may fill a whole middle page, so any run of consecutive
+    # pages starting at the block's own page is accepted.
+    if len(distinct) < 2 or distinct != list(range(local, local + len(distinct))):
+        return (), "NOT_CONSECUTIVE_EVIDENCED_PAGES"
     if owners != sorted(owners):
         return (), "NON_MONOTONIC_SPAN_ORIGINS"
 
@@ -144,16 +149,14 @@ def _fragment_plan(page, block, source_index, merged, native, layout_pages, docu
     lengths = [len("".join(value.split())) for value in rendered]
     if compact != "".join("".join(value.split()) for value in rendered):
         return (), "SOURCE_TEXT_MISMATCH"
-    split_span = owners.index(distinct[1])
-    if not sum(lengths[:split_span]) or not sum(lengths[split_span:]):
+    bounds = [owners.index(owner) for owner in distinct] + [len(owners)]
+    if any(not sum(lengths[a:b]) for a, b in zip(bounds, bounds[1:])):
         return (), "EMPTY_PAGE_FRAGMENT"
-    cut = positions[sum(lengths[:split_span])]
-    offset = page["pdf_page_index"] - block["local_page_idx"]
+    cuts = [0] + [positions[sum(lengths[:b])] for b in bounds[1:-1]] + [len(text)]
+    offset = page["pdf_page_index"] - local
     fragments = []
-    for owner, start, end, part in (
-        (distinct[0], 0, cut, origins[:split_span]),
-        (distinct[1], cut, len(text), origins[split_span:]),
-    ):
+    for owner, start, end, a, b in zip(distinct, cuts, cuts[1:], bounds, bounds[1:]):
+        part = origins[a:b]
         target_index = offset + owner
         target = document_pages.get(target_index)
         if target is None:
@@ -186,20 +189,25 @@ def _fragment_plan(page, block, source_index, merged, native, layout_pages, docu
     return tuple(fragments), "EXACT_NATIVE_SPAN_ORIGINS"
 
 
-def attach_export_layout(pages, runtime_root: Path) -> None:
-    """Enrich freshly-read export copies, never persisted parser records."""
+def attach_export_layout(pages, runtime_root: Path, layout_paths=None) -> None:
+    """Enrich freshly-read page copies, never persisted parser records.
+
+    ``layout_paths`` maps a block's ``result_dir`` to its ``layout.json`` when
+    the parser kept it elsewhere; the default is ``<result_dir>/layout.json``.
+    """
     cache = {}
     document_pages = {page["pdf_page_index"]: page for page in pages}
     for page in pages:
         for source_index, block in enumerate(page.get("blocks") or []):
             directory = block.get("result_dir")
-            if not directory:
+            if not directory or block.get("page_split"):
                 continue
+            mapped = (layout_paths or {}).get(str(directory))
             directory = Path(directory)
             if not directory.is_absolute():
                 directory = runtime_root / directory
             if directory not in cache:
-                path = directory / "layout.json"
+                path = Path(mapped) if mapped else directory / "layout.json"
                 layout_pages = {}
                 native = defaultdict(list)
                 if path.is_file():
@@ -273,19 +281,24 @@ def reconstruct_export_pages(pages) -> ReconstructedPages:
             fragments = block.get("_export_fragments")
             if not fragments:
                 continue
-            first, incoming = fragments
+            first, incoming = fragments[0], fragments[1:]
             if not all(aligned.get(f.target_page_index) for f in fragments):
                 record["reason"] = "SOURCE_OR_TARGET_TEXT_UNALIGNED"
                 continue
-            target = by_index[incoming.target_page_index]
-            # Preserve existing body/media/note order. Page decorations may be
-            # appended by the parser; trusted-heading ordering handles them later.
-            anchors = [b for b in target["blocks"] if _block_role(b) not in {
-                "header", "page_header", "footer", "page_footer", "page_number",
-            }]
-            orders = [b.get("_export_layout_order") for b in anchors]
-            order = incoming.spans[0].layout_block_index
-            if any(o is None for o in orders) or orders != sorted(set(orders)) or order in orders:
+            placements = []
+            for fragment in incoming:
+                target = by_index[fragment.target_page_index]
+                # Preserve existing body/media/note order. Page decorations may be
+                # appended by the parser; trusted-heading ordering handles them later.
+                anchors = [b for b in target["blocks"] if _block_role(b) not in {
+                    "header", "page_header", "footer", "page_footer", "page_number",
+                }]
+                orders = [b.get("_export_layout_order") for b in anchors]
+                order = fragment.spans[0].layout_block_index
+                if any(o is None for o in orders) or orders != sorted(set(orders)) or order in orders:
+                    break
+                placements.append((target, anchors, order))
+            if len(placements) != len(incoming):
                 record["reason"] = "TARGET_BLOCK_ORDER_UNPROVEN"
                 continue
             originals = by_index[first.target_page_index]["blocks"]
@@ -301,15 +314,16 @@ def reconstruct_export_pages(pages) -> ReconstructedPages:
                 piece.pop("_export_source_spans", None)
                 logical.append(piece)
             originals[originals.index(original)] = logical[0]
-            after = next((b for b in anchors if b["_export_layout_order"] > order), None)
-            if after is not None:
-                insertion = target["blocks"].index(after)
-            else:
-                # Native reading order places this after all existing body
-                # anchors, but before any evidenced later page decoration.
-                after = next((b for b in target["blocks"] if b.get("_export_layout_order", -1) > order), None)
-                insertion = target["blocks"].index(after) if after is not None else len(target["blocks"])
-            target["blocks"].insert(insertion, logical[1])
+            for (target, anchors, order), piece in zip(placements, logical[1:]):
+                after = next((b for b in anchors if b["_export_layout_order"] > order), None)
+                if after is not None:
+                    insertion = target["blocks"].index(after)
+                else:
+                    # Native reading order places this after all existing body
+                    # anchors, but before any evidenced later page decoration.
+                    after = next((b for b in target["blocks"] if b.get("_export_layout_order", -1) > order), None)
+                    insertion = target["blocks"].index(after) if after is not None else len(target["blocks"])
+                target["blocks"].insert(insertion, piece)
             changed.update(f.target_page_index for f in fragments)
             record.update(status="reconstructed", reason="EXACT_NATIVE_SPAN_ORIGINS",
                           fragments=[asdict(f) for f in fragments])
@@ -335,7 +349,7 @@ def reconstruct_export_pages(pages) -> ReconstructedPages:
         page = by_index[index]
         page["text_raw"] = "\n".join(str(b.get("text") or "").strip() for b in page["blocks"] if str(b.get("text") or "").strip())
     return ReconstructedPages(result, {
-        "schema_version": 1, "policy": "two-page ordinary text; exact preproc span identities and deleted target block",
+        "schema_version": 1, "policy": "consecutive-page ordinary text; exact preproc span identities and deleted target blocks",
         "cross_page_block_count": len(records),
         "reconstructed_block_count": sum(r["status"] == "reconstructed" for r in records),
         "retained_block_count": sum(r["status"] == "retained" for r in records),

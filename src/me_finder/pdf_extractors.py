@@ -34,11 +34,16 @@ from .normalization import (
 )
 from .page_mapping_service import PageMappingService
 from .pdf_page_mapping import PageMapper, mapped_page_display
+from .pdf_page_split import mineru_layout_paths, split_parser_merged_pages
 
 
 PDF_TYPES = {"native_text", "scanned", "broken_text", "complex_layout"}
 CROSS_PAGE_TAIL_CHARS = 900
 CROSS_PAGE_HEAD_CHARS = 900
+PAGE_DECORATION_BLOCK_TYPES = {
+    "header", "page_header", "footer", "page_footer", "page_number",
+    "page_footnote", "footnote", "aside_text",
+}
 SIMPLE_PDF_MAX_BYTES = 128 * 1024 * 1024
 
 _BIBLIOGRAPHIC_STATE_FIELDS = (
@@ -213,7 +218,9 @@ def extract_pdf_source(
     }
     audit_issues: List[Dict[str, object]] = []
     if structured_segments:
-        pages = load_mineru_pdf_pages(path, source_file_id, document_id, config, structured_segments)
+        pages = load_mineru_pdf_pages(
+            path, source_file_id, document_id, config, structured_segments, root=root
+        )
         source_file["pdf_outline"] = enrich_pdf_headings(
             pages, path, structured_segments, root=root
         )
@@ -666,6 +673,7 @@ def load_mineru_pdf_pages(
     document_id: str,
     config: Dict[str, object],
     segments: Sequence[Dict[str, object]],
+    root: Optional[Path] = None,
 ) -> List[Dict[str, object]]:
     mapper = PageMapper.from_config(config)
     page_texts: Dict[int, List[str]] = {}
@@ -790,6 +798,18 @@ def load_mineru_pdf_pages(
                 "parser_version": parser_version,
             }
         )
+    if parser_name == "mineru":
+        _, changed = split_parser_merged_pages(pages, mineru_layout_paths(segments, root))
+        for page in pages:
+            if int(page["pdf_page_index"]) not in changed:
+                continue
+            raw_text = str(page["text_raw"])
+            for block in page["blocks"]:
+                for key in ("page_char_start", "page_char_end", "offset_unit"):
+                    block.pop(key, None)
+            attach_page_block_offsets(raw_text, page["blocks"])
+            page["page_text_hash"] = pdf_page_text_hash(raw_text)
+            page["normalized_text"] = normalize_pdf_text(raw_text)
     return pages
 
 
@@ -1082,10 +1102,17 @@ def make_pdf_paragraphs(
     for left, right in zip(pages, pages[1:]):
         left_page_text = str(left.get("text_raw") or "")
         right_page_text = str(right.get("text_raw") or "")
-        left_body_start, left_body_end = stripped_text_bounds(left_page_text)
-        right_body_text, right_body_start, right_body_end = strip_pdf_page_header_for_cross(
-            right_page_text
+        left_body_start, left_body_end = (
+            page_body_bounds(left) or stripped_text_bounds(left_page_text)
         )
+        right_bounds = page_body_bounds(right)
+        if right_bounds:
+            right_body_start, right_body_end = right_bounds
+            right_body_text = right_page_text[right_body_start:right_body_end]
+        else:
+            right_body_text, right_body_start, right_body_end = strip_pdf_page_header_for_cross(
+                right_page_text
+            )
         if left_body_start == left_body_end or not right_body_text:
             continue
         left_slice_start = max(left_body_start, left_body_end - CROSS_PAGE_TAIL_CHARS)
@@ -1323,6 +1350,36 @@ def pdf_page_text_hash(text: str) -> str:
     """Return the stable short hash used to validate page-local deep links."""
 
     return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:16]
+
+
+def page_body_bounds(page: Mapping[str, object]) -> Optional[Tuple[int, int]]:
+    """Span from the first to the last body block of a parsed page.
+
+    A paragraph that runs over a page break continues from the last body line
+    of one page to the first body line of the next; running heads, footnotes
+    and folios sit between them in page text.  ``None`` when the parser gave no
+    block roles or some block has no exact offsets, so callers keep the
+    plain-text fallback.
+    """
+
+    blocks = [
+        block for block in page.get("blocks") or []
+        if isinstance(block, Mapping) and str(block.get("text") or "").strip()
+    ]
+    if not blocks or not all(
+        isinstance(block.get("page_char_start"), int)
+        and isinstance(block.get("page_char_end"), int)
+        for block in blocks
+    ):
+        return None
+    body = [
+        block for block in blocks
+        if str(block.get("mineru_type") or block.get("parser_type") or "").strip().casefold()
+        not in PAGE_DECORATION_BLOCK_TYPES
+    ]
+    if not body or len(body) == len(blocks):
+        return None
+    return int(body[0]["page_char_start"]), int(body[-1]["page_char_end"])
 
 
 def strip_pdf_page_header_for_cross(text: str) -> Tuple[str, int, int]:

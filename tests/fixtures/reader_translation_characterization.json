@@ -387,6 +387,7 @@
     "calibrated_units": 2,
     "coverage": "full",
     "mapping_record": null,
+    "page_text": null,
     "segments": [
      {
       "citation_page_end": "2",
@@ -395,7 +396,7 @@
       "method": "epub_pagebreak",
       "method_note": "EPUB 出版方分页标记",
       "number_style": "arabic",
-      "offset": null,
+      "page_jump": null,
       "start": 0,
       "status": "verified"
      }
@@ -430,6 +431,7 @@
     "calibrated_units": 3,
     "coverage": "full",
     "mapping_record": null,
+    "page_text": null,
     "segments": [
      {
       "citation_page_end": "28",
@@ -438,7 +440,7 @@
       "method": "epub_page_list",
       "method_note": "EPUB 出版方页码表",
       "number_style": "arabic",
-      "offset": null,
+      "page_jump": null,
       "start": 0,
       "status": "verified"
      }
@@ -473,6 +475,7 @@
     "calibrated_units": 0,
     "coverage": "none",
     "mapping_record": null,
+    "page_text": null,
     "segments": [
      {
       "citation_page_end": null,
@@ -481,7 +484,7 @@
       "method": "unknown",
       "method_note": "页码尚未解析",
       "number_style": null,
-      "offset": null,
+      "page_jump": null,
       "start": 0,
       "status": "unavailable"
      }
@@ -516,6 +519,11 @@
     "calibrated_units": 2,
     "coverage": "partial",
     "mapping_record": null,
+    "page_text": {
+     "exact_pages": 0,
+     "merged_pages": 0,
+     "unchecked_pages": 4
+    },
     "segments": [
      {
       "citation_page_end": "39",
@@ -524,7 +532,7 @@
       "method": "manual_segment",
       "method_note": "PDF 页码来自人工分段映射",
       "number_style": "arabic",
-      "offset": 37,
+      "page_jump": null,
       "start": 0,
       "status": "calibrated"
      },
@@ -535,7 +543,7 @@
       "method": "uncalibrated",
       "method_note": "PDF 引用页码尚未校准",
       "number_style": null,
-      "offset": null,
+      "page_jump": null,
       "start": 2,
       "status": "uncalibrated"
      }
@@ -570,6 +578,7 @@
     "calibrated_units": 3,
     "coverage": "full",
     "mapping_record": null,
+    "page_text": null,
     "segments": [
      {
       "citation_page_end": "4",
@@ -578,7 +587,7 @@
       "method": "section_break_verified",
       "method_note": "分节页码，已验证",
       "number_style": "arabic",
-      "offset": null,
+      "page_jump": null,
       "start": 0,
       "status": "verified"
      }
@@ -605,6 +614,7 @@
     "calibrated_units": 0,
     "coverage": "none",
     "mapping_record": null,
+    "page_text": null,
     "segments": [
      {
       "citation_page_end": null,
@@ -613,7 +623,7 @@
       "method": "section_break_inferred",
       "method_note": "分节推断页码，尚未人工验证",
       "number_style": null,
-      "offset": null,
+      "page_jump": null,
       "start": 0,
       "status": "unavailable"
      },
@@ -624,7 +634,7 @@
       "method": "toc_range_bound",
       "method_note": "目录页码范围，非段落级精确页码",
       "number_style": null,
-      "offset": null,
+      "page_jump": null,
       "start": 2,
       "status": "unavailable"
      },
@@ -635,7 +645,7 @@
       "method": "unknown",
       "method_note": "页码尚未解析",
       "number_style": null,
-      "offset": null,
+      "page_jump": null,
       "start": 3,
       "status": "unavailable"
      }

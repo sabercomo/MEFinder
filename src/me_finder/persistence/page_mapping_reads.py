@@ -27,6 +27,8 @@ _PAGE_EVIDENCE_KEYS = (
     "page_verified",
 )
 _VERIFIED_KEYS = {"citation_page_verified", "page_mapping_verified", "page_verified"}
+# PDF payload keys telling whether a page's text is exactly what it prints.
+_PAGE_TEXT_KEYS = ("parser", "page_text_boundary")
 
 
 def _evidence_columns() -> str:
@@ -70,12 +72,20 @@ def read_page_mapping_evidence(
         units: List[Dict[str, object]] = []
         mapping_record: Optional[Dict[str, object]] = None
         if source_type == "pdf":
+            text_columns = "".join(
+                f", json_extract(payload_json, '$.{key}') AS \"{key}\""
+                for key in _PAGE_TEXT_KEYS
+            )
             for row in connection.execute(
-                f"SELECT pdf_page_index AS position, {_evidence_columns()} "
+                f"SELECT pdf_page_index AS position, {_evidence_columns()}{text_columns} "
                 "FROM pdf_pages WHERE source_file_id = ? ORDER BY pdf_page_index",
                 (source_file_id,),
             ):
-                units.append({"position": int(row["position"]), **_evidence(row)})
+                units.append({
+                    "position": int(row["position"]),
+                    **_evidence(row),
+                    **{key: row[key] for key in _PAGE_TEXT_KEYS if row[key] is not None},
+                })
             mapping_row = connection.execute(
                 "SELECT json_extract(payload_json, '$.mapping_status') AS mapping_status, "
                 "json_extract(payload_json, '$.validated_by') AS validated_by, "

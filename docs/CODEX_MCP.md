@@ -12,7 +12,7 @@ MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十七个工具：十�
 - `locate_quote`：定位原句、近似引文和多个候选；
 - `read_document_window`：从命中位置继续读取有界的 PDF 页或 Word 段落窗口；传 `section_index` 时只读该章节；
 - `list_sections`：列出与阅读器目录同源的一、二级章节及位置范围，没有可识别标题时返回空列表；
-- `describe_page_mapping`：按连续区间说明哪些位置有可引用页码、映射方法与 PDF 页→印刷页偏移，只读已入库映射；
+- `describe_page_mapping`：按连续区间说明哪些位置有可引用页码、映射方法、扫描缺页与页内文字是否已按页核准（引用页码即书上印的页码，不做 PDF 页换算），只读已入库映射；
 - `verify_quotes`：一次核对多条引文，逐条返回 `verified`/`approximate`/`not_found`，每个命中附所在章节路径；
 - `diff_quote`：把疑似抄错的引文与最接近的原句逐字符对齐，标注增、漏、改；
 - `search_passages`：按自然语言描述或关键词按相关性召回可能相关的原文段落（相关性检索，非逐字命中，`relevance.rank` 取用后可转 `locate_quote` 逐字核验）；

@@ -66,14 +66,22 @@ class DescribePageMappingTests(_FixtureCase):
             (calibrated["start"], calibrated["end"], calibrated["status"]),
             (0, 0, "calibrated"),
         )
-        # Printed page 38 sits on PDF page 1 (1-based): printed = pdf + 37.
-        self.assertEqual(calibrated["offset"], 37)
+        # Printed page 38 sits on PDF page 1; the printed number is reported
+        # as is, never as an offset to convert.
+        self.assertEqual(calibrated["citation_page_start"], "38")
+        self.assertNotIn("offset", calibrated)
+        self.assertIsNone(calibrated["page_jump"])
         self.assertEqual(calibrated["method"], "manual_segment")
         self.assertEqual(uncalibrated["status"], "uncalibrated")
         self.assertIsNone(uncalibrated["citation_page_start"])
-        self.assertIsNone(uncalibrated["offset"])
+        self.assertIsNone(uncalibrated["page_jump"])
+        # Fixture pages predate the page-text check and name no parser.
+        self.assertEqual(
+            result["page_text"],
+            {"exact_pages": 0, "merged_pages": 0, "unchecked_pages": 2},
+        )
 
-    def test_word_pages_are_verified_without_pdf_offsets(self) -> None:
+    def test_word_pages_are_verified_without_pdf_page_checks(self) -> None:
         result = self.call("describe_page_mapping", {"source_file_id": WORD_SOURCE_ID})
 
         self.assertEqual(result["unit"], "word_paragraph")
@@ -85,7 +93,8 @@ class DescribePageMappingTests(_FixtureCase):
         self.assertEqual(
             (segment["citation_page_start"], segment["citation_page_end"]), ("7", "8")
         )
-        self.assertIsNone(segment["offset"])
+        self.assertIsNone(segment["page_jump"])
+        self.assertIsNone(result["page_text"])
 
     def test_missing_source_is_a_known_error(self) -> None:
         result = _call_tool(
@@ -119,19 +128,56 @@ class PageMappingRunTests(unittest.TestCase):
             "page_mapping_method": "manual_segment",
         }
 
-    def test_offset_change_mid_book_opens_a_new_run(self) -> None:
+    def test_pages_missing_from_the_scan_are_named_not_offset(self) -> None:
         result = self.describe(
             [self.page(0, "i"), self.page(1, "ii"), self.page(2, "1"),
-             self.page(3, "2"), self.page(4, "10"), self.page(5, "11")]
+             self.page(3, "2"), self.page(4, "5"), self.page(5, "6"),
+             self.page(6, "7"), self.page(7, "1")]
         )
         self.assertEqual(
-            [(item["start"], item["end"], item["number_style"], item["offset"])
+            [(item["start"], item["end"], item["number_style"], item["page_jump"])
              for item in result["segments"]],
-            [(0, 1, "roman", 0), (2, 3, "arabic", -2), (4, 5, "arabic", 5)],
+            [
+                (0, 1, "roman", None),
+                (2, 3, "arabic", None),
+                # Printed pages 3-4 are absent from the PDF: cite 5 as 5.
+                (4, 6, "arabic", {"from": "2", "to": "5", "missing": "3-4"}),
+                # Numbering restarts (e.g. an appendix): nothing is missing.
+                (7, 7, "arabic", {"from": "7", "to": "1", "missing": None}),
+            ],
         )
         self.assertEqual(result["coverage"], "full")
 
-    def test_spread_pages_keep_one_run_without_a_fake_offset(self) -> None:
+    def test_unnumbered_pages_between_runs_do_not_claim_a_jump(self) -> None:
+        result = self.describe(
+            [self.page(0, "126"),
+             {"position": 1, "page_mapping_method": "uncalibrated"},
+             self.page(2, "130")]
+        )
+        self.assertEqual(
+            [item["page_jump"] for item in result["segments"]], [None, None, None]
+        )
+
+    def test_roman_gap_keeps_the_printed_case(self) -> None:
+        result = self.describe([self.page(0, "IV"), self.page(1, "VII")])
+        self.assertEqual(
+            result["segments"][1]["page_jump"],
+            {"from": "IV", "to": "VII", "missing": "V-VI"},
+        )
+
+    def test_page_text_counts_split_merged_unchecked_and_native_pages(self) -> None:
+        result = self.describe(
+            [{**self.page(0, "1"), "parser": "mineru", "page_text_boundary": "layout_checked"},
+             {**self.page(1, "2"), "parser": "mineru", "page_text_boundary": "parser_merged"},
+             {**self.page(2, "3"), "parser": "mineru"},
+             {**self.page(3, "4"), "parser": "pymupdf"}]
+        )
+        self.assertEqual(
+            result["page_text"],
+            {"exact_pages": 2, "merged_pages": 1, "unchecked_pages": 1},
+        )
+
+    def test_spread_pages_keep_one_run(self) -> None:
         result = self.describe(
             [self.page(0, "2", "3"), self.page(1, "4", "5"), self.page(2, "6", "7")]
         )
@@ -140,7 +186,7 @@ class PageMappingRunTests(unittest.TestCase):
         self.assertEqual(
             (segment["citation_page_start"], segment["citation_page_end"]), ("2", "7")
         )
-        self.assertIsNone(segment["offset"])
+        self.assertIsNone(segment["page_jump"])
 
     def test_unmapped_pages_never_receive_citation_pages(self) -> None:
         result = self.describe(

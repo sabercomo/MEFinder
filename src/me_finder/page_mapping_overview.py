@@ -4,6 +4,10 @@ Read-only: it inspects the page evidence already written into the index and
 never runs automatic detection or touches source files. Page statuses reuse
 ``page_display.resolve_citation_page`` so a run is "calibrated" exactly when
 search and reader results would report the same pages as citable.
+
+A citation page is the number printed on that page.  When the printed numbers
+jump between two adjacent runs, the scan lacks those pages (or restarts its
+numbering); this is reported as ``page_jump``, never as an offset to convert.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional
 
 from .page_display import page_source_note, resolve_citation_page
+from .pdf_page_mapping import int_to_roman, page_range_display
 from .persistence.page_mapping_reads import read_page_mapping_evidence
 from .structured_reader import SourceNotFound, StructuredReaderError, _validate_source_id
 
@@ -41,6 +46,8 @@ def describe_page_mapping(db_path: Path, source_id: str) -> Dict[str, object]:
         if segments and _extends(segments[-1], entry, is_pdf):
             _extend(segments[-1], entry)
         else:
+            if segments and is_pdf:
+                entry["page_jump"] = _page_jump(segments[-1], entry)
             segments.append(entry)
     total = len(evidence["units"])
     if calibrated_units == 0:
@@ -58,6 +65,7 @@ def describe_page_mapping(db_path: Path, source_id: str) -> Dict[str, object]:
         "mapping_record": evidence["mapping_record"],
         "segments": [_public_segment(item) for item in segments[:MAX_SEGMENTS]],
         "segments_truncated": len(segments) > MAX_SEGMENTS,
+        "page_text": _page_text_summary(evidence["units"]) if is_pdf else None,
     }
 
 
@@ -77,11 +85,6 @@ def _unit_entry(unit: Mapping[str, object], is_pdf: bool) -> Dict[str, object]:
     start = resolution.start
     end = resolution.end or start
     style = _number_style(start) if start else None
-    start_value = _page_value(start, style)
-    end_value = _page_value(end, style)
-    offset = None
-    if is_pdf and start_value is not None and start_value == end_value:
-        offset = start_value - (position + 1)
     return {
         "start": position,
         "end": position,
@@ -90,9 +93,9 @@ def _unit_entry(unit: Mapping[str, object], is_pdf: bool) -> Dict[str, object]:
         "citation_page_start": start,
         "citation_page_end": end,
         "number_style": style,
-        "offset": offset,
-        "_last_value": end_value,
-        "_uniform_offset": offset is not None,
+        "page_jump": None,
+        "_first_value": _page_value(start, style),
+        "_last_value": _page_value(end, style),
     }
 
 
@@ -110,8 +113,8 @@ def _extends(run: Mapping[str, object], entry: Mapping[str, object], is_pdf: boo
     if not is_pdf or entry["number_style"] == "other":
         return True
     # A PDF run stays one run only while printed pages keep counting upward,
-    # so a restart or jump (the offset changing mid-book) opens a new run.
-    first_value = _page_value(entry["citation_page_start"], entry["number_style"])
+    # so a restart or a jump over pages missing from the scan opens a new run.
+    first_value = entry["_first_value"]
     last_value = run["_last_value"]
     return first_value is not None and last_value is not None and first_value == last_value + 1
 
@@ -120,10 +123,67 @@ def _extend(run: Dict[str, object], entry: Mapping[str, object]) -> None:
     run["end"] = entry["end"]
     run["citation_page_end"] = entry["citation_page_end"]
     run["_last_value"] = entry["_last_value"]
-    if run["_uniform_offset"] and entry["offset"] != run["offset"]:
-        # Spreads and similar layouts do not map one PDF page to one printed page.
-        run["_uniform_offset"] = False
-        run["offset"] = None
+
+
+def _page_jump(
+    previous: Mapping[str, object], entry: Mapping[str, object]
+) -> Optional[Dict[str, object]]:
+    """Describe printed numbering that does not continue across adjacent runs.
+
+    Only directly adjacent calibrated runs of one number style qualify; pages
+    without a citable number in between are their own uncalibrated run.
+    """
+
+    if (
+        previous["status"] != "calibrated"
+        or entry["status"] != "calibrated"
+        or previous["number_style"] != entry["number_style"]
+        or entry["number_style"] not in {"arabic", "roman"}
+        or entry["start"] != int(previous["end"]) + 1
+    ):
+        return None
+    last_value = previous["_last_value"]
+    first_value = entry["_first_value"]
+    if last_value is None or first_value is None:
+        return None
+    missing = None
+    if first_value > last_value + 1:
+        upper = str(entry["citation_page_start"]).isupper()
+        missing = page_range_display(
+            _page_label(last_value + 1, entry["number_style"], upper),
+            _page_label(first_value - 1, entry["number_style"], upper),
+        )
+    return {
+        "from": previous["citation_page_end"],
+        "to": entry["citation_page_start"],
+        "missing": missing,
+    }
+
+
+def _page_label(value: int, style: object, upper: bool) -> str:
+    return int_to_roman(value, upper=upper) if style == "roman" else str(value)
+
+
+def _page_text_summary(units: List[Mapping[str, object]]) -> Dict[str, int]:
+    """Count pages whose indexed text is exactly what the page prints.
+
+    MinerU may join a paragraph that runs over a page break into the earlier
+    page.  Import splits it back when the parser's layout proves the break
+    (``layout_checked``); ``parser_merged`` pages keep such a join; MinerU
+    pages indexed before that check are ``unchecked``.  Other parsers read
+    one page at a time.
+    """
+
+    summary = {"exact_pages": 0, "merged_pages": 0, "unchecked_pages": 0}
+    for unit in units:
+        boundary = unit.get("page_text_boundary")
+        if boundary == "parser_merged":
+            summary["merged_pages"] += 1
+        elif boundary == "layout_checked" or (unit.get("parser") or "mineru") != "mineru":
+            summary["exact_pages"] += 1
+        else:
+            summary["unchecked_pages"] += 1
+    return summary
 
 
 def _public_segment(run: Mapping[str, object]) -> Dict[str, object]:
@@ -136,7 +196,7 @@ def _public_segment(run: Mapping[str, object]) -> Dict[str, object]:
         "citation_page_start": run["citation_page_start"],
         "citation_page_end": run["citation_page_end"],
         "number_style": run["number_style"],
-        "offset": run["offset"],
+        "page_jump": run["page_jump"],
     }
 
 

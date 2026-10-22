@@ -227,19 +227,55 @@ class ExportPageReconstructionTests(unittest.TestCase):
         self.enrich(pages, layout)
         self.assertEqual(reconstruct_export_pages(pages).report["reason_counts"], {"EMPTY_PAGE_FRAGMENT": 1})
 
-    def test_three_page_merge_stays_whole(self):
+    @staticmethod
+    def three_page_fixture(*, third_page=True):
         pages, layout = reconstruction_fixture()
         third = deepcopy(layout["pdf_info"][1]["preproc_blocks"][0])
-        third["lines"][0]["spans"][0]["content"] = "第三页尾句。"
-        layout["pdf_info"].append({"page_idx": 2, "page_size": [1000, 1000], "preproc_blocks": [third]})
+        third["bbox"] = [100, 120, 900, 170]
+        third["lines"][0]["spans"][0].update(content="第三页尾句。", bbox=third["bbox"])
+        folio = {"index": 5, "type": "page_number", "bbox": [480, 950, 520, 980],
+                 "lines": [{"spans": [{"type": "text", "content": "3", "bbox": [480, 950, 520, 980]}]}]}
+        layout["pdf_info"].append({
+            "page_idx": 2, "page_size": [1000, 1000], "preproc_blocks": [third],
+            "para_blocks": [{"index": 1, "bbox": third["bbox"], "lines_deleted": True}],
+            "discarded_blocks": [folio],
+        })
         layout["pdf_info"][0]["para_blocks"][1]["lines"].append(
             {"spans": [{**third["lines"][0]["spans"][0], "cross_page": True}]})
         pages[0]["blocks"][1]["text"] += "第三页尾句。"
         pages[0]["text_raw"] = "\n".join(b["text"] for b in pages[0]["blocks"])
+        if third_page:
+            page = _page(12, "3", [_block("3", bbox=folio["bbox"], role="page_number")])
+            page["source_file_id"] = "reconstruction-book"
+            page["blocks"][0].update(local_page_idx=2, pdf_page_index=12, page_index_offset=10,
+                                     block_index=0, parser_item_index=60, page_char_start=0, page_char_end=1)
+            pages.append(page)
+        return pages, layout
+
+    def test_merge_over_a_whole_middle_page_returns_each_part_to_its_page(self):
+        pages, layout = self.three_page_fixture()
         self.enrich(pages, layout)
         snapshot = deepcopy(pages)
         rebuilt = reconstruct_export_pages(pages)
-        self.assertEqual(rebuilt.report["reason_counts"], {"NOT_TWO_CONSECUTIVE_EVIDENCED_PAGES": 1})
+        self.assertEqual(pages, snapshot)
+        self.assertEqual(rebuilt.report["reconstructed_block_count"], 1)
+        self.assertEqual(rebuilt.report["content_invariant"]["checked_span_count"], 3)
+        self.assertEqual(
+            [p["text_raw"] for p in rebuilt.pages],
+            ["第一章 方法\n前页正文", "下一页正文。\n下一段。", "第三页尾句。\n3"],
+        )
+        self.assertEqual(
+            [b["_export_source_fragment"].target_page_index
+             for p in rebuilt.pages for b in p["blocks"] if "_export_source_fragment" in b],
+            [10, 11, 12],
+        )
+
+    def test_merge_reaching_an_unindexed_page_stays_whole(self):
+        pages, layout = self.three_page_fixture(third_page=False)
+        self.enrich(pages, layout)
+        snapshot = deepcopy(pages)
+        rebuilt = reconstruct_export_pages(pages)
+        self.assertEqual(rebuilt.report["reason_counts"], {"TARGET_PAGE_UNAVAILABLE": 1})
         self.assertEqual(rebuilt.report["content_invariant"]["checked_span_count"], 0)
         self.assertEqual(pages, snapshot)
         self.assertEqual([p["text_raw"] for p in rebuilt.pages], [p["text_raw"] for p in pages])

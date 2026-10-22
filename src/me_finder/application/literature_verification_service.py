@@ -597,6 +597,7 @@ class LiteratureVerificationService:
                     "mapping_record",
                     "segments",
                     "segments_truncated",
+                    "page_text",
                 )
             },
         }

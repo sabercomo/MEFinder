@@ -6,7 +6,7 @@
 
 1. `ensure_document_headings` 从原 PDF 目录、已有 MinerU 缓存补全标题。补全只增加标题元数据，不改正文、解析器级别或页码映射。
 2. `_text_export_pages` 读取导出副本；`attach_export_layout` 从已有 `layout.json` 读取合并前的 native spans、合并后的 `cross_page` 标记及页内 block 顺序。没有缓存则不推测来源。
-3. `normalize_document_export` 首先执行 `reconstruct_export_pages`：只拆有完整证据的两页普通文本块，检查实际片段流的内容守恒，再进入后续处理。未重建的跨页块仍受原有配注 veto 约束。
+3. `normalize_document_export` 首先执行 `reconstruct_export_pages`：只拆有完整证据的普通文本块（2026-10-22 起含整页续接的连续三页及以上），检查实际片段流的内容守恒，再进入后续处理。未重建的跨页块仍受原有配注 veto 约束。导入时已由 `pdf_page_split` 拆过的块带 `page_split` 标记，导出不再重复拆分。
 4. `build_page_artifact_profile` 首先排除脚注候选和显式引用，再统计页边重复文本。解析器 `text_level` 不豁免重复检测；短章的页眉不会被全书页数稀释。
 5. `prepare_export_structure` 统一判断可信标题，按明确版面证据修正标题位置，建立编号范围与父级输出边界，再清理页眉页脚及可见页码。注释与引用先于任何删除操作受到保护。
 6. 原有保守 matcher 配对同页唯一 marker，按首次正文引用顺序编号，并产生 `NormalizedDocument(items, footnote_report, reconstruction_report)`。
@@ -29,7 +29,7 @@
 
 两种正式 HTTP 导出结果均提供 `reconstruction_report`，包括重建/保留数量、原因分布、每块的 fragments 和 `content_invariant`，以及聚合 `checked_block_count / checked_span_count / missing_span_count / duplicated_span_count / unexpected_span_count / content_order_invariant_failure_count`。
 
-三页及以上合并、注释正文、标题、图片、显示公式、表格均保持原样；普通正文内 inline equation 作为完整 span 保留。缺少 span/bbox、来源冲突或原文不一致时也不拆分。未重建块不计入 checked spans，不能把“保持原样”报告成“成功拆分”。现有新 engine 发布目录若没有转存 layout 证据，本功能不会凭空恢复它；没有改 importer 或数据库 schema。
+注释正文、标题、图片、显示公式、表格均保持原样（三页及以上的连续合并 2026-10-22 起按同一证据规则拆回各页，此前的真实书验收只覆盖两页块）；普通正文内 inline equation 作为完整 span 保留。缺少 span/bbox、来源冲突或原文不一致时也不拆分。未重建块不计入 checked spans，不能把“保持原样”报告成“成功拆分”。新 engine 发布目录本身不带 layout，导入时经解析任务目录（`parser_jobs/<job>/provider/<slice>/layout.json`）找回；导出仍只读 `result_dir/layout.json`，找不到则不推测来源。
 
 ### 真实书验收（2026-08-28）
 

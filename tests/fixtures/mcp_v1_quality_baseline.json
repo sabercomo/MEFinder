@@ -8,8 +8,8 @@
   },
   "advertised_context": {
     "instructions_characters": 510,
-    "instructions_utf8_bytes": 1010,
-    "utf8_bytes": 54174,
+    "instructions_utf8_bytes": 1020,
+    "utf8_bytes": 55023,
     "before_unreferenced_defs_trim_utf8_bytes": 175520
   },
   "responses": {
@@ -150,7 +150,7 @@
       "arguments": {
         "source_file_id": "fixture-pdf"
       },
-      "structured_content_utf8_bytes": 930,
+      "structured_content_utf8_bytes": 1008,
       "content_utf8_bytes": 58
     },
     "section_list": {
@@ -222,12 +222,12 @@
       "call_count": 1,
       "result_utf8_bytes": 1230
     },
-    "page_offset_lookup": {
+    "page_mapping_lookup": {
       "responses": [
         "page_mapping_overview"
       ],
       "call_count": 1,
-      "result_utf8_bytes": 988
+      "result_utf8_bytes": 1066
     }
   }
 }

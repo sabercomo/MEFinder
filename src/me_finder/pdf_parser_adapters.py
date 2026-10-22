@@ -568,6 +568,8 @@ def _publish_mineru_engine_results(
                 "page_index_offset": item.global_page_offset,
                 "result_dir": str(result_dir),
                 "credential_id": item.credential_id,
+                # Locates the provider's layout.json for cross-page splitting.
+                "parser_slice_id": item.id,
             }
         )
     if parser_id != "mineru" and not has_text:
