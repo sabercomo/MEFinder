@@ -699,8 +699,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 默认搜索页启动也先取得共享摘要，再预取持有索引锁的对齐总览。
     # 关于与更新统一项目链接、Star 入口与 Mac Homebrew 更新命令。
     # 译本对齐组件：模型下载显示速度与预计剩余，运行时安装显示第几步与已用时间。
+    # 0.6.0 版本号落库：仅摘要变化。
     BASELINE_SHA256 = (
-        "ddfcaacee61870211f9c1609e2bb64a4b10d797553b577863fa94394b41fb98c"
+        "b0cdaf8b6a27481fd14c52de0f5bc10d8d042ba5088ca139608573d87ef1a073"
     )
     BASELINE_BYTES = 1531497
 
