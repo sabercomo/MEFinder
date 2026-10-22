@@ -30,7 +30,7 @@ MEFinder 的设计是：一段文字的引用页码，就是它所在那一页�
 
 - 页面状态：`layout_checked` 26,108 页（92.5%），`parser_merged` 1,410 页（5.0%，仍有未能证明的合并），无 layout 证据 717 页（2.5%；其中 3 本整书无 layout，共 451 页，其余是个别分段缺 layout）。
 - 未拆原因：`TARGET_BLOCK_ORDER_UNPROVEN` 921、`SOURCE_TEXT_MISMATCH` 301、`MULTIPLE_NATIVE_BLOCKS_ON_PAGE` 67、`NATIVE_SPAN_NOT_UNIQUE` 65、`NOT_CONSECUTIVE_EVIDENCED_PAGES` 38、`SOURCE_OR_TARGET_TEXT_UNALIGNED` 18。
-- 不可读：配置中 146 本书的分段清单写的是 Windows 路径（`corpus\processed\…`、`D:\ME_Finder\…`）；统计时把反斜杠换成本机路径后可读其中 95 本，另 51 本清单指向本机不存在的 OneDrive 目录。180 本原生文字层 PDF（pymupdf）逐页取字，不存在此问题。
+- 不可读：配置中 146 本书的分段清单写的是 Windows 路径（`corpus\processed\…`、`D:\ME_Finder\…`）；统计时把反斜杠换成本机路径后可读其中 95 本，另 51 本清单指向旧 Mac OneDrive 数据根（此处原写“本机不存在的 OneDrive 目录”有误，更正见文末）。180 本原生文字层 PDF（pymupdf）逐页取字，不存在此问题。
 
 ## 推断
 
@@ -40,3 +40,9 @@ MEFinder 的设计是：一段文字的引用页码，就是它所在那一页�
 ## 复现
 
 只读脚本按以下步骤即可复现（未入库，属一次性统计）：对 `config/pdf_imports.json` 中每本有 MinerU 清单的书，`load_mineru_segments(config, root)` 后调用新版 `load_mineru_pdf_pages(..., root=root)`，统计 `reconstruct_export_pages` 报告与各页 `page_text_boundary`。全库一次约 80 秒（Apple Silicon，本机运行目录）。
+
+## 更正与逐本预演（2026-10-22 续）
+
+- 更正：51 本 OneDrive 路径的书缓存并未缺失，与另 95 本 Windows 路径书一样都在当前数据根 `corpus/processed/` 下，只是清单记着旧数据根的绝对路径。按 `corpus/processed/` 之后的部分改接后，171 本 MinerU 书全部可读。
+- 逐本预演（只读，新导入代码逐本抽取 352 本并与现库比对，约 11 分钟）：352 本全部可抽取，页数零变化；180 本原生文字层书文字、页码零变化；164 本 MinerU 书页内文字变化，共 32,470 页；页码仅 1 本变化（科尔施《马克思主义和哲学》序言 26 页，旧版导入时无“序言第N页”规则）。
+- 全部 171 本 MinerU 书口径：46,643 页中 `layout_checked` 41,610、`parser_merged` 2,740、未标记 2,293（多为空白页，已在本轮修为按版面记录覆盖即标核准）。

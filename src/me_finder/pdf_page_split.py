@@ -83,7 +83,9 @@ def _ledger_slice_id(
 
 
 def split_parser_merged_pages(
-    pages: List[Dict[str, object]], layout_paths: Mapping[str, Path]
+    pages: List[Dict[str, object]],
+    layout_paths: Mapping[str, Path],
+    checked_pages: Optional[Set[int]] = None,
 ) -> tuple[Dict[str, object], Set[int]]:
     """Move evidenced continuations to their printed page, in place.
 
@@ -92,6 +94,9 @@ def split_parser_merged_pages(
     Pages whose parser output was checked get ``page_text_boundary``:
     ``layout_checked`` (text is what the page prints) or ``parser_merged``
     (a merge could not be proven, so lines of the next page may remain).
+    ``checked_pages`` lists every page index the layouts cover, so blank or
+    image-only pages count as checked too; without it a page counts when one
+    of its blocks comes from a covered result directory.
     """
 
     if not layout_paths:
@@ -116,7 +121,9 @@ def split_parser_merged_pages(
         source = by_index[page["pdf_page_index"]]
         if page["pdf_page_index"] in unsplit_pages:
             page["page_text_boundary"] = "parser_merged"
-        elif any(str(block.get("result_dir")) in layout_paths for block in page.get("blocks") or []):
+        elif page["pdf_page_index"] in (checked_pages or ()) or any(
+            str(block.get("result_dir")) in layout_paths for block in page.get("blocks") or []
+        ):
             page["page_text_boundary"] = "layout_checked"
         blocks = []
         for block in source["blocks"]:

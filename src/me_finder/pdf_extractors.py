@@ -559,6 +559,33 @@ def write_parsed_pdf_snapshot(
     partial.replace(target)
 
 
+def runtime_corpus_path(value: str, root: Optional[Path]) -> Optional[str]:
+    """Resolve a recorded parser path against the current data root.
+
+    Manifests keep the absolute path of the machine and data root that wrote
+    them (``D:\\ME_Finder\\…``, an earlier OneDrive folder).  When that path
+    is not readable here, the part from ``corpus/processed/`` on is looked up
+    under ``root``; relative paths resolve against ``root`` as before.
+    ``None`` when ``value`` is empty.
+    """
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+    path = Path(text)
+    if root is not None and not path.is_absolute():
+        path = Path(root) / path
+    if path.exists() or root is None:
+        return str(path)
+    marker = "corpus/processed/"
+    portable = text.replace("\\", "/")
+    if marker in portable:
+        rebased = Path(root) / "corpus" / "processed" / portable.split(marker, 1)[1]
+        if rebased.exists():
+            return str(rebased)
+    return str(path)
+
+
 def load_mineru_segments(
     config: Dict[str, object],
     *,
@@ -574,9 +601,9 @@ def load_mineru_segments(
     segments: List[Dict[str, object]] = []
     raw_manifest_path = parser_results.get("manifest")
     if raw_manifest_path:
-        manifest_path = Path(str(raw_manifest_path))
-        if root is not None and not manifest_path.is_absolute():
-            manifest_path = Path(root) / manifest_path
+        manifest_path = Path(
+            runtime_corpus_path(str(raw_manifest_path), root) or str(raw_manifest_path)
+        )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
         manifest_resume = (
             dict(parser_results.get("resume"))
@@ -598,10 +625,8 @@ def load_mineru_segments(
             item.setdefault("document_job_id", manifest.get("document_job_id"))
             item.setdefault("import_resume", manifest_resume)
             raw_result_dir = str(item.get("result_dir") or "").strip()
-            if root is not None and raw_result_dir:
-                result_dir = Path(raw_result_dir)
-                if not result_dir.is_absolute():
-                    item["result_dir"] = str(Path(root) / result_dir)
+            if raw_result_dir:
+                item["result_dir"] = runtime_corpus_path(raw_result_dir, root) or raw_result_dir
             segments.append(item)
     for segment in parser_results.get("segments", []):
         if isinstance(segment, dict):
@@ -611,10 +636,8 @@ def load_mineru_segments(
             item.setdefault("provider_name", parser_results.get("provider_name"))
             item.setdefault("model", parser_results.get("model"))
             raw_result_dir = str(item.get("result_dir") or "").strip()
-            if root is not None and raw_result_dir:
-                result_dir = Path(raw_result_dir)
-                if not result_dir.is_absolute():
-                    item["result_dir"] = str(Path(root) / result_dir)
+            if raw_result_dir:
+                item["result_dir"] = runtime_corpus_path(raw_result_dir, root) or raw_result_dir
             segments.append(item)
     return [segment for segment in segments if segment.get("result_dir")]
 
@@ -681,6 +704,7 @@ def load_mineru_pdf_pages(
     parser_version = "unknown"
     parser_name = "mineru"
     provider_name = "MinerU"
+    segment_pages: Dict[str, range] = {}
     for segment in segments:
         page_range = parse_mineru_page_range(str(segment.get("page_ranges") or ""))
         if page_range is None:
@@ -694,6 +718,9 @@ def load_mineru_pdf_pages(
         except (TypeError, ValueError):
             page_index_offset = start_1based - 1
         result_dir = Path(str(segment["result_dir"]))
+        segment_pages[str(segment["result_dir"]).strip()] = range(
+            page_index_offset, page_index_offset + page_count
+        )
         segment_parser = str(segment.get("parser") or "mineru")
         is_mineru = segment_parser in {"mineru", "precision"}
         parser_name = "mineru" if is_mineru else segment_parser
@@ -799,7 +826,16 @@ def load_mineru_pdf_pages(
             }
         )
     if parser_name == "mineru":
-        _, changed = split_parser_merged_pages(pages, mineru_layout_paths(segments, root))
+        layout_paths = mineru_layout_paths(segments, root)
+        _, changed = split_parser_merged_pages(
+            pages,
+            layout_paths,
+            checked_pages={
+                index
+                for key in layout_paths
+                for index in segment_pages.get(key, ())
+            },
+        )
         for page in pages:
             if int(page["pdf_page_index"]) not in changed:
                 continue

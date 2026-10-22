@@ -35,6 +35,7 @@ from .mineru_api import (
     submit_local_pdf,
     submit_local_pdf_segments,
 )
+from .pdf_page_refresh import refresh_page_text
 from .search import SearchEngine
 from .web import serve
 
@@ -141,6 +142,17 @@ def main() -> None:
     agent_download.add_argument("--result-dir", default=str(DEFAULT_MINERU_AGENT_RESULT_DIR))
     agent_download.add_argument("--api-base", default="https://mineru.net")
 
+    refresh = sub.add_parser(
+        "refresh-page-text",
+        help="re-publish MinerU books from their parser cache so page text matches pages (close the app first)",
+    )
+    refresh.add_argument("--root", required=True, help="runtime data root, e.g. /Applications/MEFinder/runtime")
+    refresh.add_argument("--database", default=None, help="SQLite index; default <root>/data/index.sqlite3")
+    refresh.add_argument("--apply", action="store_true", help="write the refresh; without it only report the plan")
+    refresh.add_argument("--skip", action="append", default=[], help="source_file_id to leave untouched (repeatable)")
+    refresh.add_argument("--only", action="append", default=None, help="limit to this source_file_id (repeatable)")
+    refresh.add_argument("--report", default=None, help="write the full JSON report to this path")
+
     args = parser.parse_args()
     if args.command == "build-index":
         index = build_index(
@@ -161,6 +173,21 @@ def main() -> None:
             f"Built {built}: {meta['source_count']} source files, "
             f"{meta['paragraph_count']} paragraphs, {meta['eligible_paragraph_count']} searchable."
         )
+    elif args.command == "refresh-page-text":
+        root = Path(args.root)
+        result = refresh_page_text(
+            root,
+            Path(args.database) if args.database else root / "data" / "index.sqlite3",
+            apply=args.apply,
+            skip=set(args.skip),
+            only=set(args.only) if args.only else None,
+            on_event=lambda item: print(json.dumps(item, ensure_ascii=False), flush=True),
+        )
+        if args.report:
+            Path(args.report).write_text(
+                json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+            )
+        print(json.dumps({"counts": result["counts"], "backup_path": result["backup_path"]}, ensure_ascii=False))
     elif args.command == "search":
         engine = SearchEngine(Path(args.index))
         result = engine.search(args.query, args.mode, args.limit, args.source_type)

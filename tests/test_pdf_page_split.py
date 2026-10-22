@@ -15,8 +15,10 @@ from unittest.mock import patch
 from src.me_finder.export_page_reconstruction import attach_export_layout, reconstruct_export_pages
 from src.me_finder.pdf_extractors import (
     load_mineru_pdf_pages,
+    load_mineru_segments,
     make_pdf_paragraphs,
     pdf_page_text_hash,
+    runtime_corpus_path,
 )
 from src.me_finder.pdf_page_split import mineru_layout_paths
 from tests.test_export_page_reconstruction import reconstruction_fixture
@@ -117,6 +119,20 @@ class ImportPageSplitTests(unittest.TestCase):
         self.assertEqual([p["page_text_boundary"] for p in pages],
                          ["parser_merged", "layout_checked"])
 
+    def test_blank_page_in_a_checked_slice_counts_as_checked(self):
+        self.write_layout(self.result_dir)
+        segment = {"result_dir": str(self.result_dir), "page_ranges": "1-3",
+                   "page_index_offset": 0, "parser": "mineru"}
+        with patch("src.me_finder.pdf_extractors.get_pdf_page_labels", return_value=[None] * 3), \
+                patch("src.me_finder.pdf_extractors.get_pdf_page_dimensions",
+                      return_value=[(1000.0, 1000.0)] * 3):
+            pages = load_mineru_pdf_pages(
+                self.root / "unused.pdf", "book", "book", {}, [segment], root=self.root
+            )
+
+        self.assertEqual(pages[2]["blocks"], [])
+        self.assertEqual([p["page_text_boundary"] for p in pages], ["layout_checked"] * 3)
+
     def test_engine_slice_layout_is_found_through_the_job_ledger(self):
         provider = self.root / "corpus/processed/parser_jobs/job-1/provider/slice-a"
         self.write_layout(provider)
@@ -144,6 +160,51 @@ class ImportPageSplitTests(unittest.TestCase):
         self.assertEqual(mineru_layout_paths([segment], self.root),
                          {str(self.result_dir): provider / "layout.json"})
         self.assertEqual(mineru_layout_paths([segment], None), {})
+
+
+class RuntimeCorpusPathTests(unittest.TestCase):
+    """Manifests written under another data root still find their cache here."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.cache = self.root / "corpus/processed/mineru/results/engine-book/pages-000001-000002"
+        self.cache.mkdir(parents=True)
+
+    def test_paths_from_other_machines_and_old_roots_rebase_onto_this_root(self):
+        for recorded in (
+            "D:\\ME_Finder\\dist\\MEFinderData\\runtime\\corpus\\processed\\mineru\\results"
+            "\\engine-book\\pages-000001-000002",
+            "corpus\\processed\\mineru\\results\\engine-book\\pages-000001-000002",
+            "/Users/someone/Library/CloudStorage/OneDrive/MeFinder/runtime/corpus/processed/"
+            "mineru/results/engine-book/pages-000001-000002",
+        ):
+            with self.subTest(recorded=recorded):
+                self.assertEqual(runtime_corpus_path(recorded, self.root), str(self.cache))
+
+    def test_readable_and_unresolvable_paths_keep_their_previous_meaning(self):
+        relative = "corpus/processed/mineru/results/engine-book/pages-000001-000002"
+        self.assertEqual(runtime_corpus_path(relative, self.root), str(self.root / relative))
+        self.assertEqual(runtime_corpus_path(str(self.cache), self.root), str(self.cache))
+        self.assertEqual(runtime_corpus_path("missing/dir", self.root), str(self.root / "missing/dir"))
+        self.assertEqual(runtime_corpus_path("D:\\x\\y", None), "D:\\x\\y")
+        self.assertIsNone(runtime_corpus_path("  ", self.root))
+
+    def test_manifest_segments_are_rebased_when_loaded(self):
+        manifest = self.root / "corpus/processed/mineru/manifests/segments-book.json"
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(json.dumps({"parser": "mineru", "document_job_id": "job", "segments": [{
+            "page_ranges": "1-2", "page_index_offset": 0,
+            "result_dir": "E:\\OneDrive\\MeFinder\\runtime\\corpus\\processed\\mineru\\results"
+                          "\\engine-book\\pages-000001-000002",
+        }]}), encoding="utf-8")
+        config = {"mineru": {"manifest": "corpus\\processed\\mineru\\manifests\\segments-book.json"}}
+
+        [segment] = load_mineru_segments(config, root=self.root)
+
+        self.assertEqual(segment["result_dir"], str(self.cache))
+        self.assertEqual(segment["document_job_id"], "job")
 
 
 class CrossPageWindowTests(unittest.TestCase):
