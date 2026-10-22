@@ -43,3 +43,7 @@ uv venv --python 3.11 --managed-python --relocatable --no-python-downloads --off
 ## 验证范围
 
 尚未在反馈用户的机器上验证原生系统错误 448；本轮不声称重现了其 OneDrive 或 Windows 安全策略。现有安装包、便携包和 GitHub 草稿资产尚不包含本轮修复。
+
+## 2026-10-20 — 重新打包与草稿替换
+
+用户随后授权重打并替换草稿，已按 `9fe9b03` 完成 Windows 双包、两个校验文件及远端核验；上节未重打包状态已更新。见[交付核验](windows-ocr-release-2026-10-20.md)。反馈用户实机仍待验收。
