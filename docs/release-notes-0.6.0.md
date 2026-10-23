@@ -1,4 +1,4 @@
-2026-10-23：macOS Intel（x86_64）0.6.0 测试包已构建并核验；Apple Silicon 与 Intel 两架构的 DMG、ZIP 及四份 SHA-256 文件均已上传至 v0.6.0 草稿并核对远端摘要。未安装、未正式发布。
+2026-10-23：**MEFinder v0.6.0 已正式发布。** GitHub Release 提供 Windows x64、macOS Apple Silicon 与 Intel 三种架构的安装包；tag 指向 `49241fc`（产品源码 `2371f60`），12 个附件均与本地 SHA-256 一致。
 
 本轮从 `2371f60` 启动官方 `build_macos.sh`，在 Apple Silicon 上通过 Rosetta 使用 `.venv-macos12-x86_64` 构建；随后快进到 `15d81fa`，差异仅为 Windows 构建文档，产品文件未变。两程序均为纯 x86_64，最低 macOS 12.0；未在 Intel 真机验证。
 
@@ -12,7 +12,7 @@
 | `MEFinder-v0.6.0-macos-x86_64.dmg` | 108,662,028 | `b168c654ce28a1d1bbdb2796261bf59a9aec14f7f86ef99a38a9af34cffe43bc` |
 | `MEFinder-v0.6.0-macos-x86_64.zip` | 102,826,401 | `723ea5b41281070c2e05344414e996c97d554ca9f94ecd16852b346a216634df` |
 
-两架构的 DMG、ZIP 及四份 SHA 文件已上传到 v0.6.0 草稿；八个附件的远端大小与 SHA-256 均与本地逐项一致，Release 保持草稿。本机应用与用户文献库未改动。
+两架构的 DMG、ZIP 及四份 SHA 文件已上传至 v0.6.0 并成为正式发布附件；八个附件的远端大小与 SHA-256 均与本地逐项一致。本机应用与用户文献库未改动。
 
 2026-10-23：Windows 安装版与便携版已按远端 `2371f60` 完成本机测试构建；两次官方脚本各通过全量 2,825 项 unittest，Chrome 16 项、Ruff、MCP 与制品核验通过。0.6.0 仍为开发版，未安装、未上传、未正式发布。
 

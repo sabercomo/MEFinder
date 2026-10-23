@@ -1,3 +1,18 @@
+2026-10-23：**v0.6.0 正式发布。** GitHub Release [`v0.6.0`](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.0) 已转为发布，tag 指向 `49241fc`（产品源码 `2371f60`）。12 个附件状态均为 uploaded，六个二进制的远端 digest 与本地 SHA-256 一致。本版修复 MinerU 跨页合并造成的部分 PDF 原句定位页码错位，并完成「关于与更新」设置页美化；已有文献需按下方升级说明从缓存刷新后应用页码修复。
+
+发布门禁：Windows 安装版与便携版各通过全量 2,825 项 unittest（52 项环境跳过）；macOS arm64 通过 2,825 项（39 项跳过），macOS x86_64 通过 2,825 项（44 项跳过）。Windows Chrome 回归 16 项、about 页 3 项，Ruff(F)、JavaScript 语法、MCP STDIO、签名和制品核验通过。Windows 安装 / 升级 / 卸载冒烟与两平台冻结 GUI 人工验收仍未执行；x86_64 包通过 Rosetta 构建，未在 Intel 真机验证。详细验证见 [v0.6.0 版本记录](release-notes-0.6.0.md)。
+
+| 文件 | 字节数 | SHA-256 |
+|---|---:|---|
+| `MEFinder-v0.6.0-windows-setup.exe` | 82,513,410 | `052fd6d57ce7259fd9552d2b627d36941218e11024f03cc2dab0feaf917a27db` |
+| `MEFinder-v0.6.0-windows-portable.zip` | 98,284,307 | `557ffc04205c3f92c12a28adb25d7020c9ba55b3b9c9a55deabfe5b783fca334` |
+| `MEFinder-v0.6.0-macos-arm64.dmg` | 104,330,119 | `9a505a443c23304720f6da96587b4f8836a11cabafb8808147568b47ca6d073d` |
+| `MEFinder-v0.6.0-macos-arm64.zip` | 96,291,408 | `0c26ecba3d375acb3d7acc9c5bdb5fb143b089afa026fbec97a157fe976fcf01` |
+| `MEFinder-v0.6.0-macos-x86_64.dmg` | 108,662,028 | `b168c654ce28a1d1bbdb2796261bf59a9aec14f7f86ef99a38a9af34cffe43bc` |
+| `MEFinder-v0.6.0-macos-x86_64.zip` | 102,826,401 | `723ea5b41281070c2e05344414e996c97d554ca9f94ecd16852b346a216634df` |
+
+每个二进制文件均附同名 `.sha256.txt`。
+
 2026-10-20：**v0.5.9 正式发布。** GitHub Release [`v0.5.9`](https://github.com/sabercomo/MEFinder/releases/tag/v0.5.9) 已由草稿转为发布，tag 指向 `19fa89e`（产品源码 `9fe9b03`，两者 `src/` 逐文件相同，差异只有测试入口修复与文档）；12 个资产（四平台制品加六个 SHA-256 校验文件）状态均为 uploaded，digest 与本地实算一致。发布文案见下方 v0.5.9 条目。Windows 安装 / 升级 / 卸载的自动冒烟与安装后人工验收、反馈用户实机验收仍未进行；远端 CI 在 `9fe9b03` 上因 Windows 测试入口的命令行长度限制报一处 error（已由 `19fa89e` 修掉），在 `19fa89e` 上浏览器回归一项失败，而该产品源码在 `9fe9b03` 的 CI 浏览器回归为通过，正在复跑确认是否为时序抖动。
 
 2026-10-20：已按 `9fe9b03` 重新构建包含本地 OCR Windows 448 修复的安装版与便携版，替换 [v0.5.9 GitHub 草稿](https://github.com/sabercomo/MEFinder/releases/tag/untagged-65703827561537269ea3) 中四个 Windows 文件；两次官方构建各通过全量 2,790 项 unittest，制品与远端 SHA-256 核验通过，草稿保持未发布。反馈用户实机仍待验收。
