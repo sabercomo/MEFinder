@@ -16,21 +16,26 @@ PACKAGE = ROOT / "src" / "me_finder"
 # 移入 persistence/structured_reader_reads.py、translation_work_reads.py,移出基线。
 SQLITE_CONNECT_OUTSIDE_PERSISTENCE: dict[str, int] = {}
 
-SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE = {
-    "application/import_orchestrator.py",
-    "application/literature_verification_service.py",
-    "application/parallel_passage_service.py",
-    "application/script_search.py",
-    "data_location.py",
-    "document_deletion.py",
-    "document_export_service.py",
-    "edition_folio_anchors.py",
-    "index_publisher.py",
-    "indexer.py",
-    "large_document/job_ledger.py",
-    "parser_statistics.py",
-    "search_assembly.py",
-    "search_recall.py",
+SQL_EXECUTE_OUTSIDE_PERSISTENCE = {
+    "data_location.py": 5,
+    "document_deletion.py": 1,
+    "document_export_service.py": 10,
+    "edition_folio_anchors.py": 4,
+    "index_publisher.py": 1,
+    "indexer.py": 1,
+    "large_document/job_ledger.py": 43,
+    "parser_statistics.py": 3,
+    "search_assembly.py": 2,
+    "search_recall.py": 2,
+}
+
+# 已核实的非 SQL 调用只按文件 + 完整调用目标豁免，不放行整个模块。
+# 其余 execute* 一律计入棘轮；新增同名服务需要审阅后登记，避免漏掉动态 SQL。
+NON_SQL_EXECUTE_TARGETS = {
+    "application/import_orchestrator.py": {"self._parser_executor.execute"},
+    "application/literature_verification_service.py": {"SearchService.execute"},
+    "application/parallel_passage_service.py": {"SearchService.execute"},
+    "application/script_search.py": {"SearchService.execute"},
 }
 
 # C3: direct thread creation must have an explicit lifecycle owner. Startup
@@ -49,11 +54,11 @@ THREAD_CREATION_OWNERS = {
 }
 
 
-def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], set[str]]:
-    """Return ``sqlite3.connect`` counts and ``.execute*`` files per module."""
+def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], dict[str, int]]:
+    """Count connection and execute calls, excluding reviewed service targets."""
 
     connects: dict[str, int] = {}
-    executes: set[str] = set()
+    executes: dict[str, int] = {}
     for path in sorted(PACKAGE.rglob("*.py")):
         relative = path.relative_to(PACKAGE)
         if "__pycache__" in relative.parts or relative.parts[0] == "persistence":
@@ -72,7 +77,8 @@ def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], set[str]]:
             ):
                 connects[name] = connects.get(name, 0) + 1
             if func.attr in {"execute", "executemany", "executescript"}:
-                executes.add(name)
+                if ast.unparse(func) not in NON_SQL_EXECUTE_TARGETS.get(name, set()):
+                    executes[name] = executes.get(name, 0) + 1
     return connects, executes
 
 
@@ -114,13 +120,13 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     definitions.append(path.relative_to(PACKAGE).as_posix())
         self.assertEqual(definitions, ["persistence/connection.py"])
 
-    def test_sql_execute_files_outside_persistence_only_shrink(self) -> None:
+    def test_sql_execute_calls_outside_persistence_only_shrink(self) -> None:
         _connects, executes = _sqlite_usage_outside_persistence()
         self.assertEqual(
             executes,
-            SQL_EXECUTE_FILES_OUTSIDE_PERSISTENCE,
-            "persistence 之外不得新增执行 SQL 的模块;SQL 请收进 persistence 仓储。"
-            "某文件清零后请从本文件基线删掉它。",
+            SQL_EXECUTE_OUTSIDE_PERSISTENCE,
+            "persistence 之外不得新增执行 SQL 的调用点;SQL 请收进 persistence 仓储。"
+            "迁走调用后请下调计数，清零后删项；非 SQL execute 调用须逐目标核实。",
         )
 
     def test_web_boundary_stays_split_by_responsibility(self) -> None:
