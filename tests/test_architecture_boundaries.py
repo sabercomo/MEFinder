@@ -25,8 +25,6 @@ SQL_EXECUTE_OUTSIDE_PERSISTENCE = {
     "indexer.py": 1,
     "large_document/job_ledger.py": 43,
     "parser_statistics.py": 3,
-    "search_assembly.py": 2,
-    "search_recall.py": 2,
 }
 
 # 已核实的非 SQL 调用只按文件 + 完整调用目标豁免，不放行整个模块。
@@ -202,14 +200,19 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 不再扫描 SQLite 后端从不加载的内存段落表），SQL 下沉到
             # persistence/passage_reads.py 与 paragraph_scope.py；
             # search_recall.py 的上限随之只降不升。
-            "search_recall.py": 475,
+            "search_recall.py": 400,
             # 2026-09-30：两字扫描改为截断后才解析段落、子串计重合度（gram_overlap）；
             # 同日改为先读排序列、截断后按 rowid 取整行（persistence.passage_reads）。
             "search_recall_passages.py": 149,
             "search_scoring.py": 250,
             "search_anchors.py": 240,
             "search_citation.py": 140,
-            "search_assembly.py": 400,
+            "search_assembly.py": 365,
+            "persistence/passage_reads.py": 245,
+            # 0.6.1：导入编排、原生解析、段落/页码锚点构造分别归属。
+            "pdf_extractors.py": 900,
+            "pdf_native.py": 580,
+            "pdf_paragraphs.py": 440,
             # 2026-10-01：普通版式跨页段落按命中页收窄引用页码，独立成模块。
             "search_cross_page.py": 70,
             "search_contract.py": 60,

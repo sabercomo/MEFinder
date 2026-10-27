@@ -139,7 +139,7 @@ class _Base(unittest.TestCase):
             used.append(strings)
             return original(strings)
 
-        with patch("src.me_finder.search_recall.short_gram_prefilter", side_effect=recording):
+        with patch("src.me_finder.persistence.passage_reads.short_gram_prefilter", side_effect=recording):
             with_index = self.responses(prefilter=True)
         self.assertTrue(used, "the prefilter was never exercised")
         plain = self.responses(prefilter=False)

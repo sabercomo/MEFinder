@@ -907,7 +907,7 @@ class VisionAPIParserTests(unittest.TestCase):
                 {"parser_results": {"manifest": str(manifest_path)}}
             )
             with patch(
-                "src.me_finder.pdf_extractors.load_pymupdf",
+                "src.me_finder.pdf_native.load_pymupdf",
                 return_value=None,
             ):
                 profile = mineru_profile(pdf, segments)

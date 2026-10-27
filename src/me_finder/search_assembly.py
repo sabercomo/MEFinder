@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Protocol, Sequence, Tuple
 from .citations import build_citation_formats
 from .normalization import trim_for_display
 from .page_display import build_page_display, resolve_citation_page
+from .persistence.passage_reads import read_search_context_rows
 from .search_anchors import page_match_spans, resolve_spread_hit
 from .search_citation import build_copy_text, citation_metadata, hit_page
 from .search_cross_page import narrow_to_cross_page_side, resolve_cross_page_side
@@ -275,39 +276,15 @@ def sql_context(db: object, paragraph: Dict[str, object], before: bool) -> List[
         return []
     source_file_id = str(paragraph.get("source_file_id") or "")
     volume_id = paragraph.get("volume_id")
-    source_column = "source_file_id" if source_file_id else "volume_id"
-    source_value = source_file_id if source_file_id else volume_id
-    source_predicate = (
-        f"{source_column} IS NULL" if source_value is None else f"{source_column} = ?"
-    )
-    source_args = [] if source_value is None else [source_value]
-
     if str(paragraph.get("source_type") or "word") == "pdf":
         bounds = pdf_page_bounds(paragraph)
         if bounds is None:
             return []
         start_page, end_page = bounds
-        paragraph_index = int(paragraph.get("paragraph_index") or 0)
-        if before:
-            position_predicate = "paragraph_index < ?"
-            order = "DESC"
-        else:
-            position_predicate = "paragraph_index > ?"
-            order = "ASC"
-        position_index = (
-            "idx_paragraphs_source_position"
-            if source_file_id
-            else "idx_paragraphs_volume_position"
-        )
-        sql = (
-            "/* pdf_context */ "
-            "SELECT p.paragraph_id, p.text_raw, p.pdf_page_start_index, "
-            "p.pdf_page_end_index, p.payload_json "
-            f"FROM paragraphs AS p INDEXED BY {position_index} "
-            f"WHERE p.{source_predicate} AND p.source_type = 'pdf' "
-            f"AND p.{position_predicate} ORDER BY p.paragraph_index {order}"
-        )
-        for row in db.execute(sql, [*source_args, paragraph_index]):
+        for row in read_search_context_rows(
+            db, source_file_id, volume_id, int(paragraph.get("paragraph_index") or 0),
+            before, is_pdf=True,
+        ):
             candidate = sql_context_candidate(row)
             candidate_bounds = pdf_page_bounds(candidate)
             if not is_real_pdf_page(candidate, candidate_bounds):
@@ -319,20 +296,10 @@ def sql_context(db: object, paragraph: Dict[str, object], before: bool) -> List[
                 return [context_item(candidate)]
         return []
 
-    paragraph_index = int(paragraph.get("paragraph_index") or 0)
-    if before:
-        order = "DESC"
-        predicate = "paragraph_index < ?"
-    else:
-        order = "ASC"
-        predicate = "paragraph_index > ?"
-    sql = (
-        "SELECT paragraph_id, text_raw FROM paragraphs "
-        f"WHERE {source_predicate} AND source_type != 'pdf' "
-        f"AND trim(text_raw) != '' AND {predicate} "
-        f"ORDER BY paragraph_index {order} LIMIT 1"
-    )
-    row = db.execute(sql, [*source_args, paragraph_index]).fetchone()
+    row = read_search_context_rows(
+        db, source_file_id, volume_id, int(paragraph.get("paragraph_index") or 0),
+        before, is_pdf=False,
+    ).fetchone()
     if row is None:
         return []
     return [

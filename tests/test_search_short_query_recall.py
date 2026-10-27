@@ -17,38 +17,29 @@ from pathlib import Path
 
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
+from src.me_finder.persistence.passage_reads import _instr_eligibility_clause
 from src.me_finder.search import SearchEngine
 from src.me_finder.search_recall import CandidateRecall
 
 
 class InstrEligibilityClauseTests(unittest.TestCase):
-    def _recall(self) -> CandidateRecall:
-        return CandidateRecall(
-            db_provider=lambda: None,
-            backend="sqlite",
-            paragraphs=[],
-            ngram_index={},
-            ensure_fts=lambda: False,
-        )
-
     def test_whole_library_search_suppresses_the_eligibility_index(self) -> None:
-        clause = self._recall()._instr_eligibility_clause("all", None, None)
+        clause = _instr_eligibility_clause("all", None, None)
         self.assertEqual(clause, "+p.eligible_for_search = 1")
 
     def test_scoped_searches_keep_the_eligibility_index(self) -> None:
-        recall = self._recall()
         # source_type filter, single-document filter, and an explicit member set
         # are all selective; none may suppress the index.
         self.assertEqual(
-            recall._instr_eligibility_clause("pdf", None, None),
+            _instr_eligibility_clause("pdf", None, None),
             "p.eligible_for_search = 1",
         )
         self.assertEqual(
-            recall._instr_eligibility_clause("all", "pdf-a", None),
+            _instr_eligibility_clause("all", "pdf-a", None),
             "p.eligible_for_search = 1",
         )
         self.assertEqual(
-            recall._instr_eligibility_clause("all", None, frozenset({"pdf-a"})),
+            _instr_eligibility_clause("all", None, frozenset({"pdf-a"})),
             "p.eligible_for_search = 1",
         )
 

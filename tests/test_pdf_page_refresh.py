@@ -64,7 +64,7 @@ class PageTextRefreshTests(unittest.TestCase):
         )
 
     def patched(self):
-        stack = patch("src.me_finder.pdf_extractors.load_pymupdf", return_value=None)
+        stack = patch("src.me_finder.pdf_native.load_pymupdf", return_value=None)
         mapping = patch("src.me_finder.pdf_extractors.PageMappingService.infer", return_value=UNCALIBRATED)
 
         class Both:

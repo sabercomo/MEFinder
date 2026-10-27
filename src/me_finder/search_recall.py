@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from .database import (
-    PARAGRAPH_SELECT_COLUMNS,
     paragraph_from_database_row,
 )
 from .normalization import (
@@ -21,11 +20,10 @@ from .normalization import (
     plain_spans,
     punctuationless_text,
 )
-from .persistence.paragraph_scope import source_filter_clause
 from .persistence.passage_reads import (
     RANK_COLUMNS, read_bm25_passage_rows, read_gram_passage_rows, read_paragraph_rows,
+    read_exact_candidate_rows, read_substring_candidate_rows,
 )
-from .persistence.short_gram_index import short_gram_prefilter
 from .search_contract import (
     FUZZY_RESCORE_LIMIT,
     MAX_FTS_QUERY_TRIGRAMS,
@@ -140,43 +138,6 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
         quoted = ['"' + gram.replace('"', '""') + '"' for gram in grams]
         return f" {operator} ".join(quoted)
 
-    @staticmethod
-    def _limit_sql(sql: str, candidate_budget: Optional[int]) -> str:
-        if candidate_budget is None:
-            return sql
-        return sql + f" LIMIT {max(1, int(candidate_budget)) + 1}"
-
-    def _instr_eligibility_clause(
-        self, source_type: str, source_file_id: Optional[str], scope: Scope
-    ) -> str:
-        """Eligibility predicate for the non-FTS ``instr`` substring scans.
-        On a whole-library short-query scan a unary ``+`` suppresses the
-        non-selective ``idx_paragraphs_searchable`` so SQLite walks the table in
-        rowid order and ``LIMIT budget+1`` stops early instead of temp-B-tree
-        sorting every match — same rows, faster path; a scoped search keeps the
-        selective index. See reports/performance-short-query-recall-2026-09-12.md.
-        """
-
-        if source_type == "all" and not source_file_id and scope is None:
-            return "+p.eligible_for_search = 1"
-        return "p.eligible_for_search = 1"
-
-    def _short_gram_clause(self, strings: List[str]) -> Tuple[str, List[object]]:
-        """Superset prefilter for the non-FTS scans; empty until the index is ready."""
-
-        return short_gram_prefilter(strings) if self._short_gram_ready() else ("", [])
-
-    def sql_source_filter(
-        self,
-        source_type: str,
-        source_file_id: Optional[str],
-        scope: Scope,
-        alias: str = "",
-    ) -> Tuple[str, List[object]]:
-        """Scope predicate for every SQLite pass; the SQL lives in persistence."""
-
-        return source_filter_clause(source_type, source_file_id, scope, alias)
-
     def _sql_exact_pass(
         self,
         query: str,
@@ -191,33 +152,13 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
         if self.db() is None:
             return False
         fts_query = self.fts_match_expression(q_plain, "AND")
-        source_clause, source_args = self.sql_source_filter(source_type, source_file_id, scope, "p")
-        if fts_query:
-            sql = (
-                f"SELECT {PARAGRAPH_SELECT_COLUMNS} "
-                "FROM paragraphs_fts JOIN paragraphs p "
-                "ON p.rowid = paragraphs_fts.rowid "
-                "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
-                + source_clause
-                + " AND (instr(p.text_raw, ?) > 0 OR instr(p.normalized_text, ?) > 0) "
-                "ORDER BY p.rowid"
-            )
-            args: List[object] = [fts_query, *source_args, query, q_norm]
-        else:
-            gram_clause, gram_args = self._short_gram_clause([query, q_norm])
-            sql = (
-                f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p WHERE "
-                + self._instr_eligibility_clause(source_type, source_file_id, scope)
-                + source_clause
-                + gram_clause
-                + " AND (instr(p.text_raw, ?) > 0 OR instr(p.normalized_text, ?) > 0) "
-                "ORDER BY p.rowid"
-            )
-            args = [*source_args, *gram_args, query, q_norm]
+        rows = read_exact_candidate_rows(
+            self.db(), query, q_norm, fts_query, source_type, source_file_id, scope,
+            candidate_budget, not fts_query and self._short_gram_ready(),
+        )
         processed = 0
         truncated = False
-        sql = self._limit_sql(sql, candidate_budget)
-        for row in self.db().execute(sql, args):
+        for row in rows:
             if candidate_budget is not None and processed >= candidate_budget:
                 truncated = True
                 break
@@ -251,31 +192,13 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
         if self.db() is None or not query or column not in {"compact_text", "plain_text"}:
             return False
         fts_query = self.fts_match_expression(q_plain, "AND")
-        source_clause, source_args = self.sql_source_filter(source_type, source_file_id, scope, "p")
-        if fts_query:
-            sql = (
-                f"SELECT {PARAGRAPH_SELECT_COLUMNS} "
-                "FROM paragraphs_fts JOIN paragraphs p "
-                "ON p.rowid = paragraphs_fts.rowid "
-                "WHERE paragraphs_fts MATCH ? AND p.eligible_for_search = 1"
-                + source_clause
-                + f" AND instr(p.{column}, ?) > 0 ORDER BY p.rowid"
-            )
-            args: List[object] = [fts_query, *source_args, query]
-        else:
-            gram_clause, gram_args = self._short_gram_clause([query])
-            sql = (
-                f"SELECT {PARAGRAPH_SELECT_COLUMNS} FROM paragraphs p WHERE "
-                + self._instr_eligibility_clause(source_type, source_file_id, scope)
-                + source_clause
-                + gram_clause
-                + f" AND instr(p.{column}, ?) > 0 ORDER BY p.rowid"
-            )
-            args = [*source_args, *gram_args, query]
+        rows = read_substring_candidate_rows(
+            self.db(), query, column, fts_query, source_type, source_file_id, scope,
+            candidate_budget, not fts_query and self._short_gram_ready(),
+        )
         processed = 0
         truncated = False
-        sql = self._limit_sql(sql, candidate_budget)
-        for row in self.db().execute(sql, args):
+        for row in rows:
             if candidate_budget is not None and processed >= candidate_budget:
                 truncated = True
                 break

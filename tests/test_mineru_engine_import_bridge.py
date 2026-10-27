@@ -211,7 +211,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             document = load_import_config(config_path)["documents"][0]
             with (
                 patch(
-                    "src.me_finder.pdf_extractors.load_pymupdf",
+                    "src.me_finder.pdf_native.load_pymupdf",
                     return_value=None,
                 ),
                 patch(
