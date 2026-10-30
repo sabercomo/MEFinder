@@ -38,8 +38,8 @@ from dataclasses import dataclass, field
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 
-from .auto_page_mapping import layout_bbox_scale, normalized_page_bbox
-from .document_heading import normalize_heading_text
+from ..auto_page_mapping import layout_bbox_scale, normalized_page_bbox
+from ..document_heading import normalize_heading_text
 
 
 # --------------------------------------------------------------------------- #

@@ -14,9 +14,9 @@ import re
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Set
 
-from .document_export import DocumentExportError
-from .export_page_reconstruction import attach_export_layout, reconstruct_export_pages
-from .markdown_export_normalize import page_scale
+from .export.document import DocumentExportError
+from .export.page_reconstruction import attach_export_layout, reconstruct_export_pages
+from .export.normalize import page_scale
 from .persistence.parser_job_reads import read_slice_job_id
 
 SPLIT_METHOD = "mineru_layout_spans"

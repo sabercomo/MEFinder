@@ -19,7 +19,7 @@ from pathlib import Path
 from src.me_finder.app_context import AppContext, AppPaths
 from src.me_finder.application.document_import_coordinator import DocumentImportCoordinator
 from src.me_finder.database import build_database, replace_source_in_database
-from src.me_finder.document_export import (
+from src.me_finder.export.document import (
     DocumentExportError,
     document_manifest,
     export_document_zip,

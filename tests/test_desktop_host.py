@@ -138,9 +138,9 @@ class BusinessPagesStayPlatformFreeTests(unittest.TestCase):
         "http_routes.py",
         "application/search_service.py",
         "application/script_search.py",
-        "document_export_service.py",
-        "markdown_export.py",
-        "epub_export.py",
+        "export/service.py",
+        "export/markdown.py",
+        "export/epub.py",
     )
 
     def test_business_modules_never_reference_sys_platform(self) -> None:

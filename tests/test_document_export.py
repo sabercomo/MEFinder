@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
-from src.me_finder.document_export import (
+from src.me_finder.export.document import (
     DOCUMENT_SCHEMA_VERSION,
     DocumentExportError,
     document_manifest,
@@ -88,7 +88,7 @@ class DocumentExportTests(unittest.TestCase):
                 raise AssertionError("the exporter materialized the full page list")
             return original_dumps(value, *args, **kwargs)
 
-        with mock.patch("src.me_finder.document_export.json.dumps", side_effect=reject_page_lists):
+        with mock.patch("src.me_finder.export.document.json.dumps", side_effect=reject_page_lists):
             export_document_zip(path, self.manifest, pages())
         self.assertEqual(emitted, [1, 2])
         self.assertEqual([p["physical_pdf_page"] for p in iter_document_pages(path)], [1, 2])

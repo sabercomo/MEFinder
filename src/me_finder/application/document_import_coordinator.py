@@ -20,7 +20,7 @@ from typing import (
 
 from ..app_context import AppPaths
 from ..chunked_upload import ChunkedUploadStore
-from ..document_export import DocumentExportError, extract_embedded_source_pdf
+from ..export.document import DocumentExportError, extract_embedded_source_pdf
 from ..document_package_import import (
     DocumentPackageImportError,
     build_document_package_records,

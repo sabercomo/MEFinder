@@ -18,7 +18,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from .auto_page_mapping import normalize_page_candidate
 from .citations import build_citation_formats
 from .database import open_database
-from .markdown_export_normalize import (
+from .export.normalize import (
     ExportOptions,
     build_page_artifact_profile,
     iter_decoration_spans,

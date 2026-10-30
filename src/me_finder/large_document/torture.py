@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence
 
-from ..document_export import document_manifest
+from ..export.document import document_manifest
 from ..mineru_api import resolve_mineru_config_path
 from ..mineru_local_provider import MinerULocalConfig, MinerULocalProvider
 from ..mineru_provider import MinerUCloudProvider

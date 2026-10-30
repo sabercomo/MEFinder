@@ -14,9 +14,9 @@ import json
 from pathlib import Path
 from typing import Mapping, Optional
 
-from .auto_page_mapping import normalized_page_bbox
-from .document_export import DocumentExportError
-from .markdown_export_normalize import (
+from ..auto_page_mapping import normalized_page_bbox
+from .document import DocumentExportError
+from .normalize import (
     block_role, blocks_aligned_with_text, heading_level, page_scale,
     physical_page_number, printed_page_raw,
 )

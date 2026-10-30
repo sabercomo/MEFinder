@@ -10,10 +10,10 @@ from __future__ import annotations
 import re
 from typing import Iterable, List, Mapping, Optional
 
-from .export_footnotes import (
+from .footnotes import (
     Footnote, FootnoteText, NormalizedDocument, normalize_document_export, normalize_document_footnotes,
 )
-from .markdown_export_normalize import (
+from .normalize import (
     ExportOptions,
     PageArtifactProfile,
     PageMarker,

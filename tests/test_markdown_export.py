@@ -8,12 +8,12 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.database import build_database
-from src.me_finder.document_export_service import (
+from src.me_finder.export.service import (
     IndexedDocumentNotFound,
     UnsupportedDocumentExport,
     export_indexed_pdf_markdown,
 )
-from src.me_finder.markdown_export import (
+from src.me_finder.export.markdown import (
     document_to_markdown,
     page_to_markdown,
     safe_markdown_filename,
@@ -117,7 +117,7 @@ class MarkdownExportCoreTests(unittest.TestCase):
         self.assertIn("另一页", plain)
 
     def test_full_marker_mode_keeps_pdf_page(self) -> None:
-        from src.me_finder.markdown_export_normalize import ExportOptions
+        from src.me_finder.export.normalize import ExportOptions
 
         page = {
             "pdf_page_index": 30,
@@ -133,7 +133,7 @@ class MarkdownExportCoreTests(unittest.TestCase):
         self.assertIn("<!-- pdf_page: 31 | printed_page: 23 -->", markdown)
 
     def test_none_marker_mode_emits_no_anchor(self) -> None:
-        from src.me_finder.markdown_export_normalize import ExportOptions
+        from src.me_finder.export.normalize import ExportOptions
 
         page = {
             "pdf_page_index": 30,
@@ -640,7 +640,7 @@ def footnote_fixture():
 
 class FootnoteNormalizationTests(unittest.TestCase):
     def test_parent_boundary_flushes_notes_even_without_a_following_chapter(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_export
+        from src.me_finder.export.footnotes import Footnote, normalize_document_export
 
         for parent in ("篇", "部"):
             for next_chapter in (False, True):
@@ -668,7 +668,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
 
     def test_located_heading_moves_before_its_body_without_sorting_paragraphs(self):
         from src.me_finder.document_heading import apply_heading_assignments
-        from src.me_finder.export_footnotes import Footnote, normalize_document_export
+        from src.me_finder.export.footnotes import Footnote, normalize_document_export
 
         for source, title in (("parser", "第一章 方法"), ("document_toc", "前言")):
             with self.subTest(source=source):
@@ -701,7 +701,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
                 self.assertLess(markdown.index("# " + title), markdown.index("本节第一段"))
 
     def test_heading_without_unambiguous_geometry_does_not_move(self):
-        from src.me_finder.export_footnotes import normalize_document_export
+        from src.me_finder.export.footnotes import normalize_document_export
 
         for bbox in (None, [100, 490, 400, 530], [910, 200, 980, 240]):
             with self.subTest(bbox=bbox):
@@ -712,13 +712,13 @@ class FootnoteNormalizationTests(unittest.TestCase):
                 self.assertEqual([i.text for i in doc.items if hasattr(i, "text")], ["保持正文位置。", "第一章"])
 
     def test_part_flush_does_not_pull_later_references_forward_or_reset_numbers(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_export
+        from src.me_finder.export.footnotes import Footnote, normalize_document_export
 
         pages = [_page(i, str(i + 1), [
             _block(title, level=1), _block(f"正文{i}①。", bbox=MID),
             _block(f"① 注释{i}。", role="page_footnote", bbox=BOT),
         ]) for i, title in enumerate(("第一篇", "第二篇"))]
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
             doc = normalize_document_export(pages)
         self.assertEqual([i.text for i in doc.items if hasattr(i, "text")], [
             "第一篇", "正文0①。", "注释0。", "第二篇", "正文1①。", "注释1。",
@@ -726,14 +726,14 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertEqual([i.display_number for i in doc.items if isinstance(i, Footnote)], [1, 2])
 
     def test_explicit_cross_page_source_is_rejected_without_splitting_or_pairing(self):
-        from src.me_finder.export_footnotes import normalize_document_export
+        from src.me_finder.export.footnotes import normalize_document_export
         for position in (1, 2):
             pages = [_page(0, "1", [
                 _block("第一章", level=1), _block("本页正文和合并来的文字①。", bbox=MID),
                 _block("① 注释原文", bbox=BOT, role="page_footnote"),
             ])]
             pages[0]["blocks"][position]["cross_page"] = True
-            with self.subTest(position=position), self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+            with self.subTest(position=position), self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
                 doc = normalize_document_export(pages)
             self.assertEqual(doc.footnote_report["matched_ref_count"], 0)
             self.assertEqual(doc.footnote_report["unresolved_reason"], {
@@ -742,8 +742,8 @@ class FootnoteNormalizationTests(unittest.TestCase):
             self.assertEqual([i.text for i in doc.items if hasattr(i, "text")], [b["text"] for b in pages[0]["blocks"]])
 
     def test_100_parser_headings_are_running_headers_not_chapters(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_export
-        from src.me_finder.markdown_export_normalize import ExportOptions
+        from src.me_finder.export.footnotes import Footnote, normalize_document_export
+        from src.me_finder.export.normalize import ExportOptions
 
         for role in ("header", "text"):
             pages = [_page(i, str(i + 1), [
@@ -755,7 +755,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
                 header = page["blocks"][0]
                 header["text_level"] = header.pop("document_heading_level")
             original = deepcopy(pages)
-            with self.subTest(role=role), self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+            with self.subTest(role=role), self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
                 doc = normalize_document_export(pages)
                 kept = normalize_document_export(pages, options=ExportOptions(remove_running_headers=False))
             self.assertEqual([n.display_number for n in doc.items if isinstance(n, Footnote)], list(range(1, 101)))
@@ -767,7 +767,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
             self.assertEqual(pages, original)
 
     def test_report_counts_and_locations_preserve_unresolved_entities(self):
-        from src.me_finder.export_footnotes import normalize_document_export
+        from src.me_finder.export.footnotes import normalize_document_export
 
         pages = [_page(10, "4", [
             _block("第一章 方法", level=1),
@@ -776,7 +776,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
             _block("③ 不猜多引用", role="page_footnote", bbox=BOT),
             _block("④ 没有引用", role="page_footnote", bbox=BOT),
         ])]
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
             doc = normalize_document_export(pages)
         report = doc.footnote_report
         self.assertEqual([report[k] for k in ("candidate_ref_count", "matched_ref_count", "unresolved_ref_count")], [4, 1, 3])
@@ -798,7 +798,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
         json.dumps(report, ensure_ascii=False)  # complete report is transport-ready
 
     def test_scope_policy_uses_chapters_not_heading_depth_or_note_count(self):
-        from src.me_finder.export_footnotes import normalize_document_export
+        from src.me_finder.export.footnotes import normalize_document_export
 
         pages = footnote_fixture()
         # Deliberately flat parser styling for parts, chapters and sections.
@@ -816,7 +816,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertIn(("第一节 小节不重置", 3), headings)
 
     def test_heading_folio_cleanup_and_scope_use_the_same_title(self):
-        from src.me_finder.export_footnotes import normalize_document_export
+        from src.me_finder.export.footnotes import normalize_document_export
         pages = [_page(i, str(i+1), [
             _block(f"{i+1} 第{number}章 方法", level=1), _block("正文①。", bbox=MID),
             _block("① 注释", role="page_footnote", bbox=BOT),
@@ -829,7 +829,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertIn("# 第二章 方法", markdown)
 
     def test_repeated_notes_report_four_candidates_even_when_text_is_identical(self):
-        from src.me_finder.export_footnotes import normalize_document_export
+        from src.me_finder.export.footnotes import normalize_document_export
 
         for text in ("① 同上。", "① 完全相同的文献说明。"):
             for tagged in (True, False):
@@ -837,15 +837,15 @@ class FootnoteNormalizationTests(unittest.TestCase):
                     _block("正文①。", bbox=MID),
                     _block(text, bbox=BOT, role="page_footnote" if tagged else "text"),
                 ]) for i in range(4)]
-                with self.subTest(text=text, tagged=tagged), self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+                with self.subTest(text=text, tagged=tagged), self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
                     report = normalize_document_export(pages).footnote_report
                 self.assertEqual(report["candidate_note_count"], 4)
                 self.assertEqual(report["matched_note_count"], 4)
                 self.assertEqual(len({r["note_id"] for r in report["candidates"] if r["kind"] == "note"}), 4)
 
     def test_report_and_matching_do_not_depend_on_exported_page_markers(self):
-        from src.me_finder.export_footnotes import normalize_document_export
-        from src.me_finder.markdown_export_normalize import ExportOptions
+        from src.me_finder.export.footnotes import normalize_document_export
+        from src.me_finder.export.normalize import ExportOptions
 
         reports = [normalize_document_export(footnote_fixture(), options=ExportOptions(page_marker_mode=mode)).footnote_report
                    for mode in ("none", "printed", "full")]
@@ -854,8 +854,8 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertEqual(reports[1]["candidates"][0]["source_physical_page"], 10)
 
     def test_page_resets_become_chapter_numbers_in_reference_order(self):
-        from src.me_finder.export_footnotes import Footnote, FootnoteText, normalize_document_footnotes
-        from src.me_finder.markdown_export_normalize import ExportOptions
+        from src.me_finder.export.footnotes import Footnote, FootnoteText, normalize_document_footnotes
+        from src.me_finder.export.normalize import ExportOptions
 
         pages = footnote_fixture()
         before = deepcopy(pages)
@@ -877,7 +877,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
                 self.assertEqual([item for item in other if isinstance(item, Footnote)], notes)
 
     def test_markdown_definitions_move_to_chapter_end_and_preserve_paragraphs(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         pages = footnote_fixture()
         notes = [item for item in normalize_document_footnotes(pages) if isinstance(item, Footnote)]
@@ -894,7 +894,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertNotIn("pdf_page", markdown)
 
     def test_repeated_footnotes_are_protected_before_artifact_detection(self):
-        from src.me_finder.markdown_export_normalize import build_page_artifact_profile, iter_export_page_blocks
+        from src.me_finder.export.normalize import build_page_artifact_profile, iter_export_page_blocks
 
         for tagged in (True, False):
             with self.subTest(tagged=tagged):
@@ -906,18 +906,18 @@ class FootnoteNormalizationTests(unittest.TestCase):
                 self.assertFalse(profile.running_footers)
                 kept = [b.text for p in pages for b in iter_export_page_blocks(p, profile=profile)]
                 self.assertEqual(kept.count("① 同上。"), 4)
-                with self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+                with self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
                     markdown = document_to_markdown(pages)
                 self.assertEqual(markdown.count("同上。"), 4)
 
     def test_missing_note_is_not_paired_by_order(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         page = _page(0, "1", [
             _block("第一章", level=1), _block("正文①②③。"),
             _block("① 注甲", role="page_footnote"), _block("③ 注丙", role="page_footnote"),
         ])
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
             items = normalize_document_footnotes([page])
             markdown = document_to_markdown([page])
         self.assertIn("orphan_ref", " ".join(logs.output))
@@ -927,16 +927,16 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertEqual(markdown.count("注丙"), 1)
 
     def test_repeated_raw_markers_are_ambiguous_without_explicit_link_identity(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         page = _page(0, "1", [_block("正文①。合并进来的另一页正文①。"), _block("① 本页注释", role="page_footnote")])
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
             items = normalize_document_footnotes([page])
         self.assertFalse(any(isinstance(item, Footnote) for item in items))
         self.assertIn("ambiguous_references", " ".join(logs.output))
 
     def test_mineru_superscript_wrapper_is_replaced_whole_but_math_is_untouched(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         page = _page(0, "1", [
             _block("第一章", level=1), _block("正文 $^{①}$。公式 $x^{②}$ 不变。"),
@@ -950,19 +950,19 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertIn("公式 $x^{②}$ 不变。", markdown)
 
     def test_following_note_only_page_indicates_uncertain_page_flow(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         pages = [
             _page(0, "1", [_block("第一章", level=1), _block("正文①。"), _block("① 注释", role="page_footnote")]),
             _page(1, "2", [_block("导论", role="header"), _block("② 只有注释，没有正文", role="page_footnote")]),
         ]
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
             items = normalize_document_footnotes(pages)
         self.assertFalse(any(isinstance(item, Footnote) for item in items))
         self.assertIn("uncertain_page_flow", " ".join(logs.output))
 
     def test_ambiguous_and_unsupported_notes_stay_in_place(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         cases = [
             ("ambiguous_definitions", [_block("① 注甲", role="page_footnote"), _block("① 注乙", role="page_footnote")]),
@@ -974,33 +974,33 @@ class FootnoteNormalizationTests(unittest.TestCase):
         for reason, definitions in cases:
             with self.subTest(reason=reason):
                 page = _page(0, "1", [_block("第一章", level=1), _block("正文①。"), *definitions])
-                with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+                with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
                     items = normalize_document_footnotes([page])
                 self.assertFalse(any(isinstance(item, Footnote) for item in items))
                 self.assertIn(reason, " ".join(logs.output))
                 self.assertEqual([item.text for item in items if hasattr(item, "text")], [b["text"] for b in page["blocks"]])
 
     def test_no_matching_across_physical_pages_even_with_repeated_printed_page(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         pages = [
             _page(0, "1", [_block("第一章", level=1), _block("前页正文①。")]),
             _page(1, "1", [_block("后页正文。"), _block("① 无对应标记", role="page_footnote")]),
         ]
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
             items = normalize_document_footnotes(pages)
         self.assertFalse(any(isinstance(item, Footnote) for item in items))
         self.assertIn("orphan_ref", " ".join(logs.output))
         self.assertIn("orphan_note", " ".join(logs.output))
 
     def test_cross_page_continuation_is_preserved_without_relocation(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         pages = [
             _page(0, "1", [_block("第一章", level=1), _block("正文①。"), _block("① 注释前半", role="page_footnote")]),
             _page(1, "2", [_block("下一页正文。"), _block("续注后半。", role="page_footnote")]),
         ]
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
             items = normalize_document_footnotes(pages)
         self.assertFalse(any(isinstance(item, Footnote) for item in items))
         self.assertIn("possible_continuation", " ".join(logs.output))
@@ -1008,7 +1008,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertIn("续注后半。", [item.text for item in items if hasattr(item, "text")])
 
     def test_same_page_chapter_boundary_uses_reference_owner(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         page = _page(0, "1", [
             _block("第一章", level=1), _block("前章正文①。"),
@@ -1021,38 +1021,38 @@ class FootnoteNormalizationTests(unittest.TestCase):
         self.assertLess(items.index(notes[0]), next(i for i, item in enumerate(items) if getattr(item, "text", "") == "第二章"))
         page["blocks"][3]["text"] = "后章正文①。"
         page["text_raw"] = "\n".join(b["text"] for b in page["blocks"])
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
             items = normalize_document_footnotes([page])
         self.assertFalse(any(isinstance(item, Footnote) for item in items))
         self.assertIn("ambiguous_chapter", " ".join(logs.output))
 
     def test_unknown_chapters_do_not_reset_at_arbitrary_headings(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         pages = [_page(i, None, [
             _block(f"普通标题{i}", level=1), _block(f"正文{i}①。"),
             _block("① 注释", role="page_footnote"),
         ]) for i in range(2)]
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
             notes = [item for item in normalize_document_footnotes(pages) if isinstance(item, Footnote)]
         self.assertEqual([note.display_number for note in notes], [1, 2])
         self.assertIn("chapter boundaries unavailable", " ".join(logs.output))
 
     def test_note_identity_does_not_depend_on_earlier_note_numbers(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         pages = footnote_fixture()
         original = [i for i in normalize_document_footnotes(pages) if isinstance(i, Footnote)]
         pages[0]["blocks"][2]["text"] = "只引用①。"
         pages[0]["text_raw"] = "\n".join(b["text"] for b in pages[0]["blocks"])
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
             changed = [i for i in normalize_document_footnotes(pages) if isinstance(i, Footnote)]
         later = next(note for note in changed if note.source_physical_page == 11)
         self.assertEqual(later.note_id, original[2].note_id)
         self.assertEqual(later.display_number, 2)
 
     def test_stale_blocks_and_missing_physical_page_are_not_guessed(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         page = _page(0, "1", [_block("正文①。"), _block("① 注释", role="page_footnote")])
         for reason in ("unstructured_page", "missing_physical_page"):
@@ -1062,7 +1062,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
             else:
                 del broken["pdf_page_index"]
                 del broken["pdf_page_number_1based"]
-            with self.subTest(reason=reason), self.assertLogs("src.me_finder.export_footnotes", level="WARNING") as logs:
+            with self.subTest(reason=reason), self.assertLogs("src.me_finder.export.footnotes", level="WARNING") as logs:
                 items = normalize_document_footnotes([broken])
             self.assertFalse(any(isinstance(item, Footnote) for item in items))
             self.assertIn(reason, " ".join(logs.output))
@@ -1072,7 +1072,7 @@ class FootnoteNormalizationTests(unittest.TestCase):
             _block("第一章", level=1), _block("1848年，面积12m²，1+2=3。"),
             _block("① 列表第一项", bbox=MID), _block("① 页底注释", role="page_footnote"),
         ])
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
             markdown = document_to_markdown([page])
         self.assertNotIn("[^fn-", markdown)
         self.assertIn("1848年，面积12m²，1+2=3。", markdown)

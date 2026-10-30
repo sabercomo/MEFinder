@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from src.me_finder.document_export import document_manifest, read_document_export
+from src.me_finder.export.document import document_manifest, read_document_export
 from src.me_finder.large_document.engine import LargeDocumentJobEngine
 from src.me_finder.large_document.io_utils import sha256_file
 from src.me_finder.large_document.job_ledger import JobLedger

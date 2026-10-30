@@ -19,7 +19,7 @@ SQLITE_CONNECT_OUTSIDE_PERSISTENCE: dict[str, int] = {}
 SQL_EXECUTE_OUTSIDE_PERSISTENCE = {
     "data_location.py": 5,
     "document_deletion.py": 1,
-    "document_export_service.py": 10,
+    "export/service.py": 10,
     "edition_folio_anchors.py": 4,
     "index_publisher.py": 1,
     "indexer.py": 1,

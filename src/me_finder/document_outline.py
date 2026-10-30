@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 from .database import open_database
-from .markdown_export_normalize import build_page_artifact_profile, reader_heading_spans
+from .export.normalize import build_page_artifact_profile, reader_heading_spans
 from .persistence import structured_reader_reads as reader_reads
 from .structured_reader import (
     SourceNotFound,

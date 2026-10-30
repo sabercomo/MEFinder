@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from src.me_finder.export_page_reconstruction import attach_export_layout, reconstruct_export_pages
+from src.me_finder.export.page_reconstruction import attach_export_layout, reconstruct_export_pages
 from src.me_finder.pdf_extractors import (
     load_mineru_pdf_pages,
     load_mineru_segments,

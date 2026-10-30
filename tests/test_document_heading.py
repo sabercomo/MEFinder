@@ -15,7 +15,7 @@ from src.me_finder.document_heading import (
     map_semantic_outline_to_blocks,
     map_v2_titles_to_blocks,
 )
-from src.me_finder.markdown_export import document_to_markdown
+from src.me_finder.export.markdown import document_to_markdown
 
 
 def _block(text, **extra):

@@ -15,9 +15,9 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from typing import Mapping, Optional, Sequence
 
-from .export_page_reconstruction import SourceFragment, reconstruct_export_pages
+from .page_reconstruction import SourceFragment, reconstruct_export_pages
 
-from .markdown_export_normalize import (
+from .normalize import (
     ExportBlock,
     ExportOptions,
     FOOTNOTE_MARKER_RE,

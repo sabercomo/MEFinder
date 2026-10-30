@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional
 
-from ..document_export import export_document_zip
+from ..export.document import export_document_zip
 from ..import_resume import options_fingerprint
 from ..parser_provider import (
     ParserProvider,

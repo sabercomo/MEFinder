@@ -8,13 +8,13 @@ import unittest
 from unittest.mock import patch
 
 from src.me_finder.database import build_database
-from src.me_finder.document_export import DocumentExportError
-from src.me_finder.document_export_service import export_indexed_pdf_markdown
-from src.me_finder.export_footnotes import Footnote, FootnoteText, FootnoteReference, NormalizedDocument, normalize_document_export
-from src.me_finder.export_page_reconstruction import attach_export_layout
-from src.me_finder.markdown_export import document_to_markdown
-from src.me_finder.markdown_export_normalize import ExportOptions
-from src.me_finder.markdown_page_selection import PageSelection, resolve_pdf_pages, select_normalized_pages, select_epub_paragraphs
+from src.me_finder.export.document import DocumentExportError
+from src.me_finder.export.service import export_indexed_pdf_markdown
+from src.me_finder.export.footnotes import Footnote, FootnoteText, FootnoteReference, NormalizedDocument, normalize_document_export
+from src.me_finder.export.page_reconstruction import attach_export_layout
+from src.me_finder.export.markdown import document_to_markdown
+from src.me_finder.export.normalize import ExportOptions
+from src.me_finder.export.page_selection import PageSelection, resolve_pdf_pages, select_normalized_pages, select_epub_paragraphs
 from tests.test_markdown_export import _page, _block, footnote_fixture
 from tests.test_export_page_reconstruction import reconstruction_fixture
 
@@ -182,7 +182,7 @@ class PageSelectionTests(unittest.TestCase):
             self.assertIn('下一页重新出现', text)
             self.assertNotIn('先引用', text)
             self.assertEqual(part['page_selection']['note_count'], 1)
-            with patch('src.me_finder.document_export_service.document_to_markdown') as render:
+            with patch('src.me_finder.export.service.document_to_markdown') as render:
                 with self.assertRaises(DocumentExportError):
                     export_indexed_pdf_markdown(**args, page_selection=selection('99'))
                 render.assert_not_called()

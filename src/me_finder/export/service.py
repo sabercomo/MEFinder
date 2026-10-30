@@ -12,27 +12,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterator, Mapping, Optional
 
-from .persistence.connection import connect_index
-from .document_export import (
+from ..persistence.connection import connect_index
+from .document import (
     DOCUMENT_SCHEMA_VERSION,
     DocumentExportError,
     document_manifest,
     export_document_zip,
 )
-from .database import paragraph_from_database_row
-from .epub_export import safe_epub_filename, write_epub
-from .markdown_export import (
+from ..database import paragraph_from_database_row
+from .epub import safe_epub_filename, write_epub
+from .markdown import (
     document_to_markdown,
     epub_paragraphs_to_markdown,
     safe_markdown_filename,
 )
-from .export_footnotes import normalize_document_export
-from .markdown_page_selection import (
+from .footnotes import normalize_document_export
+from .page_selection import (
     PageSelection, resolve_pdf_pages, select_normalized_pages, select_epub_paragraphs,
 )
-from .markdown_export_normalize import ExportOptions
-from .export_page_reconstruction import attach_export_layout
-from .pdf_extractors import file_sha256
+from .normalize import ExportOptions
+from .page_reconstruction import attach_export_layout
+from ..pdf_extractors import file_sha256
 
 
 class IndexedDocumentNotFound(DocumentExportError):

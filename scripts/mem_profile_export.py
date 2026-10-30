@@ -53,8 +53,8 @@ create_fixture(
 
 
 from scripts import mem_profile_common as common  # noqa: E402
-from src.me_finder import document_export_service as export_module  # noqa: E402
-from src.me_finder import epub_export as epub_export_module  # noqa: E402
+from src.me_finder.export import service as export_module  # noqa: E402
+from src.me_finder.export import epub as epub_export_module  # noqa: E402
 from src.me_finder.app_context import AppPaths  # noqa: E402
 from src.me_finder.application.index_runtime import IndexRuntime  # noqa: E402
 from src.me_finder.database import replace_source_in_database  # noqa: E402

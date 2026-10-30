@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .bibliographic.metadata import METADATA_FIELDS
-from .document_export import (
+from .export.document import (
     DocumentExportError,
     ExportedDocument,
     normalize_export_page,

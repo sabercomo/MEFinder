@@ -8,8 +8,8 @@ from pathlib import Path
 from src.me_finder.archive_transfer_controller import (
     ArchiveTransferController,
 )
-from src.me_finder.document_export import DocumentExportError
-from src.me_finder.markdown_export_normalize import ExportOptions
+from src.me_finder.export.document import DocumentExportError
+from src.me_finder.export.normalize import ExportOptions
 from src.me_finder.errors import UserFacingError
 
 

@@ -31,7 +31,7 @@ from src.me_finder.application.document_heading_enrichment import (
     ensure_document_headings,
 )
 from src.me_finder.bibliographic.metadata import update_metadata_in_database
-from src.me_finder.document_export_service import (
+from src.me_finder.export.service import (
     export_indexed_pdf,
     export_indexed_pdf_markdown,
 )
@@ -347,7 +347,7 @@ class ExportSnapshotConsistencyTests(unittest.TestCase):
 
 
 def document_export_service_module():
-    import src.me_finder.document_export_service as module
+    import src.me_finder.export.service as module
 
     return module
 

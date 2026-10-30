@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass, replace
 from typing import Mapping, Sequence
 
-from .document_export import DocumentExportError
-from .export_footnotes import Footnote, FootnoteText, NormalizedDocument
-from .markdown_export_normalize import (
+from .document import DocumentExportError
+from .footnotes import Footnote, FootnoteText, NormalizedDocument
+from .normalize import (
     ExportOptions,
     physical_page_number,
     printed_page_raw,

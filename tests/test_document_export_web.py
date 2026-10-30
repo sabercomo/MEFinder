@@ -16,11 +16,11 @@ from pathlib import Path
 
 from src.me_finder.app_context import AppContext
 from src.me_finder.database import build_database
-from src.me_finder.document_export import (
+from src.me_finder.export.document import (
     extract_embedded_source_pdf,
     read_document_export,
 )
-from src.me_finder.document_export_service import (
+from src.me_finder.export.service import (
     IndexedDocumentNotFound,
     UnsupportedDocumentExport,
     export_indexed_pdf,

@@ -7,17 +7,17 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from src.me_finder.epub_export import (
+from src.me_finder.export.epub import (
     build_epub_bytes,
     safe_epub_filename,
     write_epub,
 )
-from src.me_finder.document_export_service import (
+from src.me_finder.export.service import (
     IndexedDocumentNotFound,
     UnsupportedDocumentExport,
     export_indexed_pdf_epub,
 )
-from src.me_finder.markdown_export_normalize import ExportOptions
+from src.me_finder.export.normalize import ExportOptions
 from tests.test_markdown_export import footnote_fixture, markdown_fixture
 
 
@@ -60,7 +60,7 @@ class EPUBExportCoreTests(unittest.TestCase):
         for page in pages:
             header = page["blocks"][0]
             header["text_level"] = header.pop("document_heading_level")
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
             data = build_epub_bytes(pages)
         with _archive(data) as archive:
             nav = archive.read("OEBPS/nav.xhtml").decode("utf-8")
@@ -70,8 +70,8 @@ class EPUBExportCoreTests(unittest.TestCase):
                              [str(i) for i in range(1, 101)])
 
     def test_explicit_multi_reference_model_renders_all_backlinks_without_text_deduplication(self):
-        from src.me_finder.export_footnotes import Footnote, FootnoteReference, FootnoteText, NormalizedDocument
-        from src.me_finder.markdown_export import document_to_markdown
+        from src.me_finder.export.footnotes import Footnote, FootnoteReference, FootnoteText, NormalizedDocument
+        from src.me_finder.export.markdown import document_to_markdown
 
         # Already-known semantic relationships; this is NOT evidence to relax
         # the raw OCR duplicate-marker rejection tested by normalization.
@@ -97,7 +97,7 @@ class EPUBExportCoreTests(unittest.TestCase):
         self.assertEqual(markdown.count("同上。"), 2)
 
     def test_footnotes_have_chapter_numbers_and_all_links_resolve(self):
-        from src.me_finder.export_footnotes import Footnote, normalize_document_footnotes
+        from src.me_finder.export.footnotes import Footnote, normalize_document_footnotes
 
         pages = footnote_fixture()
         notes = [item for item in normalize_document_footnotes(pages) if isinstance(item, Footnote)]
@@ -153,7 +153,7 @@ class EPUBExportCoreTests(unittest.TestCase):
             {"text": "① 注释甲", "mineru_type": "page_footnote"},
             {"text": "③ 无正文引用的注释", "mineru_type": "page_footnote"},
         ])]
-        with self.assertLogs("src.me_finder.export_footnotes", level="WARNING"):
+        with self.assertLogs("src.me_finder.export.footnotes", level="WARNING"):
             data = build_epub_bytes(pages)
         with _archive(data) as archive:
             content = ElementTree.fromstring(archive.read("OEBPS/content.xhtml"))

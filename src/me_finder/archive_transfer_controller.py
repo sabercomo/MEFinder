@@ -8,14 +8,14 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Protocol, Tuple
 
-from .document_export import DocumentExportError
-from .document_export_service import (
+from .export.document import DocumentExportError
+from .export.service import (
     export_indexed_pdf,
     export_indexed_pdf_epub,
     export_indexed_pdf_markdown,
 )
-from .markdown_export_normalize import ExportOptions
-from .markdown_page_selection import PageSelection
+from .export.normalize import ExportOptions
+from .export.page_selection import PageSelection
 from .errors import UserFacingError
 
 
@@ -224,7 +224,7 @@ def build_archive_transfer_controller(
 ) -> ArchiveTransferController:
     """Compose backup coordination and the read-only document exporters."""
 
-    from .document_export_service import export_indexed_pdf
+    from .export.service import export_indexed_pdf
 
     return ArchiveTransferController(
         backup,

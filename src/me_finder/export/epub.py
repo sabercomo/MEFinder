@@ -33,8 +33,8 @@ from pathlib import Path
 from typing import Iterable, List, Mapping, Optional
 from xml.sax.saxutils import escape, quoteattr
 
-from .export_footnotes import Footnote, NormalizedDocument, normalize_document_export
-from .markdown_export_normalize import (
+from .footnotes import Footnote, NormalizedDocument, normalize_document_export
+from .normalize import (
     ExportOptions,
     PageMarker,
 )

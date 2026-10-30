@@ -9,13 +9,13 @@ from unittest.mock import patch
 import zipfile
 from xml.etree import ElementTree as ET
 
-from src.me_finder.epub_export import build_epub_bytes
-from src.me_finder.document_export import DocumentExportError
-from src.me_finder.export_footnotes import FootnoteText, normalize_document_export
-from src.me_finder.export_page_reconstruction import (
+from src.me_finder.export.epub import build_epub_bytes
+from src.me_finder.export.document import DocumentExportError
+from src.me_finder.export.footnotes import FootnoteText, normalize_document_export
+from src.me_finder.export.page_reconstruction import (
     ReconstructedPages, attach_export_layout, reconstruct_export_pages, reconstruction_invariant,
 )
-from src.me_finder.markdown_export import document_to_markdown
+from src.me_finder.export.markdown import document_to_markdown
 from tests.test_markdown_export import _block, _page, footnote_fixture
 
 
@@ -345,7 +345,7 @@ class ExportPageReconstructionTests(unittest.TestCase):
 
     def test_non_cross_page_document_has_identical_rendered_output(self):
         pages = footnote_fixture()
-        with patch("src.me_finder.export_footnotes.reconstruct_export_pages", return_value=ReconstructedPages(pages, {})):
+        with patch("src.me_finder.export.footnotes.reconstruct_export_pages", return_value=ReconstructedPages(pages, {})):
             before = normalize_document_export(pages)
         after = normalize_document_export(pages)
         self.assertEqual(after.items, before.items)
