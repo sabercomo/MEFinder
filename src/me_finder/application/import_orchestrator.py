@@ -29,10 +29,10 @@ from ..import_queue import (
 from ..import_resume import sha256_file
 from ..lifecycle import DurableOperationGate
 from ..errors import UserFacingError
-from ..mineru_api import resolve_mineru_config_path
-from ..mineru_local_settings import mineru_local_config_summary
-from ..mineru_local_provider import MINERU_LOCAL_PROVIDER_ID
-from ..local_ocr_settings import local_ocr_available
+from ..parsers.mineru_api import resolve_mineru_config_path
+from ..parsers.mineru_local_settings import mineru_local_config_summary
+from ..parsers.mineru_local_provider import MINERU_LOCAL_PROVIDER_ID
+from ..parsers.local_ocr_settings import local_ocr_available
 from ..import_config_store import (
     import_config_lock,
     load_import_config,
@@ -42,7 +42,7 @@ from ..pdf_import_service import (
     register_pdf,
     reuse_registered_pdf_copy,
 )
-from ..vision_api import (
+from ..parsers.vision_api import (
     VisionAPIError,
     resolve_vision_config_path,
     vision_config_summary,

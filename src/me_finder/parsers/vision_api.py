@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence
 
-from .import_resume import (
+from ..import_resume import (
     atomic_write_json,
     load_json_object,
     manifest_matches,
@@ -25,7 +25,7 @@ from .import_resume import (
     sha256_file,
     utc_now_iso,
 )
-from .pdf_extractors import load_pymupdf
+from ..pdf_extractors import load_pymupdf
 
 from .general_model import (
     GENERAL_MODEL_PROVIDER_ID,

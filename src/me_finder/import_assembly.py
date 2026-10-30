@@ -40,8 +40,8 @@ from .bibliographic.journal_lookup import fetch_cnki_candidate, lookup_cnki_jour
 from .large_document.job_ledger import JobLedger
 from .large_document.mineru_accounts import MinerUAccountService, resolve_mineru_accounts_path
 from .lifecycle import DurableOperationGate
-from .mineru_api import resolve_mineru_config_path
-from .mineru_local_settings import mineru_local_config_summary
+from .parsers.mineru_api import resolve_mineru_config_path
+from .parsers.mineru_local_settings import mineru_local_config_summary
 from .page_mapping_controller import PageMappingController
 from .pdf_extractors import extract_pdf_source
 from .pdf_import_service import detect_imported_pdf
@@ -50,7 +50,7 @@ from .persistence import SQLiteDocumentHeadingStore, SQLiteDocumentReadRepositor
 from .preferences import read_preferences, resolve_preferences_path, record_backup_export
 from .runtime_page_mapping import apply_mapping_to_database
 from .search import SearchEngine
-from .vision_api import resolve_vision_config_path, vision_config_summary
+from .parsers.vision_api import resolve_vision_config_path, vision_config_summary
 
 
 @dataclass(frozen=True)

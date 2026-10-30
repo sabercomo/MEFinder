@@ -8,9 +8,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from src.me_finder.app_context import AppPaths
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.parsers.mineru_api import MinerUError
 from src.me_finder.parser_settings_controller import ParserSettingsController
-from src.me_finder.vision_api import VisionAPIError
+from src.me_finder.parsers.vision_api import VisionAPIError
 
 
 class FakeAccountSummary:

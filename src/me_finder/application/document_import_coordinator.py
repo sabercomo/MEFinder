@@ -41,11 +41,11 @@ from ..import_config_store import (
 from ..import_resume import sha256_file
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
 from ..errors import UserFacingError
-from ..mineru_api import resolve_mineru_config_path
-from ..mineru_local_settings import mineru_local_config_summary
-from ..local_ocr_settings import local_ocr_available
+from ..parsers.mineru_api import resolve_mineru_config_path
+from ..parsers.mineru_local_settings import mineru_local_config_summary
+from ..parsers.local_ocr_settings import local_ocr_available
 from ..pdf_import_service import detect_imported_pdf
-from ..vision_api import VisionAPIError
+from ..parsers.vision_api import VisionAPIError
 from .import_job_store import ImportJobAlreadyRunning
 
 

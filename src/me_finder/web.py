@@ -18,7 +18,7 @@ from .document_groups import (
 )
 from .database import DEFAULT_DATABASE_PATH
 from .errors import UserFacingError
-from .vision_api import VisionAPIError
+from .parsers.vision_api import VisionAPIError
 from .preferences import (
     read_preferences,
     resolve_preferences_path,

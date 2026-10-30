@@ -7,9 +7,9 @@ from unittest import mock
 
 from src.me_finder.application.import_job_store import ImportJobCancelled, Job
 from src.me_finder.application.import_parser_executor import ImportParserExecutor
-from src.me_finder.mineru_api import MinerUError
-from src.me_finder.local_ocr_settings import LocalOCRCancelled, LocalOCRError
-from src.me_finder.vision_api import VisionAPIError
+from src.me_finder.parsers.mineru_api import MinerUError
+from src.me_finder.parsers.local_ocr_settings import LocalOCRCancelled, LocalOCRError
+from src.me_finder.parsers.vision_api import VisionAPIError
 
 
 class _FakeJobs:

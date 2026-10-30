@@ -32,8 +32,8 @@ from .install import (
 )
 from ..runtime_location import component_runtime_root
 from ..import_resume import ResumeManifestError, atomic_write_json
-from ..local_ocr_runtime import local_ocr_engine_lock
-from ..local_ocr_settings import (
+from ..parsers.local_ocr_runtime import local_ocr_engine_lock
+from ..parsers.local_ocr_settings import (
     LocalOCRError,
     clear_managed_local_ocr_engine,
     configure_managed_local_ocr_engine,

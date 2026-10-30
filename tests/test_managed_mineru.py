@@ -19,7 +19,7 @@ from src.me_finder.components.mineru import (
     load_managed_mineru_manifest,
     resolve_managed_mineru_version,
 )
-from src.me_finder.mineru_local_settings import mineru_local_config_summary
+from src.me_finder.parsers.mineru_local_settings import mineru_local_config_summary
 
 
 def _test_process_launcher(command, **kwargs):

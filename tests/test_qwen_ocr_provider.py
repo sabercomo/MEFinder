@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.large_document.slicing import SlicePlanner
-from src.me_finder.parser_provider import ParserProviderError, ParserRequest, ParserTaskStatus
-from src.me_finder.qwen_ocr_provider import QwenOCRConfig, QwenOCRProvider
-from src.me_finder.vision_api import VisionAPIError
+from src.me_finder.parsers.provider import ParserProviderError, ParserRequest, ParserTaskStatus
+from src.me_finder.parsers.qwen_ocr_provider import QwenOCRConfig, QwenOCRProvider
+from src.me_finder.parsers.vision_api import VisionAPIError
 
 
 class FakeQwenClient:

@@ -21,7 +21,7 @@ from src.me_finder.components.local_ocr_installer import (
     LocalOCRInstaller,
     load_local_ocr_installer_manifest,
 )
-from src.me_finder.local_ocr_settings import load_local_ocr_config
+from src.me_finder.parsers.local_ocr_settings import load_local_ocr_config
 
 
 _MINOR_VERSION_LINK_ERROR = (

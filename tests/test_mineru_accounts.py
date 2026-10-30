@@ -11,7 +11,7 @@ from src.me_finder.large_document.mineru_accounts import (
     MinerUAccountService,
 )
 from src.me_finder.large_document.slicing import PhysicalPDFSlicer
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.provider import (
     NormalizedPage,
     NormalizedParseResult,
     ParserPollResult,

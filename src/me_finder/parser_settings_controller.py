@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from .app_context import AppPaths
 from .errors import UserFacingError
 from .large_document.mineru_accounts import MinerUAccountService
-from .mineru_api import (
+from .parsers.mineru_api import (
     DEFAULT_MINERU_API_BASE,
     clear_legacy_mineru_token,
     load_mineru_config,
@@ -23,7 +23,7 @@ from .mineru_api import (
     resolve_mineru_config_path,
     save_mineru_config,
 )
-from .mineru_local_settings import (
+from .parsers.mineru_local_settings import (
     mineru_local_config_summary,
     save_mineru_local_config,
     test_mineru_local_connection,
@@ -33,7 +33,7 @@ from .components.embedding_models import ManagedEmbeddingModelsError
 from .components.alignment_runtime import ManagedAlignmentRuntimeError
 from .import_resume import ResumeManifestError
 from .components.local_ocr_installer import LocalOCRInstallerError
-from .local_ocr_settings import (
+from .parsers.local_ocr_settings import (
     LocalOCRError,
     local_ocr_config_summary,
     resolve_local_ocr_config_path,
@@ -41,16 +41,16 @@ from .local_ocr_settings import (
     test_local_ocr_engine,
 )
 from .components.contract import ManagedComponent
-from .parser_provider import ParserProviderError
-from .parser_statistics import build_parser_statistics
-from .general_model import (
+from .parsers.provider import ParserProviderError
+from .parsers.statistics import build_parser_statistics
+from .parsers.general_model import (
     discover_general_model_models,
     general_model_summary,
     resolve_general_model_config_path,
     save_general_model_config,
     test_general_model,
 )
-from .vision_api import (
+from .parsers.vision_api import (
     VisionAPIError,
     delete_vision_provider,
     resolve_vision_config_path,

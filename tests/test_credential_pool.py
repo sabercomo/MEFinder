@@ -12,7 +12,7 @@ from src.me_finder.large_document.credential_pool import (
 from src.me_finder.large_document.engine import LargeDocumentJobEngine
 from src.me_finder.large_document.job_ledger import JobLedger, SCHEMA_V1, SCHEMA_V2
 from src.me_finder.large_document.slicing import PhysicalPDFSlicer
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.provider import (
     NormalizedPage,
     NormalizedParseResult,
     ParserPollResult,

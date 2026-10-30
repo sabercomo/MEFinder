@@ -7,7 +7,7 @@ upgrades their own MinerU install does not have to wait for a MEFinder release:
 * ``tasks`` — MinerU 3.x: ``GET /health``, ``POST /tasks``,
   ``GET /tasks/{id}``, ``GET /tasks/{id}/result``.
 * ``v1-jobs`` — MinerU 4.x: ``GET /v1/health`` plus the upload/parse-job API
-  implemented in :mod:`me_finder.mineru_local_v1`.
+  implemented in :mod:`me_finder.parsers.mineru_local_v1`.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from .mineru_local_v1 import (
     structured_content_file_id,
     tier_for_backend,
 )
-from .parser_provider import (
+from .provider import (
     NormalizedBlock,
     NormalizedPage,
     NormalizedParseResult,

@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.me_finder.mineru_api import MinerUError
-from src.me_finder.mineru_local_settings import (
+from src.me_finder.parsers.mineru_api import MinerUError
+from src.me_finder.parsers.mineru_local_settings import (
     clear_managed_mineru,
     configure_managed_mineru,
     load_mineru_local_config,
@@ -148,7 +148,7 @@ class MinerULocalSettingsTests(unittest.TestCase):
             )
 
         with patch(
-            "src.me_finder.mineru_local_settings.MinerULocalProvider.health",
+            "src.me_finder.parsers.mineru_local_settings.MinerULocalProvider.health",
             return_value={"ok": True, "protocol_version": "1"},
         ) as health:
             result = run_mineru_local_connection(

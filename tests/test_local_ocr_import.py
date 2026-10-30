@@ -8,7 +8,7 @@ from pathlib import Path
 
 import fitz
 
-from src.me_finder.local_ocr_settings import save_local_ocr_config
+from src.me_finder.parsers.local_ocr_settings import save_local_ocr_config
 from src.me_finder.pdf_import_service import (
     load_import_config,
     parse_pdf_with_local_ocr,

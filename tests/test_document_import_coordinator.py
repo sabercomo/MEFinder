@@ -14,8 +14,8 @@ from src.me_finder.application.document_import_coordinator import (
 from src.me_finder.chunked_upload import ChunkedUploadError, ChunkedUploadStore
 from src.me_finder.import_resume import sha256_file
 from src.me_finder.errors import UserFacingError
-from src.me_finder.mineru_api import resolve_mineru_config_path
-from src.me_finder.mineru_local_settings import save_mineru_local_config
+from src.me_finder.parsers.mineru_api import resolve_mineru_config_path
+from src.me_finder.parsers.mineru_local_settings import save_mineru_local_config
 
 
 class FakeImportJobs:

@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Protocol
 
-from ..mineru_api import MinerUError
-from ..local_ocr_settings import (
+from ..parsers.mineru_api import MinerUError
+from ..parsers.local_ocr_settings import (
     LocalOCRCancelled,
     LocalOCRError,
     local_ocr_available,
 )
-from ..vision_api import (
+from ..parsers.vision_api import (
     VisionAPIError,
     resolve_vision_config_path,
     vision_config_summary,

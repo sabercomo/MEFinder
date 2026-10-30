@@ -17,14 +17,14 @@ from typing import Dict
 from .components.catalog import ComponentCatalog
 from .embedding_runtime import embedding_run_active
 from .components.local_ocr_installer import LOCAL_OCR_MANIFEST_FILE, LocalOCRInstaller
-from .local_ocr_settings import resolve_local_ocr_config_path
+from .parsers.local_ocr_settings import resolve_local_ocr_config_path
 from .components.alignment_runtime import (
     ManagedAlignmentRuntime,
     make_model_downloader,
 )
 from .components.embedding_models import ManagedEmbeddingModels
 from .components.mineru import ManagedMinerU
-from .mineru_api import resolve_mineru_config_path
+from .parsers.mineru_api import resolve_mineru_config_path
 
 _DESKTOP_SHELLS = {"macos", "win32", "linux"}
 

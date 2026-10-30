@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.database import build_database
-from src.me_finder.parser_statistics import build_parser_statistics
+from src.me_finder.parsers.statistics import build_parser_statistics
 
 
 def _pdf_source(

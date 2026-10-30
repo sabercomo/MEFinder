@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Mapping, Optional
 
-from .persistence.connection import connect_index
+from ..persistence.connection import connect_index
 
 
 MINERU_PROVIDER_ID = "mineru-cloud"

@@ -3,9 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.me_finder.mineru_api import MinerUError
-from src.me_finder.mineru_provider import MinerUCloudProvider
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.mineru_api import MinerUError
+from src.me_finder.parsers.mineru_provider import MinerUCloudProvider
+from src.me_finder.parsers.provider import (
     NormalizedPage,
     NormalizedParseResult,
     ParserPollResult,

@@ -21,7 +21,7 @@ from .bibliographic.metadata import update_metadata_in_database
 from .import_resume import sha256_file
 from .persistence.zotero_sync_store import ZoteroSyncStore
 from .preferences import read_preferences, resolve_preferences_path
-from .vision_api import resolve_vision_config_path, vision_config_summary
+from .parsers.vision_api import resolve_vision_config_path, vision_config_summary
 from .zotero_sync import ZoteroSyncPorts, ZoteroSyncService
 
 

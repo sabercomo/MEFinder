@@ -10,7 +10,7 @@ from urllib.error import HTTPError
 from urllib.request import Request
 from unittest.mock import patch
 
-from src.me_finder.mineru_api import (
+from src.me_finder.parsers.mineru_api import (
     MinerUClient,
     MinerUConfig,
     MinerUError,
@@ -239,11 +239,11 @@ class MinerUConfigTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.mineru_api.get_pdf_page_count",
+                    "src.me_finder.parsers.mineru_api.get_pdf_page_count",
                     return_value=1,
                 ),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=auth_error,
                 ),
             ):
@@ -279,7 +279,7 @@ class MinerUConfigTests(unittest.TestCase):
                 return _FakeResponse(success)
 
             with patch(
-                "src.me_finder.mineru_api.MinerUClient.upload_file"
+                "src.me_finder.parsers.mineru_api.MinerUClient.upload_file"
             ) as upload, patch(
                 "urllib.request.OpenerDirector.open", side_effect=fake_open
             ):

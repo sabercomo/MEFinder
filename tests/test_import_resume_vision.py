@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from src.me_finder.vision_api import (
+from src.me_finder.parsers.vision_api import (
     DEFAULT_VISION_MANIFEST_DIR,
     VisionAPIError,
     parse_pdf_with_vision_provider,
@@ -116,10 +116,10 @@ class VisionImportResumeTests(unittest.TestCase):
         on_progress=None,
     ):
         with patch(
-            "src.me_finder.vision_api.load_pymupdf",
+            "src.me_finder.parsers.vision_api.load_pymupdf",
             return_value=_FakeFitz(page_count),
         ), patch(
-            "src.me_finder.vision_api.OpenAICompatibleVisionClient.extract_page",
+            "src.me_finder.parsers.vision_api.OpenAICompatibleVisionClient.extract_page",
             side_effect=side_effect,
         ) as extract:
             result = parse_pdf_with_vision_provider(

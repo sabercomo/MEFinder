@@ -10,7 +10,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 
 from .import_config_store import attach_mineru_manifest, attach_parser_manifest
 from .import_resume import COMPLETED_UNIT_STATUSES, resume_summary
-from .mineru_api import (
+from .parsers.mineru_api import (
     DEFAULT_MINERU_API_BASE,
     DEFAULT_MINERU_MANIFEST_DIR,
     DEFAULT_MINERU_RESULT_DIR,
@@ -24,12 +24,12 @@ from .mineru_api import (
     save_segment_manifest,
     submit_local_pdf_segments,
 )
-from .mineru_provider import MinerUCloudProvider
-from .mineru_local_provider import (
+from .parsers.mineru_provider import MinerUCloudProvider
+from .parsers.mineru_local_provider import (
     MINERU_LOCAL_PROVIDER_ID,
     MinerULocalProvider,
 )
-from .mineru_local_settings import load_mineru_local_config
+from .parsers.mineru_local_settings import load_mineru_local_config
 from .large_document.engine import LargeDocumentJobEngine
 from .large_document.job_ledger import JobLedger, SliceJob
 from .large_document.merge import iter_normalized_pages
@@ -37,17 +37,17 @@ from .large_document.mineru_accounts import (
     MinerUAccountService,
     resolve_mineru_accounts_path,
 )
-from .local_ocr_provider import (
+from .parsers.local_ocr_provider import (
     LocalOCRProvider,
     choose_local_ocr_engine,
 )
-from .local_ocr_settings import (
+from .parsers.local_ocr_settings import (
     LocalOCRCancelled,
     LocalOCRError,
     load_local_ocr_config,
     resolve_local_ocr_config_path,
 )
-from .vision_api import parse_pdf_with_vision_provider
+from .parsers.vision_api import parse_pdf_with_vision_provider
 
 
 ProgressCallback = Callable[[Dict[str, object]], None]

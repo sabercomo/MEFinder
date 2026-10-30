@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.me_finder.local_ocr_settings import (
+from src.me_finder.parsers.local_ocr_settings import (
     LocalOCRError,
     clear_managed_local_ocr_engine,
     configure_managed_local_ocr_engine,
@@ -15,7 +15,7 @@ from src.me_finder.local_ocr_settings import (
     save_local_ocr_config,
     test_local_ocr_engine as run_local_ocr_engine,
 )
-from src.me_finder.local_ocr_runtime import local_ocr_engine_lock
+from src.me_finder.parsers.local_ocr_runtime import local_ocr_engine_lock
 
 
 class LocalOCRSettingsTests(unittest.TestCase):

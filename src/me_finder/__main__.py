@@ -19,7 +19,7 @@ from .indexer import (
     build_index,
 )
 from .errors import UserFacingError
-from .mineru_api import (
+from .parsers.mineru_api import (
     DEFAULT_MINERU_AGENT_INPUT_DIR,
     DEFAULT_MINERU_AGENT_RESULT_DIR,
     DEFAULT_MINERU_CONFIG_PATH,

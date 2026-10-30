@@ -11,7 +11,7 @@ from .application.import_orchestrator import ImportOrchestrator
 from .import_resume import ResumeManifestError
 from .errors import UserFacingError
 from .tasks import TaskEvent
-from .vision_api import VisionAPIError
+from .parsers.vision_api import VisionAPIError
 
 
 ImportJobResponse = Tuple[int, Dict[str, object]]

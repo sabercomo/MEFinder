@@ -9,7 +9,7 @@ from src.me_finder.application.document_query_service import (
 from src.me_finder.import_job_controller import ImportJobController
 from src.me_finder.import_resume import ResumeManifestError
 from src.me_finder.errors import UserFacingError
-from src.me_finder.vision_api import VisionAPIError
+from src.me_finder.parsers.vision_api import VisionAPIError
 
 
 class FakeImportOrchestrator:

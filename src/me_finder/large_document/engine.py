@@ -8,7 +8,7 @@ from typing import Callable, Dict, Mapping, Optional
 
 from ..export.document import export_document_zip
 from ..import_resume import options_fingerprint
-from ..parser_provider import (
+from ..parsers.provider import (
     ParserProvider,
     ParserProviderError,
     ParserRequest,

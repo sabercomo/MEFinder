@@ -14,7 +14,7 @@ from typing import Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 
 from .local_ocr_settings import LocalOCREngineConfig
 from .local_ocr_runtime import local_ocr_engine_lock
-from .parser_provider import (
+from .provider import (
     NormalizedBlock,
     NormalizedPage,
     NormalizedParseResult,

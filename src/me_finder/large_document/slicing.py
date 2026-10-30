@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence
 
-from ..parser_provider import ProviderCapabilities
+from ..parsers.provider import ProviderCapabilities
 from .io_utils import sha256_file
 
 

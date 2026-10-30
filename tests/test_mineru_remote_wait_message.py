@@ -11,7 +11,7 @@ from src.me_finder.large_document import engine as engine_module
 from src.me_finder.large_document.engine import LargeDocumentJobEngine
 from src.me_finder.large_document.job_ledger import JobLedger
 from src.me_finder.large_document.slicing import PhysicalPDFSlicer
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.provider import (
     ParserProvider,
     ParserPollResult,
     ParserSubmission,

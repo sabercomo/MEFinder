@@ -8,17 +8,17 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from src.me_finder.mineru_local_provider import (
+from src.me_finder.parsers.mineru_local_provider import (
     MINERU_TASKS_PROTOCOL,
     MinerULocalConfig,
     MinerULocalProvider,
 )
-from src.me_finder.mineru_local_v1 import (
+from src.me_finder.parsers.mineru_local_v1 import (
     MINERU_V1_PROTOCOL,
     plain_text_from_markdown,
     tier_for_backend,
 )
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.provider import (
     ParserProviderError,
     ParserRequest,
     ParserTaskStatus,

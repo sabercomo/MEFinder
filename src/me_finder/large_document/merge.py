@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, List, Mapping, Sequence, Tuple
 
-from ..parser_provider import NormalizedParseResult
+from ..parsers.provider import NormalizedParseResult
 from .io_utils import sha256_file
 
 

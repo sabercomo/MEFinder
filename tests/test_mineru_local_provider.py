@@ -7,13 +7,13 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from src.me_finder.mineru_local_provider import (
+from src.me_finder.parsers.mineru_local_provider import (
     MinerULocalConfig,
     MinerULocalProvider,
 )
-from src.me_finder.mineru_provider import MinerUCloudProvider
+from src.me_finder.parsers.mineru_provider import MinerUCloudProvider
 from src.me_finder.large_document.slicing import SlicePlanner
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.provider import (
     ParserProviderError,
     ParserRequest,
     ParserTaskStatus,

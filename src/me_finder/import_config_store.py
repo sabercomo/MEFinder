@@ -16,7 +16,7 @@ from typing import Dict, Iterator, List, Mapping, Optional
 
 from .import_resume import resume_summary
 from .errors import UserFacingError
-from .vision_api import VisionAPIError
+from .parsers.vision_api import VisionAPIError
 
 
 # PDF imports can finish on multiple worker threads. Keep each config

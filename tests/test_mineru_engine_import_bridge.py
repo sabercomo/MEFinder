@@ -13,7 +13,7 @@ from src.me_finder.large_document.job_ledger import JobLedger
 from src.me_finder.large_document.merge import write_normalized_result
 from src.me_finder.large_document.mineru_accounts import MinerUAccountService
 from src.me_finder.large_document.slicing import SliceDescriptor
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.provider import (
     NormalizedBlock,
     NormalizedPage,
     NormalizedParseResult,
@@ -23,7 +23,7 @@ from src.me_finder.pdf_import_service import (
     parse_pdf_with_mineru,
 )
 from src.me_finder.pdf_parser_adapters import publish_mineru_engine_results
-from src.me_finder.local_ocr_settings import LocalOCRError
+from src.me_finder.parsers.local_ocr_settings import LocalOCRError
 from src.me_finder.pdf_extractors import extract_pdf_source
 
 

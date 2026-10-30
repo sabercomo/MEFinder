@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.me_finder.mineru_api import (
+from src.me_finder.parsers.mineru_api import (
     MinerUError,
     download_done_results,
     load_segment_manifest,
@@ -29,9 +29,9 @@ class MinerUResumeTests(unittest.TestCase):
             results = root / "results"
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=3),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=3),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=[
                         {"batch_id": "batch-1"},
                         MinerUError("upload interrupted"),
@@ -60,9 +60,9 @@ class MinerUResumeTests(unittest.TestCase):
             self.assertEqual(segments[1]["status"], "failed")
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=3),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=3),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "batch-2"},
                 ) as submit,
             ):
@@ -96,9 +96,9 @@ class MinerUResumeTests(unittest.TestCase):
             (complete / "content_list.json").write_text("[]", encoding="utf-8")
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "initial"},
                 ) as submit,
             ):
@@ -115,8 +115,8 @@ class MinerUResumeTests(unittest.TestCase):
             self.assertEqual(manifest["segments"][0]["batch_id"], "initial")
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
-                patch("src.me_finder.mineru_api.submit_local_pdf") as submit,
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.submit_local_pdf") as submit,
             ):
                 resumed = submit_local_pdf_segments(
                     pdf,
@@ -141,9 +141,9 @@ class MinerUResumeTests(unittest.TestCase):
             results = root / "results"
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "initial"},
                 ),
             ):
@@ -178,8 +178,8 @@ class MinerUResumeTests(unittest.TestCase):
             save_segment_manifest("source", checkpoint, manifests)
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
-                patch("src.me_finder.mineru_api.submit_local_pdf") as submit,
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.submit_local_pdf") as submit,
             ):
                 resumed = submit_local_pdf_segments(
                     pdf,
@@ -205,8 +205,8 @@ class MinerUResumeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
-                patch("src.me_finder.mineru_api.submit_local_pdf") as submit,
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.submit_local_pdf") as submit,
             ):
                 invalid_marker = submit_local_pdf_segments(
                     pdf,
@@ -232,9 +232,9 @@ class MinerUResumeTests(unittest.TestCase):
             results = root / "custom-results"
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "initial"},
                 ),
             ):
@@ -255,9 +255,9 @@ class MinerUResumeTests(unittest.TestCase):
             save_segment_manifest("source", checkpoint, manifests)
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "replacement"},
                 ) as submit,
             ):
@@ -283,9 +283,9 @@ class MinerUResumeTests(unittest.TestCase):
             results = root / "results"
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "old-batch"},
                 ),
             ):
@@ -315,9 +315,9 @@ class MinerUResumeTests(unittest.TestCase):
             )
             pdf.write_bytes(b"version-two")
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "new-batch"},
                 ) as submit,
             ):
@@ -335,8 +335,8 @@ class MinerUResumeTests(unittest.TestCase):
             self.assertEqual(manifest["resume_count"], 0)
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
-                patch("src.me_finder.mineru_api.submit_local_pdf") as submit,
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.submit_local_pdf") as submit,
             ):
                 resumed = submit_local_pdf_segments(
                     pdf,
@@ -381,9 +381,9 @@ class MinerUResumeTests(unittest.TestCase):
             (stale_result / "content_list.json").write_text("[]", encoding="utf-8")
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "fresh-batch"},
                 ) as submit,
             ):
@@ -412,9 +412,9 @@ class MinerUResumeTests(unittest.TestCase):
             (stale_result / "content_list.json").write_text("[]", encoding="utf-8")
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "fresh-batch"},
                 ) as submit,
             ):
@@ -453,11 +453,11 @@ class MinerUResumeTests(unittest.TestCase):
 
                     with (
                         patch(
-                            "src.me_finder.mineru_api.get_pdf_page_count",
+                            "src.me_finder.parsers.mineru_api.get_pdf_page_count",
                             return_value=1,
                         ),
                         patch(
-                            "src.me_finder.mineru_api.submit_local_pdf",
+                            "src.me_finder.parsers.mineru_api.submit_local_pdf",
                             return_value={"batch_id": "fresh-batch"},
                         ) as submit,
                     ):
@@ -493,9 +493,9 @@ class MinerUResumeTests(unittest.TestCase):
             manifests = root / "manifests"
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=3),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=3),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=[
                         {"batch_id": "batch-1"},
                         {"batch_id": "batch-2"},
@@ -517,9 +517,9 @@ class MinerUResumeTests(unittest.TestCase):
             save_segment_manifest("source", checkpoint, manifests)
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=3),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=3),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=KeyboardInterrupt(),
                 ),
             ):
@@ -550,9 +550,9 @@ class MinerUResumeTests(unittest.TestCase):
             tasks = root / "tasks"
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "initial"},
                 ),
             ):
@@ -583,8 +583,8 @@ class MinerUResumeTests(unittest.TestCase):
             )
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
-                patch("src.me_finder.mineru_api.submit_local_pdf") as submit,
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.submit_local_pdf") as submit,
             ):
                 resumed = submit_local_pdf_segments(
                     pdf,
@@ -610,9 +610,9 @@ class MinerUResumeTests(unittest.TestCase):
             results = root / "results"
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "initial"},
                 ),
             ):
@@ -651,9 +651,9 @@ class MinerUResumeTests(unittest.TestCase):
             save_segment_manifest("source", checkpoint, manifests)
 
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "safe-replacement"},
                 ) as submit,
             ):
@@ -697,12 +697,12 @@ class MinerUResumeTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.mineru_api.load_mineru_config",
+                    "src.me_finder.parsers.mineru_api.load_mineru_config",
                     return_value=object(),
                 ),
-                patch("src.me_finder.mineru_api.MinerUClient") as client_class,
+                patch("src.me_finder.parsers.mineru_api.MinerUClient") as client_class,
                 patch(
-                    "src.me_finder.mineru_api.extract_zip",
+                    "src.me_finder.parsers.mineru_api.extract_zip",
                     side_effect=fake_extract,
                 ),
             ):
@@ -820,9 +820,9 @@ class MinerUResumeTests(unittest.TestCase):
             state_dir = root / "corpus/processed/mineru/tasks"
             result_dir = root / "corpus/processed/mineru/results"
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "expired-batch"},
                 ),
             ):
@@ -853,9 +853,9 @@ class MinerUResumeTests(unittest.TestCase):
             failed = load_segment_manifest(source_id, manifest_dir)
             self.assertEqual(failed["segments"][0]["status"], "failed")
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "replacement-batch"},
                 ) as submit,
             ):
@@ -882,9 +882,9 @@ class MinerUResumeTests(unittest.TestCase):
             tasks = root / "tasks"
             results = root / "results"
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "old-endpoint-batch"},
                 ),
             ):
@@ -901,9 +901,9 @@ class MinerUResumeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with (
-                patch("src.me_finder.mineru_api.get_pdf_page_count", return_value=1),
+                patch("src.me_finder.parsers.mineru_api.get_pdf_page_count", return_value=1),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     return_value={"batch_id": "new-endpoint-batch"},
                 ) as submit,
             ):

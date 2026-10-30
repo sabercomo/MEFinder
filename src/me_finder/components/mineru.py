@@ -38,9 +38,9 @@ from .local_ocr_installer import (
     current_platform_key,
     load_local_ocr_installer_manifest,
 )
-from ..mineru_local_provider import MinerULocalConfig, MinerULocalProvider
-from ..parser_provider import ParserProviderError
-from ..mineru_local_settings import (
+from ..parsers.mineru_local_provider import MinerULocalConfig, MinerULocalProvider
+from ..parsers.provider import ParserProviderError
+from ..parsers.mineru_local_settings import (
     clear_managed_mineru,
     configure_managed_mineru,
     legacy_managed_mineru_config,

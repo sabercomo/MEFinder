@@ -85,7 +85,7 @@ a = Analysis(
         "src.me_finder.pdf_extractors",
         "src.me_finder.pdf_page_mapping",
         "src.me_finder.pdf_import_service",
-        "src.me_finder.vision_api",
+        "src.me_finder.parsers.vision_api",
         "src.me_finder.alignment_kernel",
         "src.me_finder.alignment_compute",
         "src.me_finder.alignment_compute_worker",

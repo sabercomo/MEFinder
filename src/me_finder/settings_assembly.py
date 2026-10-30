@@ -15,17 +15,17 @@ from .import_assembly import ImportAssembly
 from .library_assembly import LibraryAssembly
 from .macos_update import check_macos_update
 from .managed_component_assembly import ManagedComponents, assemble_managed_components
-from .mineru_api import (
+from .parsers.mineru_api import (
     load_mineru_config, mineru_config_summary, normalize_mineru_token,
     read_mineru_config_data, resolve_mineru_config_path, save_mineru_config,
     test_mineru_connection, test_mineru_credential,
 )
 from .parser_settings_controller import ParserSettingsController
-from .parser_statistics import build_parser_statistics
+from .parsers.statistics import build_parser_statistics
 from .pdf_import_service import scan_directories_for_documents
 from .preferences import read_preferences, resolve_preferences_path, save_preferences
 from .preferences_controller import PreferencesController
-from .vision_api import (
+from .parsers.vision_api import (
     delete_vision_provider, discover_vision_models, resolve_vision_config_path,
     save_vision_policy, save_vision_provider, test_vision_provider,
     vision_config_summary,

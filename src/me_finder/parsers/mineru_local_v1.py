@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
 
 from .mineru_local_http import MINERU_LOCAL_PROVIDER_ID, MinerULocalTransport
-from .parser_provider import ParserProviderError, ParserTaskStatus
+from .provider import ParserProviderError, ParserTaskStatus
 
 
 MINERU_V1_PROTOCOL = "v1-jobs"

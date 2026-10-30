@@ -19,7 +19,7 @@ from typing import (
     Optional,
 )
 
-from .parser_provider import (
+from .provider import (
     NormalizedBlock,
     NormalizedPage,
     NormalizedParseResult,

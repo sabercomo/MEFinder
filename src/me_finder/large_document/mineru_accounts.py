@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ..mineru_api import MinerUError, normalize_mineru_token
+from ..parsers.mineru_api import MinerUError, normalize_mineru_token
 from .credential_pool import CredentialPool
 from .job_ledger import JobLedger
 

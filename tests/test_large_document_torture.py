@@ -19,7 +19,7 @@ from src.me_finder.large_document.torture import (
     main,
     streaming_memory_probe,
 )
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.provider import (
     NormalizedPage,
     NormalizedParseResult,
     ParserPollResult,

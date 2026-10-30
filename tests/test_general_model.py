@@ -12,8 +12,8 @@ from unittest import mock
 import unittest
 from pathlib import Path
 
-from src.me_finder import general_model as gm
-from src.me_finder import vision_api as va
+from src.me_finder.parsers import general_model as gm
+from src.me_finder.parsers import vision_api as va
 from src.me_finder.app_context import AppContext
 from src.me_finder.application.document_import_coordinator import (
     DocumentImportCoordinator,

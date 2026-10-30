@@ -24,7 +24,7 @@ SQL_EXECUTE_OUTSIDE_PERSISTENCE = {
     "index_publisher.py": 1,
     "indexer.py": 1,
     "large_document/job_ledger.py": 43,
-    "parser_statistics.py": 3,
+    "parsers/statistics.py": 3,
 }
 
 # 已核实的非 SQL 调用只按文件 + 完整调用目标豁免，不放行整个模块。
@@ -57,8 +57,8 @@ THREAD_CREATION_OWNERS = {
 MINERU_ERROR_IMPORTERS = {
     "application/import_parser_executor.py",
     "large_document/mineru_accounts.py",
-    "mineru_local_settings.py",
-    "mineru_provider.py",
+    "parsers/mineru_local_settings.py",
+    "parsers/mineru_provider.py",
     "pdf_parser_adapters.py",
 }
 
@@ -241,8 +241,8 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 是增长最快却唯一不受约束的文件，纳入门禁。
             "application/literature_verification_service.py": 1050,
             # 协议层拆出后应保持配置无关且稳定。
-            "openai_compatible.py": 850,
-            "vision_api.py": 950,
+            "parsers/openai_compatible.py": 850,
+            "parsers/vision_api.py": 950,
             # 领域层四大模块此前完全不受约束，因而长到 1800~2900 行。
             # 先按当前行数封顶止血，再按既定顺序逐个拆分：
             # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
@@ -499,7 +499,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         """
 
         tree = ast.parse(
-            (PACKAGE / "openai_compatible.py").read_text(encoding="utf-8")
+            (PACKAGE / "parsers/openai_compatible.py").read_text(encoding="utf-8")
         )
         internal = {
             node.module

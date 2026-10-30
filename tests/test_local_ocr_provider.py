@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src.me_finder.local_ocr_provider import (
+from src.me_finder.parsers.local_ocr_provider import (
     LocalOCRProvider,
     LocalOCRProbeEvidence,
     RenderedOCRPage,
@@ -17,8 +17,8 @@ from src.me_finder.local_ocr_provider import (
     normalize_ndl_page,
     sample_page_indices,
 )
-from src.me_finder.local_ocr_settings import LocalOCREngineConfig
-from src.me_finder.parser_provider import (
+from src.me_finder.parsers.local_ocr_settings import LocalOCREngineConfig
+from src.me_finder.parsers.provider import (
     ParserProviderError,
     ParserRequest,
     ParserTaskStatus,

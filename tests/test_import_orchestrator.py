@@ -31,8 +31,8 @@ from src.me_finder.import_queue import ImportQueueFullError
 from src.me_finder.import_resume import sha256_file
 from src.me_finder.lifecycle import DurableOperationGate
 from src.me_finder.errors import UserFacingError
-from src.me_finder.mineru_api import MinerUError
-from src.me_finder.mineru_local_settings import save_mineru_local_config
+from src.me_finder.parsers.mineru_api import MinerUError
+from src.me_finder.parsers.mineru_local_settings import save_mineru_local_config
 
 
 class _FakeIndexRuntime:

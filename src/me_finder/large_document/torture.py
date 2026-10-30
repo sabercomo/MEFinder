@@ -13,11 +13,11 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence
 
 from ..export.document import document_manifest
-from ..mineru_api import resolve_mineru_config_path
-from ..mineru_local_provider import MinerULocalConfig, MinerULocalProvider
-from ..mineru_provider import MinerUCloudProvider
-from ..parser_provider import ProviderCapabilities
-from ..qwen_ocr_provider import QwenOCRConfig, QwenOCRProvider
+from ..parsers.mineru_api import resolve_mineru_config_path
+from ..parsers.mineru_local_provider import MinerULocalConfig, MinerULocalProvider
+from ..parsers.mineru_provider import MinerUCloudProvider
+from ..parsers.provider import ProviderCapabilities
+from ..parsers.qwen_ocr_provider import QwenOCRConfig, QwenOCRProvider
 from .credential_pool import CredentialPool
 from .engine import LargeDocumentJobEngine, pymupdf_page_count
 from .job_ledger import JobLedger

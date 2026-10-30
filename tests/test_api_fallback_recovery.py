@@ -13,13 +13,13 @@ from unittest.mock import patch
 from urllib.request import ProxyHandler, Request, build_opener
 
 from src.me_finder.database import build_database
-from src.me_finder.mineru_api import (
+from src.me_finder.parsers.mineru_api import (
     MinerUError,
     load_segment_manifest,
     save_segment_manifest,
     submit_local_pdf_segments,
 )
-from src.me_finder.vision_api import VisionAPIError
+from src.me_finder.parsers.vision_api import VisionAPIError
 from src.me_finder.web import make_handler
 
 
@@ -33,11 +33,11 @@ class MinerUParserFallbackBoundaryTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.mineru_api.get_pdf_page_count",
+                    "src.me_finder.parsers.mineru_api.get_pdf_page_count",
                     return_value=1,
                 ),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=MinerUError(
                         "MinerU HTTP 401: user authenticate failed",
                         allow_parser_fallback=True,
@@ -74,11 +74,11 @@ class MinerUParserFallbackBoundaryTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.mineru_api.get_pdf_page_count",
+                    "src.me_finder.parsers.mineru_api.get_pdf_page_count",
                     return_value=2,
                 ),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=[
                         {"batch_id": "accepted-batch"},
                         MinerUError(
@@ -120,11 +120,11 @@ class MinerUParserFallbackBoundaryTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.mineru_api.get_pdf_page_count",
+                    "src.me_finder.parsers.mineru_api.get_pdf_page_count",
                     return_value=2,
                 ),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=[
                         {"batch_id": "old-first"},
                         {"batch_id": "old-second"},
@@ -147,11 +147,11 @@ class MinerUParserFallbackBoundaryTests(unittest.TestCase):
 
             with (
                 patch(
-                    "src.me_finder.mineru_api.get_pdf_page_count",
+                    "src.me_finder.parsers.mineru_api.get_pdf_page_count",
                     return_value=2,
                 ),
                 patch(
-                    "src.me_finder.mineru_api.submit_local_pdf",
+                    "src.me_finder.parsers.mineru_api.submit_local_pdf",
                     side_effect=MinerUError(
                         "MinerU HTTP 401: user authenticate failed",
                         allow_parser_fallback=True,

@@ -13,7 +13,7 @@ import socket
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
-from .parser_provider import ParserProviderError
+from .provider import ParserProviderError
 
 
 MINERU_LOCAL_PROVIDER_ID = "mineru-local"

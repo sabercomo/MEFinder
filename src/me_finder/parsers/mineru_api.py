@@ -24,8 +24,8 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from .errors import UserFacingError
-from .import_resume import (
+from ..errors import UserFacingError
+from ..import_resume import (
     COMPLETED_UNIT_STATUSES,
     ResumeManifestError,
     atomic_write_json,

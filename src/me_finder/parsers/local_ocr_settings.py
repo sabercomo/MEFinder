@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Tuple
 
-from .runtime_location import component_runtime_root
-from .import_resume import atomic_write_json, load_json_object
+from ..runtime_location import component_runtime_root
+from ..import_resume import atomic_write_json, load_json_object
 from .local_ocr_runtime import local_ocr_engine_lock
 
 
