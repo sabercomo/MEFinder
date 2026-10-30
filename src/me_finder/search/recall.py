@@ -10,30 +10,30 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
-from .database import (
+from ..database import (
     paragraph_from_database_row,
 )
-from .normalization import (
+from ..normalization import (
     compact_text,
     normalize_text,
     normalize_with_spans,
     plain_spans,
     punctuationless_text,
 )
-from .persistence.passage_reads import (
+from ..persistence.passage_reads import (
     RANK_COLUMNS, read_bm25_passage_rows, read_gram_passage_rows, read_paragraph_rows,
     read_exact_candidate_rows, read_substring_candidate_rows,
 )
-from .search_contract import (
+from .contract import (
     FUZZY_RESCORE_LIMIT,
     MAX_FTS_QUERY_TRIGRAMS,
     SQL_CANDIDATE_FLOOR,
     SQL_CANDIDATE_MULTIPLIER,
     fuzzy_needs_bigram_scan,
 )
-from .search_recall_memory import InMemoryRecallPasses
-from .search_recall_passages import PassageRetrieval, gram_overlap
-from .search_scoring import best_window_ratio
+from .recall_memory import InMemoryRecallPasses
+from .recall_passages import PassageRetrieval, gram_overlap
+from .scoring import best_window_ratio
 
 Scope = Optional[frozenset]
 

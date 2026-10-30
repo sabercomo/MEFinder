@@ -18,8 +18,8 @@ from pathlib import Path
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.persistence.passage_reads import _instr_eligibility_clause
-from src.me_finder.search import SearchEngine
-from src.me_finder.search_recall import CandidateRecall
+from src.me_finder.search.engine import SearchEngine
+from src.me_finder.search.recall import CandidateRecall
 
 
 class InstrEligibilityClauseTests(unittest.TestCase):

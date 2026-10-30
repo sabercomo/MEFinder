@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from src.me_finder.database import build_database
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.persistence.connection import open_write
 
 

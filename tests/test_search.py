@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.indexer import DEFAULT_INDEX_PATH, build_index
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 from tests.corpus_fixtures import CORPUS_REASON, has_corpus
 

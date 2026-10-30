@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.me_finder.citations import build_citation_formats, format_citation
+from src.me_finder.search.citations import build_citation_formats, format_citation
 from src.me_finder.bibliographic.metadata import (
     canonical_metadata,
     detect_pdf_bibliographic_metadata,
@@ -21,7 +21,7 @@ from src.me_finder.bibliographic.metadata import (
 )
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 
 def _build_search_citation_fixture(database_path: Path) -> None:

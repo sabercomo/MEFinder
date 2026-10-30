@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from .search_anchors import span_pdf_page_index
+from .anchors import span_pdf_page_index
 
 _CROSS_PAGE_FIELD_PAIRS = (
     ("citation_page_start", "citation_page_end"),

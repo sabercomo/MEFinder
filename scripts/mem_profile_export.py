@@ -58,7 +58,7 @@ from src.me_finder.export import epub as epub_export_module  # noqa: E402
 from src.me_finder.app_context import AppPaths  # noqa: E402
 from src.me_finder.application.index_runtime import IndexRuntime  # noqa: E402
 from src.me_finder.database import replace_source_in_database  # noqa: E402
-from src.me_finder.search import SearchEngine  # noqa: E402
+from src.me_finder.search.engine import SearchEngine  # noqa: E402
 
 _DERIVED_PROBE: common.MemoryProbe | None = None
 

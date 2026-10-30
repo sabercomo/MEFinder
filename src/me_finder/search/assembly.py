@@ -13,13 +13,13 @@ import json
 from typing import Dict, List, Optional, Protocol, Sequence, Tuple
 
 from .citations import build_citation_formats
-from .normalization import trim_for_display
-from .page_display import build_page_display, resolve_citation_page
-from .persistence.passage_reads import read_search_context_rows
-from .search_anchors import page_match_spans, resolve_spread_hit
-from .search_citation import build_copy_text, citation_metadata, hit_page
-from .search_cross_page import narrow_to_cross_page_side, resolve_cross_page_side
-from .search_scoring import relative_relevance
+from ..normalization import trim_for_display
+from ..page_display import build_page_display, resolve_citation_page
+from ..persistence.passage_reads import read_search_context_rows
+from .anchors import page_match_spans, resolve_spread_hit
+from .citation import build_copy_text, citation_metadata, hit_page
+from .cross_page import narrow_to_cross_page_side, resolve_cross_page_side
+from .scoring import relative_relevance
 
 
 class ResultStore(Protocol):

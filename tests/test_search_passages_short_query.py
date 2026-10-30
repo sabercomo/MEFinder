@@ -22,9 +22,9 @@ from src.me_finder.database import build_database, paragraph_from_database_row
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.persistence import passage_reads
 from src.me_finder.persistence import short_gram_index as sgi
-from src.me_finder.search import SearchEngine
-from src.me_finder.search_recall import CandidateRecall
-from src.me_finder.search_recall_passages import gram_overlap
+from src.me_finder.search.engine import SearchEngine
+from src.me_finder.search.recall import CandidateRecall
+from src.me_finder.search.recall_passages import gram_overlap
 
 TEXTS = [
     "社会学的对象是社会事实。",  # 0 pdf-a
@@ -78,7 +78,7 @@ class SearchPassagesShortQueryTest(unittest.TestCase):
     def passages(self, query: str, *, prefilter: bool = True, **kwargs) -> dict:
         engine = SearchEngine(self.path)
         try:
-            disabled = patch("src.me_finder.search.short_gram_prefilter_ready", return_value=False)
+            disabled = patch("src.me_finder.search.engine.short_gram_prefilter_ready", return_value=False)
             with contextlib.nullcontext() if prefilter else disabled:
                 return engine.search_passages(query, **kwargs)
         finally:
@@ -181,7 +181,7 @@ class SearchPassagesShortQueryTest(unittest.TestCase):
             for index in range(65)
         ]
         build_database(corpus, self.path)
-        with patch("src.me_finder.search_recall_passages.paragraph_from_database_row",
+        with patch("src.me_finder.search.recall_passages.paragraph_from_database_row",
                    wraps=paragraph_from_database_row) as parse:
             response = self.passages("社会", limit=1)
         self.assertEqual(parse.call_count, 64)

@@ -15,7 +15,7 @@ from pathlib import Path
 
 from src.me_finder.application.search_service import SearchRequest
 from src.me_finder.database import build_database
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 QUERY = "相互承认"
 

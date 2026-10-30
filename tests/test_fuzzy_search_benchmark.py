@@ -18,7 +18,7 @@ from pathlib import Path
 from scripts import fuzzy_search_benchmark as bench
 from scripts.performance_fixture import create_fixture
 from src.me_finder.normalization import punctuationless_text
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 
 class PerturbTest(unittest.TestCase):

@@ -10,7 +10,7 @@ from src.me_finder.extractors import extract_epub
 from src.me_finder.indexer import build_index
 from src.me_finder.page_display import build_page_display, resolve_citation_page
 from src.me_finder.pdf.import_service import scan_directories_for_documents
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.structured_reader import (
     get_document_citation,
     get_document_window,

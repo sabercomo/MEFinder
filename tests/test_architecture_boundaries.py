@@ -270,29 +270,29 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 任务 2 已把 search 上帝类拆为 recall/scoring/anchors/citation/
             # assembly/contract 六个单向依赖模块；门面 317 行，上限随之下调，
             # 新模块按当前行数封顶。
-            "search.py": 350,
+            "search/engine.py": 350,
             # JSON 后端内存召回拆为 search_recall_memory（短查询两字索引同轮接入）。
-            "search_recall_memory.py": 98,
+            "search/recall_memory.py": 98,
             # search_passages 的相关性召回拆为 search_recall_passages（两字查询
             # 不再扫描 SQLite 后端从不加载的内存段落表），SQL 下沉到
             # persistence/passage_reads.py 与 paragraph_scope.py；
             # search_recall.py 的上限随之只降不升。
-            "search_recall.py": 400,
+            "search/recall.py": 400,
             # 2026-09-30：两字扫描改为截断后才解析段落、子串计重合度（gram_overlap）；
             # 同日改为先读排序列、截断后按 rowid 取整行（persistence.passage_reads）。
-            "search_recall_passages.py": 149,
-            "search_scoring.py": 250,
-            "search_anchors.py": 240,
-            "search_citation.py": 140,
-            "search_assembly.py": 365,
+            "search/recall_passages.py": 149,
+            "search/scoring.py": 250,
+            "search/anchors.py": 240,
+            "search/citation.py": 140,
+            "search/assembly.py": 365,
             "persistence/passage_reads.py": 245,
             # 0.6.1：导入编排、原生解析、段落/页码锚点构造分别归属。
             "pdf/extractors.py": 900,
             "pdf/native.py": 580,
             "pdf/paragraphs.py": 440,
             # 2026-10-01：普通版式跨页段落按命中页收窄引用页码，独立成模块。
-            "search_cross_page.py": 70,
-            "search_contract.py": 60,
+            "search/cross_page.py": 70,
+            "search/contract.py": 60,
             "application/document_heading_enrichment.py": 330,
         }
         for relative, limit in limits.items():

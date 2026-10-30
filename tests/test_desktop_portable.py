@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 import desktop
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from tools.create_empty_index import create_empty_index
 from tools.create_portable_zip import create_portable_zip
 

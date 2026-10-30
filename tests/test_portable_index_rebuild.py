@@ -18,7 +18,7 @@ from src.me_finder.pdf.import_service import (
     rebuild_local_index,
     register_pdf,
 )
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 BODY = (
     "本文以马克思主义基本原理为指导，"

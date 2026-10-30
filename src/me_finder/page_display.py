@@ -3,7 +3,7 @@
 Presentation wording and the machine-readable verification decision live
 together here so search results and the structured reader cannot silently
 disagree about whether a page number is safe to cite.  Final citation
-formatting remains the responsibility of :mod:`me_finder.citations`.
+formatting remains the responsibility of :mod:`me_finder.search.citations`.
 """
 
 from __future__ import annotations

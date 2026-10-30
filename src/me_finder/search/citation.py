@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, Tuple
 
-from .page_display import resolve_citation_page
+from ..page_display import resolve_citation_page
 
 
 def citation_metadata(

@@ -40,7 +40,7 @@ from src.me_finder.application.script_search import (  # noqa: E402
     execute_with_script_folding,
 )
 from src.me_finder.application.search_service import SearchRequest  # noqa: E402
-from src.me_finder.search import SearchEngine  # noqa: E402
+from src.me_finder.search.engine import SearchEngine  # noqa: E402
 
 # Genuinely per-request non-deterministic top-level keys to exclude from the
 # digest. Empty: verified that the whole response (index_metadata included) is

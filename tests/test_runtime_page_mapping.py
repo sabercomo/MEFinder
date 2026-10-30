@@ -10,7 +10,7 @@ from unittest import mock
 from src.me_finder.database import SCHEMA
 from src.me_finder.bibliographic.metadata import manual_metadata, update_metadata_in_database
 from src.me_finder.pdf.runtime_page_mapping import apply_mapping_to_database, normalize_auto_segments
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.web import HTML
 
 

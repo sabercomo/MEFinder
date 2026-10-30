@@ -25,7 +25,7 @@ from unittest import mock
 
 from scripts.performance_fixture import create_fixture
 from src.me_finder.components.embedding_models import ManagedEmbeddingModels
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.text_alignment import (
     generate_alignment,
     list_alignment_targets,
@@ -90,7 +90,7 @@ from src.me_finder.text_alignment import locate_alignment, list_alignment_target
 root=Path(sys.argv[1]); db=root/'data/index.sqlite3'
 handler=make_handler(db,app_context=AppContext.create(root,index_path=db))
 try:
-    from src.me_finder.search import SearchEngine
+    from src.me_finder.search.engine import SearchEngine
     engine=SearchEngine(db)
     assert engine.search('社会')['total']>0
     engine.close()

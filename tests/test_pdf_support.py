@@ -17,7 +17,7 @@ from src.me_finder.pdf.page_mapping import (
     PageMapper,
     normalize_manual_mapping_segments,
 )
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 from tests.corpus_fixtures import PDF_CORPUS_REASON, has_pdf_corpus
 

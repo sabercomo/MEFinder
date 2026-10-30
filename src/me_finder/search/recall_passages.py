@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Set, Tuple
 
-from .database import paragraph_from_database_row
-from .normalization import punctuationless_text
-from .persistence.passage_reads import (
+from ..database import paragraph_from_database_row
+from ..normalization import punctuationless_text
+from ..persistence.passage_reads import (
     RANK_COLUMNS,
     read_bm25_passage_rows,
     read_gram_passage_rows,
     read_paragraph_rows,
 )
-from .search_contract import SQL_CANDIDATE_FLOOR, SQL_CANDIDATE_MULTIPLIER
+from .contract import SQL_CANDIDATE_FLOOR, SQL_CANDIDATE_MULTIPLIER
 
 Scope = Optional[frozenset]
 

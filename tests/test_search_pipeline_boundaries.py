@@ -1,9 +1,9 @@
 """Boundary guard for the split search pipeline modules.
 
-The pipeline is one-way: ``search.py`` (facade) orchestrates recall, scoring
-and assembly; assembly consumes anchors, cross-page narrowing and citation helpers; recall only
-needs scoring's fuzzy-window helper plus its two leaf sub-stages
-(``search_recall_memory``, ``search_recall_passages``).  Stages must never
+The pipeline is one-way: ``search/engine.py`` (facade) orchestrates recall,
+scoring and assembly; assembly consumes anchors, cross-page narrowing and
+citation helpers; recall only needs scoring's fuzzy-window helper plus its two
+leaf sub-stages (``recall_memory``, ``recall_passages``).  Stages must never
 import the facade or reach backwards across the pipeline — this keeps every
 stage testable and the frozen response contract reviewable in one place.
 """
@@ -14,42 +14,42 @@ import ast
 from pathlib import Path
 import unittest
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "me_finder"
+SRC = Path(__file__).resolve().parents[1] / "src" / "me_finder" / "search"
 
-# Lowercase module names each pipeline module may import internally.
-FACADE_ALLOWED = {"search_assembly", "search_citation", "search_contract", "search_recall", "search_scoring"}
+# Stage modules of the search package each pipeline module may import.
+FACADE_ALLOWED = {"assembly", "citation", "contract", "recall", "scoring"}
 ALLOWED: dict[str, set[str]] = {
-    "search_contract": set(),
-    "search_anchors": set(),
-    "search_citation": set(),
-    "search_cross_page": {"search_anchors"},
-    "search_scoring": {"search_anchors"},
-    "search_recall_memory": set(),
-    "search_recall_passages": {"search_contract"},
-    "search_recall": {
-        "search_contract",
-        "search_recall_memory",
-        "search_recall_passages",
-        "search_scoring",
+    "contract": set(),
+    "anchors": set(),
+    "citation": set(),
+    "cross_page": {"anchors"},
+    "scoring": {"anchors"},
+    "recall_memory": set(),
+    "recall_passages": {"contract"},
+    "recall": {
+        "contract",
+        "recall_memory",
+        "recall_passages",
+        "scoring",
     },
-    "search_assembly": {
-        "search_anchors",
-        "search_citation",
-        "search_cross_page",
-        "search_scoring",
+    "assembly": {
+        "anchors",
+        "citation",
+        "cross_page",
+        "scoring",
     },
-    "search": FACADE_ALLOWED,
+    "engine": FACADE_ALLOWED,
 }
 
 
 def internal_imports(module: str) -> set[str]:
-    """Relative ``.search_*`` imports declared by one pipeline module."""
+    """Sibling pipeline stages (``from .stage import``) declared by one module."""
 
     tree = ast.parse((SRC / f"{module}.py").read_text())
     found: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.level >= 1 and node.module:
-            if node.module == "search" or node.module.startswith("search_"):
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+            if node.module in ALLOWED:
                 found.add(node.module)
     return found
 
@@ -71,10 +71,10 @@ class SearchPipelineBoundaryTests(unittest.TestCase):
 
     def test_no_stage_imports_the_facade(self) -> None:
         for module in ALLOWED:
-            if module == "search":
+            if module == "engine":
                 continue
             self.assertNotIn(
-                "search",
+                "engine",
                 internal_imports(module),
                 f"{module}.py must not import the search facade",
             )

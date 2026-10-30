@@ -43,9 +43,9 @@ from src.me_finder.application.script_search import execute_with_script_folding
 from src.me_finder.application.search_service import SearchRequest
 from src.me_finder.normalization import punctuationless_text
 from src.me_finder.persistence import short_gram_index as sgi
-from src.me_finder.search import SearchEngine
-from src.me_finder.search_recall import CandidateRecall
-from src.me_finder.search_scoring import best_window_ratio
+from src.me_finder.search.engine import SearchEngine
+from src.me_finder.search.recall import CandidateRecall
+from src.me_finder.search.scoring import best_window_ratio
 
 FUZZY_THRESHOLD = 0.58  # 与 search_recall._score_fuzzy_window 一致;只用于归因
 HIGHLIGHT_EXACT = 0.95  # 高亮文字与原句(去标点)相似度达到即算边界准确

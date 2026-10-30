@@ -9,7 +9,7 @@ from pathlib import Path
 from src.me_finder.database import build_database
 from src.me_finder.pdf.extractors import pdf_page_text_hash
 from src.me_finder.pdf.page_mapping import PageMapper
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.structured_reader import (
     CitationPositionNotFound,
     InvalidCitationRange,

@@ -8,8 +8,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from rapidfuzz import process
 from rapidfuzz.distance import Indel, Levenshtein
 
-from .normalization import punctuationless_text
-from .search_anchors import page_match_spans
+from ..normalization import punctuationless_text
+from .anchors import page_match_spans
 
 # Query-length windows kept for boundary refinement in ``best_window_ratio``.
 FUZZY_WINDOW_ANCHORS = 3

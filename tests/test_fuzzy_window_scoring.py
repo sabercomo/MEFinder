@@ -13,8 +13,8 @@ import random
 import unittest
 
 from scripts.fuzzy_d7_ab import legacy_best_window_ratio, prototype_best_window_ratio
-from src.me_finder.search_contract import fuzzy_needs_bigram_scan
-from src.me_finder.search_scoring import best_window_ratio
+from src.me_finder.search.contract import fuzzy_needs_bigram_scan
+from src.me_finder.search.scoring import best_window_ratio
 
 PAD = "此处是与查询无关的填充文字用来拉长段落"
 

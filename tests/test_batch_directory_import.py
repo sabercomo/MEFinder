@@ -23,7 +23,7 @@ from src.me_finder.import_queue import ImportQueueFullError
 from src.me_finder.errors import UserFacingError
 from src.me_finder.pdf.import_service import rebuild_local_index
 from src.me_finder.preferences import save_preferences
-from src.me_finder.search import SearchEngine as RealSearchEngine
+from src.me_finder.search.engine import SearchEngine as RealSearchEngine
 from src.me_finder.web import make_handler
 
 

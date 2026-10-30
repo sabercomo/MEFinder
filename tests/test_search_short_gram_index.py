@@ -27,7 +27,7 @@ from src.me_finder.normalization import compact_text, normalize_text, punctuatio
 from src.me_finder.persistence import short_gram_index as sgi
 from src.me_finder.persistence import short_gram_schema as sgs
 from src.me_finder.persistence.migrations import migrate_index_database
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.tasks.short_gram_backfill import run_short_gram_backfill
 
 
@@ -122,7 +122,7 @@ class _Base(unittest.TestCase):
     def responses(self, *, prefilter: bool) -> list:
         engine = SearchEngine(self.path)
         try:
-            disabled = patch("src.me_finder.search.short_gram_prefilter_ready", return_value=False)
+            disabled = patch("src.me_finder.search.engine.short_gram_prefilter_ready", return_value=False)
             with contextlib.nullcontext() if prefilter else disabled:
                 return [
                     execute_with_script_folding(engine, SearchRequest(**spec), enabled=True)
@@ -476,7 +476,7 @@ class FuzzyTieOrderTests(unittest.TestCase):
     def _fuzzy(self, *, prefilter: bool, **scope) -> list:
         engine = SearchEngine(self.path)
         try:
-            disabled = patch("src.me_finder.search.short_gram_prefilter_ready", return_value=False)
+            disabled = patch("src.me_finder.search.engine.short_gram_prefilter_ready", return_value=False)
             with contextlib.nullcontext() if prefilter else disabled:
                 response = engine.search("麒麟", mode="fuzzy", limit="all", **scope)
         finally:
@@ -484,7 +484,7 @@ class FuzzyTieOrderTests(unittest.TestCase):
         return [hit["paragraph_id"] for hit in response["results"]]
 
     def test_rescore_cut_keeps_reading_order_whatever_the_plan(self) -> None:
-        from src.me_finder.search_contract import FUZZY_RESCORE_LIMIT
+        from src.me_finder.search.contract import FUZZY_RESCORE_LIMIT
 
         self.assertGreater(self.TIED, FUZZY_RESCORE_LIMIT)
         for scope in ({"source_file_id": "pdf-a"}, {}):

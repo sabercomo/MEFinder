@@ -24,9 +24,9 @@ from pathlib import Path
 
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
-from src.me_finder.search import SearchEngine
-from src.me_finder.search_contract import SQL_CANDIDATE_FLOOR
-from src.me_finder.search_recall import CandidateRecall
+from src.me_finder.search.engine import SearchEngine
+from src.me_finder.search.contract import SQL_CANDIDATE_FLOOR
+from src.me_finder.search.recall import CandidateRecall
 
 # limit=5 -> budget = max(64, 40) = 64; keep it small so fixtures stay modest.
 LIMIT = 5

@@ -73,7 +73,7 @@ from src.me_finder.embedding_models import (  # noqa: E402
     EMBEDDING_MODELS,
 )
 from src.me_finder.preferences import save_preferences  # noqa: E402
-from src.me_finder.search import SearchEngine  # noqa: E402
+from src.me_finder.search.engine import SearchEngine  # noqa: E402
 
 
 class _DurableOperations:

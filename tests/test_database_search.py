@@ -8,7 +8,7 @@ from pathlib import Path
 from src.me_finder.database import DEFAULT_DATABASE_PATH, build_database, replace_source_in_database
 from src.me_finder.indexer import build_index
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 from tests.corpus_fixtures import CORPUS_REASON, has_corpus
 

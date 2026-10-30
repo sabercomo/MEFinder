@@ -18,7 +18,7 @@ import unittest
 from scripts.performance_fixture import create_fixture
 from src.me_finder.application.script_search import execute_with_script_folding
 from src.me_finder.application.search_service import SearchRequest
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / "tests" / "fixtures" / "search_pipeline_golden.json"

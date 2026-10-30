@@ -14,7 +14,7 @@ from src.me_finder.normalization import (
     normalize_text,
     punctuationless_text,
 )
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 
 class SearchMatchSpanTests(unittest.TestCase):

@@ -77,7 +77,7 @@ a = Analysis(
         "src",
         "src.me_finder",
         "src.me_finder.web",
-        "src.me_finder.search",
+        "src.me_finder.search.engine",
         "src.me_finder.database",
         "src.me_finder.indexer",
         "src.me_finder.normalization",

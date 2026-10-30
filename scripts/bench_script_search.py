@@ -21,7 +21,7 @@ sys.path.insert(0, str(SRC.parent))  # for `import src.me_finder`
 from src.me_finder import script_conversion  # noqa: E402
 from src.me_finder.application.script_search import execute_with_script_folding  # noqa: E402
 from src.me_finder.application.search_service import SearchRequest  # noqa: E402
-from src.me_finder.search import SearchEngine  # noqa: E402
+from src.me_finder.search.engine import SearchEngine  # noqa: E402
 
 BENCH_DB = sys.argv[1] if len(sys.argv) > 1 else r"D:\ME_Finder\.codex-tmp\bench-index.sqlite3"
 OUT_JSON = sys.argv[2] if len(sys.argv) > 2 else "bench_out.json"

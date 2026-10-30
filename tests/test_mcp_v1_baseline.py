@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder import __version__
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.structured_reader import get_document_window
 from tests.mcp_v1_fixture import build_mcp_v1_fixture
 

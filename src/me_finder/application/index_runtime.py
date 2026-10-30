@@ -21,7 +21,7 @@ from typing import (
 )
 
 from ..app_context import AppPaths
-from ..search import SearchEngine
+from ..search.engine import SearchEngine
 from .search_service import SearchRequest
 from .script_search import execute_with_script_folding
 

@@ -18,7 +18,7 @@ from src.me_finder.normalization import (
     normalize_text,
     punctuationless_text,
 )
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 
 
 def _paragraph(
@@ -314,7 +314,7 @@ class FTS5SearchScalabilityTests(unittest.TestCase):
             engine = SearchEngine(database)
             try:
                 with mock.patch(
-                    "src.me_finder.search.ensure_database_search_index",
+                    "src.me_finder.search.engine.ensure_database_search_index",
                     return_value=False,
                 ):
                     result = engine.search("马克思", mode="exact")

@@ -20,9 +20,9 @@ from unittest.mock import patch
 from src.me_finder.application.search_service import SearchRequest, SearchService
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
-from src.me_finder import search_recall
-from src.me_finder.search import SearchEngine
-from src.me_finder.search_contract import FUZZY_BIGRAM_FALLBACK_LENGTHS
+from src.me_finder.search import recall as search_recall
+from src.me_finder.search.engine import SearchEngine
+from src.me_finder.search.contract import FUZZY_BIGRAM_FALLBACK_LENGTHS
 
 TEXTS = [
     "人们通过共同劳动形成制度并检验知识。",  # 0 target of the typo queries
@@ -91,19 +91,19 @@ class FuzzyShortQueryFallbackTest(unittest.TestCase):
         self.assertEqual(self.ids("社会论"), [])
 
     def test_nine_characters_never_fall_back(self) -> None:
-        with patch("src.me_finder.search_recall.read_gram_passage_rows") as scan:
+        with patch("src.me_finder.search.recall.read_gram_passage_rows") as scan:
             self.assertEqual(self.ids("共X劳动Y成Z度并"), [])
         scan.assert_not_called()
 
     def test_queries_fts_can_serve_skip_the_scan_at_four_and_from_nine(self) -> None:
         for query in ("共同劳动", "人们通过共同劳动形X度"):
             with self.subTest(query=query):
-                with patch("src.me_finder.search_recall.read_gram_passage_rows") as scan:
+                with patch("src.me_finder.search.recall.read_gram_passage_rows") as scan:
                     self.assertEqual(self.ids(query), ["P-0000"])
                 scan.assert_not_called()
 
     def test_five_to_eight_scan_even_when_fts_found_something(self) -> None:
-        with patch("src.me_finder.search_recall.read_gram_passage_rows",
+        with patch("src.me_finder.search.recall.read_gram_passage_rows",
                    wraps=search_recall.read_gram_passage_rows) as scan:
             self.assertEqual(self.ids("共同劳动形X制度"), ["P-0000"])
         scan.assert_called()
@@ -129,7 +129,7 @@ class WeakFtsCandidateTest(unittest.TestCase):
     def test_five_characters_find_the_sentence_behind_a_weak_fts_hit(self) -> None:
         # FTS matches only the unrelated "同乙动形"; the target shares no trigram.
         self.assertIn("P-0000", self.ids("共同乙动形"))
-        with patch("src.me_finder.search_recall.fuzzy_needs_bigram_scan",
+        with patch("src.me_finder.search.recall.fuzzy_needs_bigram_scan",
                    lambda length, found: 4 <= length <= 8 and not found):
             self.assertEqual(self.ids("共同乙动形"), ["P-0001"])  # the pre-D7 rule missed it
 

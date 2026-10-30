@@ -11,7 +11,7 @@ import unittest
 from scripts.bench_responsiveness import compare_results, distribution, overlaps, result_identity, summarize
 from scripts.performance_fixture import create_fixture, QUERIES
 from src.me_finder.application.script_search import execute_with_script_folding
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.application.search_service import SearchRequest
 
 

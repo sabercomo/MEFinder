@@ -790,7 +790,7 @@ class LiteratureVerificationService:
         every scoped tool must do before searching.
         """
 
-        from ..search import SearchEngine
+        from ..search.engine import SearchEngine
         from ..structured_reader import SourceNotFound
 
         engine = SearchEngine(self._existing_index_path())

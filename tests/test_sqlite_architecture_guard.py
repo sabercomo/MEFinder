@@ -43,7 +43,7 @@ connection.executescript(schema)
                          ({}, {"application/script_search.py": 3}))
 
     def test_each_call_counts_including_cursor_and_dynamic_sql(self) -> None:
-        self.write_source("search_recall.py", '''
+        self.write_source("search/recall.py", '''
 connection.execute("SELECT 1")
 self.db().execute(sql, args)
 connection.cursor().execute(f"SELECT {columns} FROM paragraphs")
@@ -51,7 +51,7 @@ cursor.executemany(sql, rows)
 connection.executescript(schema)
 ''')
         self.assertEqual(boundaries._sqlite_usage_outside_persistence(),
-                         ({}, {"search_recall.py": 5}))
+                         ({}, {"search/recall.py": 5}))
 
     def test_unknown_executor_requires_review(self) -> None:
         self.write_source("new_service.py", '''

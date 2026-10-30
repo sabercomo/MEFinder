@@ -134,7 +134,7 @@ _ORIGINALS: Dict[str, object] = {}
 def use_variant(name: str, bench=None) -> None:
     """在当前代码上切换评分与退回规则;bench 为基准模块时同步它的诊断评分。"""
 
-    from src.me_finder import search_recall
+    from src.me_finder.search import recall as search_recall
 
     if not _ORIGINALS:
         _ORIGINALS.update(scorer=search_recall.best_window_ratio,
@@ -150,8 +150,8 @@ def use_variant(name: str, bench=None) -> None:
 def apply_prototype_to_legacy_tree() -> None:
     """在 D7 之前的代码树(如 aaa19a4)上套用验收原型:评分 + 5～8 字合并两字扫描。"""
 
-    from src.me_finder import search_recall
-    from src.me_finder.search_recall import CandidateRecall
+    from src.me_finder.search import recall as search_recall
+    from src.me_finder.search.recall import CandidateRecall
 
     original_pass = CandidateRecall._sql_fuzzy_pass
 
@@ -173,7 +173,7 @@ def validate(db: Path, seed: int, out: Path, per_category: int = 20, repeats: in
     """按查询轮流跑 legacy 与 d7(交替计时),写明细并返回。"""
 
     from scripts import fuzzy_search_benchmark as bench
-    from src.me_finder.search import SearchEngine
+    from src.me_finder.search.engine import SearchEngine
 
     with closing(sqlite3.connect(db)) as connection:
         cases = bench.build_cases(connection, per_category=per_category, seed=seed)
@@ -267,7 +267,7 @@ def dump(root: Path, db: Path, cases_path: Path, out: Path, prototype: bool) -> 
     """对 root 代码树逐请求输出完整响应 SHA-256;prototype 时先套用原型。"""
 
     sys.path.insert(0, str(root))
-    import src.me_finder.search as search_module
+    import src.me_finder.search.engine as search_module
     from src.me_finder.application.script_search import execute_with_script_folding
     from src.me_finder.application.search_service import SearchRequest
 

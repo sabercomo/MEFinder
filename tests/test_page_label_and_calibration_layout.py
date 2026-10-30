@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import unittest
 
-from src.me_finder.citations import format_citation
+from src.me_finder.search.citations import format_citation
 from src.me_finder.web import HTML
 
 

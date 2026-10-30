@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .pdf.auto_page_mapping import normalize_page_candidate
-from .citations import build_citation_formats
+from .search.citations import build_citation_formats
 from .database import open_database
 from .export.normalize import (
     ExportOptions,

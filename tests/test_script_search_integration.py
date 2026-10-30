@@ -15,7 +15,7 @@ from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
 from src.me_finder.preferences import read_preferences, save_preferences
 from src.me_finder.script_conversion import is_available
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.web import make_handler
 
 

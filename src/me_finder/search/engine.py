@@ -25,21 +25,21 @@ from typing import (
     Tuple,
 )
 
-from .database import (
+from ..database import (
     DEFAULT_DATABASE_PATH,
     database_has_fts5_search_index,
     ensure_database_search_index,
     load_database_index,
     open_database,
 )
-from .indexer import DEFAULT_INDEX_PATH, load_index
-from .persistence.short_gram_index import short_gram_prefilter_ready
-from .persistence.structured_reader_reads import read_pdf_page_payload
-from .search_assembly import format_passage, format_result, highlight_html, paragraph_context
-from .search_citation import hit_page
-from .search_contract import SEARCH_MODES
-from .search_recall import CandidateRecall
-from .search_scoring import best_window_ratio, merge_candidate_specs, rank_key
+from ..indexer import DEFAULT_INDEX_PATH, load_index
+from ..persistence.short_gram_index import short_gram_prefilter_ready
+from ..persistence.structured_reader_reads import read_pdf_page_payload
+from .assembly import format_passage, format_result, highlight_html, paragraph_context
+from .citation import hit_page
+from .contract import SEARCH_MODES
+from .recall import CandidateRecall
+from .scoring import best_window_ratio, merge_candidate_specs, rank_key
 
 # Re-exported for callers that historically imported these helpers from here.
 __all__ = ["SearchEngine", "best_window_ratio", "highlight_html"]

@@ -764,7 +764,7 @@ class LiteratureVerificationServiceIntegrationTests(unittest.TestCase):
                 self.closed = True
 
         engine = FailingEngine()
-        with mock.patch("src.me_finder.search.SearchEngine", return_value=engine):
+        with mock.patch("src.me_finder.search.engine.SearchEngine", return_value=engine):
             with self.assertRaisesRegex(RuntimeError, "search failed"):
                 self.service.locate_quote(CALIBRATED_QUOTE)
         self.assertTrue(engine.closed)

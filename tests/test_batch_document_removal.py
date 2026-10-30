@@ -30,7 +30,7 @@ from src.me_finder.pdf.import_service import (
     register_pdf,
     reuse_registered_pdf_copy,
 )
-from src.me_finder.search import SearchEngine
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.web import HTML
 
 
