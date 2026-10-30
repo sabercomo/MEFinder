@@ -38,6 +38,12 @@
 - 守卫测试：`test_slim_main_package` 原按文件名核对随包源码，两个 `embedding_models.py` 无法区分，改按包内相对路径；`test_pdf_extraction_boundaries` 与 `test_search_pipeline_boundaries` 的依赖表改按包内模块名，规则与阶段表不变（双向相等断言仍通过，证明依赖结构未变）；安装器守卫改认包内 `install` 模块。
 - 改写工具缺陷两处，均在提交前发现并修正：多名称的紧凑导入被重排为每行一个，使 `import_assembly.py` 超出 290 行预算（恢复原排版）；`search` 既是旧模块名又是新包名，`from src.me_finder.search import recall` 被二次改成 `search.engine`，影响一个测试与一个实验脚本（已改回，并调整工具改写顺序）。
 
+## 推送后发现的漏改
+
+`desktop.py`（仓库根的桌面入口）在冻结包以 `alignment-compute-worker` 参数启动时导入对齐计算进程模块。改写工具已经改好该文件，但各批只按 `src/`、`tests/`、`scripts/`、`tools/`、`packaging/` 暂存，它没有进入 `21a8e66`，并随 `a56961c` 一起推送到 `origin/main`。在 `660288c` 修复之前，冻结包的对齐计算进程会找不到旧模块。全量测试不导入根目录入口，所以没有暴露。
+
+补救：`660288c` 提交该改写；复核根目录脚本、构建脚本、CI 工作流、打包 spec 与 `tools/`，没有其他旧模块路径。新增守卫 `test_root_entry_scripts_import_existing_modules`，静态核对 `desktop.py`、`mefinder_mcp.py` 的包内导入目标存在；用修复前的 `desktop.py` 验证，该守卫会报出 `src.me_finder.alignment_compute_worker`。期间没有打包，已安装的应用不受影响。
+
 ## 验证
 
 - 每批全量 unittest：书目、组件、PDF、检索四批各有守卫或导入问题如上，修正后专项通过；导出、解析器、对齐三批 2,855 项一次通过（39 项条件跳过）。最终提交 `21a8e66` 全量 2,855 项通过（39 项跳过，187.857 秒）。

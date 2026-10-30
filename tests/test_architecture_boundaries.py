@@ -154,6 +154,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             self.assertEqual(defined & duplicated, set(), name)
             self.assertTrue(imports_kernel, name)
 
+    def test_root_entry_scripts_import_existing_modules(self) -> None:
+        # 2026-10-31：模块移入子包后，desktop.py 冻结包的对齐计算进程分派曾漏改；
+        # 根目录入口不在 unittest 导入范围内，这里静态核对其包内导入目标存在。
+        missing = []
+        for name in ("desktop.py", "mefinder_mcp.py"):
+            tree = ast.parse((ROOT / name).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom) or not node.module:
+                    continue
+                if not node.module.startswith("src.me_finder"):
+                    continue
+                parts = node.module.split(".")[2:]
+                target = PACKAGE.joinpath(*parts)
+                if not (target.with_suffix(".py").is_file() or (target / "__init__.py").is_file()):
+                    missing.append(f"{name}: {node.module}")
+        self.assertEqual(missing, [])
+
     def test_modules_do_not_import_each_others_private_names(self) -> None:
         # 2026-10-31(0.6.1):跨模块共用的辅助函数/常量一律公开命名，并从定义
         # 它的模块直接导入，不经旧模块转手。下划线名只在本模块内使用。
