@@ -123,6 +123,37 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "MinerU 解析相关模块。",
         )
 
+    def test_component_installers_share_install_mechanics(self) -> None:
+        # 2026-10-31(0.6.1):uv 日志进度、下载测速、校验、uv 解包与子进程停止
+        # 收进 component_install.py;三个安装器只保留清单、状态与安装步骤。
+        duplicated = {
+            "_UV_DOWNLOAD_PATTERN",
+            "_UV_DOWNLOADED_PATTERN",
+            "_BINARY_SIZE_MULTIPLIERS",
+            "_stop_process",
+            "_verify_download",
+        }
+        for name in (
+            "local_ocr_installer.py",
+            "managed_alignment_runtime.py",
+            "managed_mineru.py",
+        ):
+            tree = ast.parse((PACKAGE / name).read_text(encoding="utf-8"))
+            defined = set()
+            imports_kernel = False
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    defined.add(node.name)
+                elif isinstance(node, ast.Assign):
+                    defined.update(
+                        target.id for target in node.targets
+                        if isinstance(target, ast.Name)
+                    )
+                elif isinstance(node, ast.ImportFrom) and node.module == "component_install":
+                    imports_kernel = True
+            self.assertEqual(defined & duplicated, set(), name)
+            self.assertTrue(imports_kernel, name)
+
     def test_modules_do_not_import_each_others_private_names(self) -> None:
         # 2026-10-31(0.6.1):跨模块共用的辅助函数/常量一律公开命名，并从定义
         # 它的模块直接导入，不经旧模块转手。下划线名只在本模块内使用。

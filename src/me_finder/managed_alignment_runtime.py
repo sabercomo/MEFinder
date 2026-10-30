@@ -57,6 +57,12 @@ from .local_ocr_installer import (
     current_platform_key,
     load_local_ocr_installer_manifest,
 )
+from .component_install import (
+    copy_response_to_file,
+    install_uv_executable,
+    stop_process,
+    verify_download,
+)
 from .import_resume import atomic_write_json
 from .runtime_location import component_runtime_root
 from .transfer_rate import TransferRate
@@ -973,48 +979,21 @@ class ManagedAlignmentRuntime:
         executable = tool_dir / PurePosixPath(platform_manifest.uv.member).name
         if executable.is_file():
             return executable
-        staging = self.component_root / f".uv-{uuid.uuid4().hex}"
-        archive = staging / "archive"
-        staging.mkdir(parents=True)
-        try:
-            self._download_file(
+        uv = platform_manifest.uv
+        return install_uv_executable(
+            uv=uv,
+            tool_dir=tool_dir,
+            staging=self.component_root / f".uv-{uuid.uuid4().hex}",
+            archive_name="archive",
+            download=lambda archive: self._download_file(
                 self._uv_download_candidates(platform_manifest),
                 archive,
-                platform_manifest.uv.size,
-                platform_manifest.uv.sha256,
-            )
-            extracted = staging / executable.name
-            if platform_manifest.uv.archive_type == "zip":
-                with zipfile.ZipFile(archive) as bundle:
-                    try:
-                        member = bundle.getinfo(platform_manifest.uv.member)
-                    except KeyError as exc:
-                        raise ManagedAlignmentRuntimeError(
-                            "uv 归档缺少清单指定的可执行文件。"
-                        ) from exc
-                    with bundle.open(member) as source, extracted.open("wb") as output:
-                        shutil.copyfileobj(source, output)
-            else:
-                with tarfile.open(archive, "r:gz") as bundle:
-                    try:
-                        member = bundle.getmember(platform_manifest.uv.member)
-                    except KeyError as exc:
-                        raise ManagedAlignmentRuntimeError(
-                            "uv 归档缺少清单指定的可执行文件。"
-                        ) from exc
-                    source = bundle.extractfile(member)
-                    if source is None:
-                        raise ManagedAlignmentRuntimeError("uv 归档入口无法读取。")
-                    with source, extracted.open("wb") as output:
-                        shutil.copyfileobj(source, output)
-            extracted.chmod(0o755)
-            archive.unlink()
-            tool_dir.parent.mkdir(parents=True, exist_ok=True)
-            self._remove_tree(tool_dir)
-            staging.replace(tool_dir)
-            return tool_dir / executable.name
-        finally:
-            self._remove_tree(staging)
+                uv.size,
+                uv.sha256,
+            ),
+            remove_tree=self._remove_tree,
+            error=ManagedAlignmentRuntimeError,
+        )
 
     def _uv_download_candidates(self, platform_manifest: PlatformManifest) -> list[str]:
         """Ordered uv download URLs: domestic mirror first, official last."""
@@ -1086,7 +1065,14 @@ class ManagedAlignmentRuntime:
             # Integrity failure raises ManagedAlignmentRuntimeError, which is not
             # caught here and bubbles up so the caller tries the next candidate
             # (a bad mirror is not worth retrying on the same URL).
-            self._verify_download(target, expected_size, expected_sha256)
+            verify_download(
+                target,
+                expected_size=expected_size,
+                expected_sha256=expected_sha256,
+                error=ManagedAlignmentRuntimeError,
+                size_message="uv 下载文件大小与清单不一致。",
+                digest_message="uv 下载文件 SHA-256 校验失败。",
+            )
             return
         raise ManagedAlignmentRuntimeError(
             f"下载多次失败：{last_error}" if last_error is not None else "下载失败。"
@@ -1108,31 +1094,22 @@ class ManagedAlignmentRuntime:
             if resume_from and status != 206:
                 # Server ignored the Range request (whole body); start over.
                 resume_from = 0
-            downloaded = resume_from
-            with self._lock:
-                self._state.downloaded_bytes = downloaded
-                if expected_size:
-                    self._state.progress = min(downloaded / expected_size, 0.99)
+            self._record_download(resume_from, expected_size)
             with target.open("ab" if resume_from else "wb") as output:
-                while True:
-                    self._raise_if_cancelled()
-                    chunk = response.read(_DOWNLOAD_CHUNK)
-                    if not chunk:
-                        break
-                    output.write(chunk)
-                    downloaded += len(chunk)
-                    with self._lock:
-                        self._state.downloaded_bytes = downloaded
-                        if expected_size:
-                            self._state.progress = min(downloaded / expected_size, 0.99)
+                copy_response_to_file(
+                    response,
+                    output,
+                    downloaded=resume_from,
+                    raise_if_cancelled=self._raise_if_cancelled,
+                    on_progress=lambda count: self._record_download(count, expected_size),
+                    chunk_bytes=_DOWNLOAD_CHUNK,
+                )
 
-    @staticmethod
-    def _verify_download(target: Path, expected_size: int, expected_sha256: str) -> None:
-        if target.stat().st_size != expected_size:
-            raise ManagedAlignmentRuntimeError("uv 下载文件大小与清单不一致。")
-        digest = hashlib.sha256(target.read_bytes()).hexdigest()
-        if digest != expected_sha256:
-            raise ManagedAlignmentRuntimeError("uv 下载文件 SHA-256 校验失败。")
+    def _record_download(self, downloaded: int, expected_size: int) -> None:
+        with self._lock:
+            self._state.downloaded_bytes = downloaded
+            if expected_size:
+                self._state.progress = min(downloaded / expected_size, 0.99)
 
     @staticmethod
     def _discard_partial(target: Path) -> None:
@@ -1234,10 +1211,10 @@ class ManagedAlignmentRuntime:
                 deadline = time.monotonic() + timeout
                 while process.poll() is None:
                     if self._state.cancel_event.wait(0.1):
-                        self._stop_process(process)
+                        stop_process(process)
                         raise _Cancelled("操作已取消。")
                     if time.monotonic() >= deadline:
-                        self._stop_process(process)
+                        stop_process(process)
                         raise ManagedAlignmentRuntimeError("对齐计算安装子进程超时。")
             finally:
                 with self._lock:
@@ -1259,7 +1236,7 @@ class ManagedAlignmentRuntime:
             state.cancel_event.set()
             process = state.process
         if process is not None:
-            self._stop_process(process)
+            stop_process(process)
 
     def _raise_if_cancelled(self) -> None:
         if self._state.cancel_event.is_set():
@@ -1322,25 +1299,12 @@ class ManagedAlignmentRuntime:
             else:
                 process = None
         if process is not None:
-            self._stop_process(process)
+            stop_process(process)
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=timeout)
         return thread is None or not thread.is_alive()
 
     # --- helpers --------------------------------------------------------- #
-    @staticmethod
-    def _stop_process(process: subprocess.Popen) -> None:
-        if process.poll() is not None:
-            return
-        try:
-            process.terminate()
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        except OSError:
-            pass
-
     @staticmethod
     def _remove_tree(path: Path, *, strict: bool = False) -> None:
         if strict:
@@ -1518,7 +1482,7 @@ def make_model_downloader(
                 )
         finally:
             if process is not None:
-                ManagedAlignmentRuntime._stop_process(process)
+                stop_process(process)
                 process.wait()
             shutil.rmtree(work)
 

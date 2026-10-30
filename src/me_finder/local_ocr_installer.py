@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import math
 import os
 import platform
-import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +20,16 @@ from typing import Callable, Dict, Mapping, Optional, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .component_install import (
+    begin_download_progress,
+    copy_response_to_file,
+    install_uv_executable,
+    read_log_tail,
+    record_download_progress,
+    stop_process,
+    uv_download_totals,
+    verify_download,
+)
 from .runtime_location import component_runtime_root
 from .import_resume import ResumeManifestError, atomic_write_json
 from .local_ocr_runtime import local_ocr_engine_lock
@@ -46,16 +53,6 @@ ACTIVE_INSTALL_STATES = frozenset(
         "cleaning",
     }
 )
-_UV_DOWNLOAD_PATTERN = re.compile(
-    r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)\r?$",
-    re.MULTILINE,
-)
-_UV_DOWNLOADED_PATTERN = re.compile(r"^ Downloaded (.+?)\r?$", re.MULTILINE)
-_BINARY_SIZE_MULTIPLIERS = {
-    "KiB": 1024,
-    "MiB": 1024 * 1024,
-    "GiB": 1024 * 1024 * 1024,
-}
 # Windows Defender / the search indexer briefly lock freshly written runtime
 # files, which makes renaming their parent directory fail with WinError 5/32/33.
 _PUBLISH_REPLACE_ATTEMPTS = 10
@@ -366,7 +363,7 @@ class LocalOCRInstaller:
             for state in active:
                 state.cancel_event.set()
         for process in processes:
-            self._stop_process(process)
+            stop_process(process)
         for thread in threads:
             thread.join(None if deadline is None else max(0.0, deadline - time.monotonic()))
         return all(not thread.is_alive() for thread in threads)
@@ -739,18 +736,18 @@ class LocalOCRInstaller:
                                 )
                             replayed += len(chunk)
                     mode = "ab" if existing else "wb"
-                    downloaded = existing
                     with target.open(mode) as output:
-                        while True:
-                            self._raise_if_cancelled(provider_id)
-                            chunk = response.read(1024 * 1024)
-                            if not chunk:
-                                break
-                            output.write(chunk)
-                            downloaded += len(chunk)
-                            self._set_download_progress(
-                                provider_id, downloaded, expected_size
-                            )
+                        downloaded = copy_response_to_file(
+                            response,
+                            output,
+                            downloaded=existing,
+                            raise_if_cancelled=lambda: self._raise_if_cancelled(
+                                provider_id
+                            ),
+                            on_progress=lambda count: self._set_download_progress(
+                                provider_id, count, expected_size
+                            ),
+                        )
                 if downloaded == expected_size:
                     return
                 attempts += 1
@@ -775,17 +772,14 @@ class LocalOCRInstaller:
         expected_size: int,
         expected_sha256: str,
     ) -> None:
-        if path.stat().st_size != expected_size:
-            raise LocalOCRInstallerError("下载文件大小与清单不一致。")
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            while True:
-                chunk = stream.read(1024 * 1024)
-                if not chunk:
-                    break
-                digest.update(chunk)
-        if digest.hexdigest().lower() != expected_sha256.lower():
-            raise LocalOCRInstallerError("SHA-256 校验失败，已取消安装。")
+        verify_download(
+            path,
+            expected_size=expected_size,
+            expected_sha256=expected_sha256,
+            error=LocalOCRInstallerError,
+            size_message="下载文件大小与清单不一致。",
+            digest_message="SHA-256 校验失败，已取消安装。",
+        )
 
     def _extract_engine_archive(
         self,
@@ -842,65 +836,40 @@ class LocalOCRInstaller:
         receipt = tool_dir / "receipt.json"
         if executable.is_file() and receipt.is_file():
             return executable, False
-        staging = self.component_root / f".uv-staging-{uuid.uuid4().hex}"
-        archive = staging / "uv-archive"
-        staging.mkdir(parents=True)
-        try:
+        uv = self.platform.uv
+
+        def download(archive: Path) -> None:
             self._set_state(
                 provider_id,
                 "provisioning",
-                message=f"正在下载 uv {self.platform.uv.version}",
-                total_bytes=self.platform.uv.size,
+                message=f"正在下载 uv {uv.version}",
+                total_bytes=uv.size,
                 downloaded_bytes=0,
             )
-            self._download_file(
-                provider_id,
-                self.platform.uv.url,
-                archive,
-                self.platform.uv.size,
-            )
+            self._download_file(provider_id, uv.url, archive, uv.size)
             self._verify_file(
                 archive,
-                expected_size=self.platform.uv.size,
-                expected_sha256=self.platform.uv.sha256,
+                expected_size=uv.size,
+                expected_sha256=uv.sha256,
             )
-            extracted = staging / executable.name
-            if self.platform.uv.archive_type == "zip":
-                with zipfile.ZipFile(archive) as bundle:
-                    info = bundle.getinfo(self.platform.uv.member)
-                    with bundle.open(info) as source, extracted.open("wb") as output:
-                        shutil.copyfileobj(source, output)
-            elif self.platform.uv.archive_type == "tar.gz":
-                with tarfile.open(archive, "r:gz") as bundle:
-                    member = bundle.getmember(self.platform.uv.member)
-                    if not member.isfile():
-                        raise LocalOCRInstallerError("uv 归档入口无效。")
-                    source = bundle.extractfile(member)
-                    if source is None:
-                        raise LocalOCRInstallerError("uv 可执行文件无法读取。")
-                    with source, extracted.open("wb") as output:
-                        shutil.copyfileobj(source, output)
-            else:
-                raise LocalOCRInstallerError("uv 归档格式不受支持。")
-            extracted.chmod(0o755)
-            atomic_write_json(
-                staging / "receipt.json",
-                {
-                    "version": self.platform.uv.version,
-                    "url": self.platform.uv.url,
-                    "size": self.platform.uv.size,
-                    "sha256": self.platform.uv.sha256,
-                    "license": "Apache-2.0 OR MIT",
-                },
-            )
-            archive.unlink()
-            tool_dir.parent.mkdir(parents=True, exist_ok=True)
-            if tool_dir.exists():
-                shutil.rmtree(tool_dir)
-            staging.replace(tool_dir)
-            return tool_dir / executable.name, True
-        finally:
-            self._remove_tree(staging)
+
+        installed = install_uv_executable(
+            uv=uv,
+            tool_dir=tool_dir,
+            staging=self.component_root / f".uv-staging-{uuid.uuid4().hex}",
+            archive_name="uv-archive",
+            download=download,
+            remove_tree=self._remove_tree,
+            error=LocalOCRInstallerError,
+            receipt={
+                "version": uv.version,
+                "url": uv.url,
+                "size": uv.size,
+                "sha256": uv.sha256,
+                "license": "Apache-2.0 OR MIT",
+            },
+        )
+        return installed, True
 
     def _validate_runtime(
         self,
@@ -1006,7 +975,7 @@ class LocalOCRInstaller:
             try:
                 while process.poll() is None:
                     if self._states[provider_id].cancel_event.wait(0.1):
-                        self._stop_process(process)
+                        stop_process(process)
                         raise _InstallCancelled("操作已取消。")
                     now = time.monotonic()
                     if track_uv_downloads and now >= next_progress_update:
@@ -1017,7 +986,7 @@ class LocalOCRInstaller:
                         )
                         next_progress_update = now + 0.5
                     if now >= deadline:
-                        self._stop_process(process)
+                        stop_process(process)
                         raise LocalOCRInstallerError("安装子进程超时。")
             finally:
                 with self._state_lock:
@@ -1246,13 +1215,9 @@ class LocalOCRInstaller:
         total: int,
     ) -> None:
         with self._state_lock:
-            state = self._states[provider_id]
-            state.downloaded_bytes = downloaded
-            state.total_bytes = total
-            state.progress = min(1.0, downloaded / total)
-            state.download_speed_bps = 0.0
-            state.eta_seconds = None
-            state.download_samples = [(time.monotonic(), downloaded)]
+            begin_download_progress(
+                self._states[provider_id], downloaded, total, time.monotonic()
+            )
 
     def _update_uv_download_progress(
         self,
@@ -1261,20 +1226,10 @@ class LocalOCRInstaller:
         *,
         start_offset: int = 0,
     ) -> None:
-        with log_path.open("rb") as log:
-            log.seek(start_offset)
-            text = log.read().decode("utf-8", errors="replace")
-        announced = {
-            name: round(float(size) * _BINARY_SIZE_MULTIPLIERS[unit])
-            for name, size, unit in _UV_DOWNLOAD_PATTERN.findall(text)
-        }
-        if not announced:
+        totals = uv_download_totals(read_log_tail(log_path, start_offset))
+        if totals is None:
             return
-        completed_names = set(_UV_DOWNLOADED_PATTERN.findall(text))
-        completed = sum(
-            size for name, size in announced.items() if name in completed_names
-        )
-        total = sum(announced.values())
+        completed, total = totals
         with self._state_lock:
             has_samples = bool(self._states[provider_id].download_samples)
         if not has_samples:
@@ -1295,31 +1250,13 @@ class LocalOCRInstaller:
         rolling_window: bool = True,
     ) -> None:
         with self._state_lock:
-            state = self._states[provider_id]
-            state.downloaded_bytes = downloaded
-            state.total_bytes = total
-            state.progress = min(1.0, downloaded / total)
-            now = time.monotonic()
-            state.download_samples.append((now, downloaded))
-            if rolling_window:
-                cutoff = now - 8
-                while (
-                    len(state.download_samples) > 2
-                    and state.download_samples[1][0] < cutoff
-                ):
-                    state.download_samples.pop(0)
-            started_at, started_bytes = state.download_samples[0]
-            elapsed = now - started_at
-            transferred = downloaded - started_bytes
-            if elapsed >= 0.5 and transferred > 0:
-                state.download_speed_bps = transferred / elapsed
-                remaining = max(0, total - downloaded)
-                state.eta_seconds = math.ceil(
-                    remaining / state.download_speed_bps
-                )
-            elif elapsed >= 0.5:
-                state.download_speed_bps = 0.0
-                state.eta_seconds = None
+            record_download_progress(
+                self._states[provider_id],
+                downloaded,
+                total,
+                time.monotonic(),
+                window_seconds=8 if rolling_window else None,
+            )
 
     def _cancel(self, provider_id: str) -> None:
         with self._state_lock:
@@ -1330,22 +1267,11 @@ class LocalOCRInstaller:
             process = state.process
             state.message = "正在取消并清理…"
         if process is not None:
-            self._stop_process(process)
+            stop_process(process)
 
     def _raise_if_cancelled(self, provider_id: str) -> None:
         if self._states[provider_id].cancel_event.is_set():
             raise _InstallCancelled("操作已取消。")
-
-    @staticmethod
-    def _stop_process(process: subprocess.Popen[bytes]) -> None:
-        if process.poll() is not None:
-            return
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
 
     def _uv_tool_dir(self) -> Path:
         assert self.platform is not None
