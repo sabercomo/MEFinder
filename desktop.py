@@ -20,11 +20,11 @@ from __future__ import annotations
 # ``MEFinder alignment-compute-worker <request.json> <result.json>``. Do this
 # before importing the desktop shell (pywebview, etc.) so the worker stays lean
 # and never opens a window. Harmless in development, where the worker is launched
-# as ``python -m src.me_finder.alignment_compute_worker`` instead.
+# as ``python -m src.me_finder.alignment.compute_worker`` instead.
 import sys as _sys
 
 if len(_sys.argv) > 1 and _sys.argv[1] == "alignment-compute-worker":
-    from src.me_finder.alignment_compute_worker import main as _worker_main
+    from src.me_finder.alignment.compute_worker import main as _worker_main
 
     raise SystemExit(_worker_main(_sys.argv[2:]))
 
