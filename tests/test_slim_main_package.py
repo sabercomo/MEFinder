@@ -75,14 +75,17 @@ class WorkerSourceDatasTests(unittest.TestCase):
         self.sources = {src for src, _dest in self.datas}
 
     def test_ships_the_worker_and_its_transitive_compute_modules(self) -> None:
-        shipped = {Path(src).name for src in self.sources}
+        package = ROOT / "src" / "me_finder"
+        shipped = {
+            Path(src).resolve().relative_to(package).as_posix() for src in self.sources
+        }
         for expected in (
             "alignment_compute_worker.py",
             "alignment_compute.py",
             "semantic_alignment.py",
             "text_alignment.py",
             "embedding_models.py",
-            "managed_embedding_models.py",
+            "components/embedding_models.py",
         ):
             self.assertIn(expected, shipped)
 
@@ -133,8 +136,8 @@ class MainPathLoadsWithoutStackTests(unittest.TestCase):
             "mods = [\n"
             "    'src.me_finder.web_runtime',\n"
             "    'src.me_finder.managed_component_assembly',\n"
-            "    'src.me_finder.managed_alignment_runtime',\n"
-            "    'src.me_finder.managed_embedding_models',\n"
+            "    'src.me_finder.components.alignment_runtime',\n"
+            "    'src.me_finder.components.embedding_models',\n"
             "    'src.me_finder.alignment_compute',\n"
             "    'src.me_finder.application.text_alignment_coordinator',\n"
             "    'src.me_finder.text_alignment',\n"
@@ -213,7 +216,7 @@ class SlimModelDownloadGuardTests(unittest.TestCase):
     """
 
     def test_download_without_runtime_or_stack_raises_actionable_error(self) -> None:
-        mod = importlib.import_module("src.me_finder.managed_alignment_runtime")
+        mod = importlib.import_module("src.me_finder.components.alignment_runtime")
         import tempfile
 
         with tempfile.TemporaryDirectory() as directory:
@@ -227,7 +230,7 @@ class SlimModelDownloadGuardTests(unittest.TestCase):
         self.assertIn("运行时未安装", str(ctx.exception))
 
     def test_download_falls_back_in_process_when_stack_bundled(self) -> None:
-        mod = importlib.import_module("src.me_finder.managed_alignment_runtime")
+        mod = importlib.import_module("src.me_finder.components.alignment_runtime")
         import tempfile
 
         calls = []
@@ -238,7 +241,7 @@ class SlimModelDownloadGuardTests(unittest.TestCase):
             with mock.patch.object(mod, "_builtin_stack_present", return_value=True), \
                     mock.patch.dict(
                         sys.modules,
-                        {"src.me_finder.managed_embedding_models": fake},
+                        {"src.me_finder.components.embedding_models": fake},
                     ):
                 downloader("model-x", root / "models")
         self.assertEqual(calls, [("model-x", str(root / "models"))])
@@ -247,7 +250,7 @@ class SlimModelDownloadGuardTests(unittest.TestCase):
 def types_module_with_download(calls):
     import types
 
-    module = types.ModuleType("src.me_finder.managed_embedding_models")
+    module = types.ModuleType("src.me_finder.components.embedding_models")
 
     def download_embedding_model(model_id, cache_dir):
         calls.append((model_id, str(cache_dir)))
@@ -258,7 +261,7 @@ def types_module_with_download(calls):
 
 class WorkerContextResolutionTests(unittest.TestCase):
     def test_frozen_worker_context_resolves_meipass(self) -> None:
-        mod = importlib.import_module("src.me_finder.managed_alignment_runtime")
+        mod = importlib.import_module("src.me_finder.components.alignment_runtime")
         with mock.patch.object(sys, "frozen", True, create=True), mock.patch.object(
             sys, "_MEIPASS", "/opt/mefinder/data", create=True
         ):
@@ -267,7 +270,7 @@ class WorkerContextResolutionTests(unittest.TestCase):
         self.assertEqual(source_root, Path("/opt/mefinder/data"))
 
     def test_development_worker_context_uses_src_layout(self) -> None:
-        mod = importlib.import_module("src.me_finder.managed_alignment_runtime")
+        mod = importlib.import_module("src.me_finder.components.alignment_runtime")
         # Not frozen in the test process.
         module, source_root = mod.default_worker_context()
         self.assertEqual(module, "src.me_finder.alignment_compute_worker")

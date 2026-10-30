@@ -11,8 +11,8 @@ from .app_context import AppContext
 from .alignment_assembly import assemble_alignment
 from .import_assembly import assemble_import
 from .library_assembly import assemble_library
-from .component_catalog import ComponentCatalog
-from .managed_mineru import ManagedMinerU
+from .components.catalog import ComponentCatalog
+from .components.mineru import ManagedMinerU
 from .settings_assembly import assemble_desktop_shell, assemble_settings
 from .http_routes import (
     assemble_archive_routes,

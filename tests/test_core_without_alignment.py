@@ -27,7 +27,7 @@ from src.me_finder.app_context import AppContext
 from src.me_finder.web import make_handler
 from src.me_finder.web import ManagedThreadingHTTPServer
 from src.me_finder.text_alignment import locate_alignment
-from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
+from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 from src.me_finder.application.text_alignment_coordinator import TextAlignmentCoordinator, TextAlignmentFailed
 from src.me_finder.semantic_alignment import cached_text_sequence_vectors, _sequence_cache_path
 root=Path(sys.argv[1]); create_fixture(root,documents=2,paragraphs=20,alignment_paragraphs=8)

@@ -25,7 +25,7 @@ class AlignmentOfflineBoundaryTests(unittest.TestCase):
         self.assertTrue(constructor.call_args.kwargs.get('local_files_only'))
 
     def test_stale_receipt_allows_repair_and_required_files_control_presence(self):
-        from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
+        from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 
         def download(model_id, cache):
             config = embedding_model_config(model_id)
@@ -54,7 +54,7 @@ class AlignmentOfflineBoundaryTests(unittest.TestCase):
             self.assertEqual(after['state'], 'not_installed')
 
     def test_only_explicit_download_enables_network(self):
-        from src.me_finder.managed_embedding_models import download_embedding_model
+        from src.me_finder.components.embedding_models import download_embedding_model
         with TemporaryDirectory() as directory, patch('src.me_finder.semantic_alignment.embed_texts') as embed:
             download_embedding_model('minilm-l12-v2', Path(directory))
         self.assertIs(embed.call_args.kwargs['local_files_only'], False)

@@ -6,12 +6,12 @@ import hashlib
 import json
 from pathlib import Path
 
-from src.me_finder.component_catalog import validate_component_catalog
-from src.me_finder.local_ocr_installer import (
+from src.me_finder.components.catalog import validate_component_catalog
+from src.me_finder.components.local_ocr_installer import (
     LOCAL_OCR_MANIFEST_FILE,
     load_local_ocr_installer_manifest,
 )
-from src.me_finder.managed_mineru import load_managed_mineru_manifest
+from src.me_finder.components.mineru import load_managed_mineru_manifest
 
 
 OUTPUT_NAME = "mefinder-components-v1.json"

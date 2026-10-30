@@ -21,7 +21,7 @@ from ..embedding_runtime import (
     enter_embedding_run,
     exit_embedding_run,
 )
-from ..managed_alignment_runtime import (
+from ..components.alignment_runtime import (
     ComputeUnavailable,
     compute_admission,
     resolve_installed_runtime_launch,

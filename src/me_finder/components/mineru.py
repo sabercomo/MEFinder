@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, Mapping, Optional, Sequence
 from urllib.request import Request, getproxies, urlopen
 
-from .component_install import (
+from .install import (
     begin_download_progress,
     copy_response_to_file,
     install_uv_executable,
@@ -31,22 +31,22 @@ from .component_install import (
     uv_download_totals,
     verify_download,
 )
-from .import_resume import atomic_write_json
+from ..import_resume import atomic_write_json
 from .local_ocr_installer import (
     LOCAL_OCR_MANIFEST_FILE,
     PlatformManifest,
     current_platform_key,
     load_local_ocr_installer_manifest,
 )
-from .mineru_local_provider import MinerULocalConfig, MinerULocalProvider
-from .parser_provider import ParserProviderError
-from .mineru_local_settings import (
+from ..mineru_local_provider import MinerULocalConfig, MinerULocalProvider
+from ..parser_provider import ParserProviderError
+from ..mineru_local_settings import (
     clear_managed_mineru,
     configure_managed_mineru,
     legacy_managed_mineru_config,
     mineru_local_config_summary,
 )
-from .tasks import TaskEvent
+from ..tasks import TaskEvent
 
 
 MANAGED_MINERU_COMPONENT_DIR = "components/mineru"

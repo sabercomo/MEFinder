@@ -27,8 +27,8 @@ from pathlib import Path
 from urllib.error import URLError
 
 from src.me_finder.alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
-import src.me_finder.managed_alignment_runtime as align_runtime
-from src.me_finder.managed_alignment_runtime import (
+import src.me_finder.components.alignment_runtime as align_runtime
+from src.me_finder.components.alignment_runtime import (
     ManagedAlignmentRuntime,
     ManagedAlignmentRuntimeError,
     _TUNA_PYPI_INDEX,
@@ -36,7 +36,7 @@ from src.me_finder.managed_alignment_runtime import (
     _uv_mirror_url,
     resolve_installed_runtime_launch,
 )
-from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
+from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 
 
 class _FakeResponse:
@@ -306,7 +306,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         self.assertFalse((models_dir / "models--fake").exists())
 
     def test_uninstall_defers_until_compute_task_finishes(self) -> None:
-        from src.me_finder.managed_alignment_runtime import compute_admission
+        from src.me_finder.components.alignment_runtime import compute_admission
 
         manager = self._manager()
         manager.perform({"action": "install"})
@@ -410,7 +410,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         self.assertTrue(target.exists())
 
     def test_compute_status_reports_builtin_when_stack_present(self) -> None:
-        import src.me_finder.managed_alignment_runtime as mod
+        import src.me_finder.components.alignment_runtime as mod
 
         manager = self._manager()
         # Not-installed independent runtime, but the app's own stack is present:
@@ -421,7 +421,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         self.assertEqual(status, {"available": True, "provider": "builtin", "detail": ""})
 
     def test_compute_status_unavailable_when_no_runtime_and_no_stack(self) -> None:
-        import src.me_finder.managed_alignment_runtime as mod
+        import src.me_finder.components.alignment_runtime as mod
 
         manager = self._manager()
         with mock.patch.object(mod, "_builtin_stack_present", lambda: False):
@@ -429,7 +429,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         self.assertEqual(status, {"available": False, "provider": "none", "detail": ""})
 
     def test_compute_status_prefers_installed_independent_runtime(self) -> None:
-        import src.me_finder.managed_alignment_runtime as mod
+        import src.me_finder.components.alignment_runtime as mod
 
         manager = self._manager()
         manager.perform({"action": "install"})
@@ -512,7 +512,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         # [P1] An older/remote-cached catalog with no `alignment` block must not
         # abort startup: the component constructs, reports unsupported, refuses
         # install, and still reports compute available via the bundled stack.
-        import src.me_finder.managed_alignment_runtime as mod
+        import src.me_finder.components.alignment_runtime as mod
 
         manager = ManagedAlignmentRuntime(
             self.runtime,
@@ -567,7 +567,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
     def test_compute_status_matches_launch_on_incompatible_receipt(self) -> None:
         # [P2] An installed receipt with an incompatible protocol must not read
         # as "可用 · 独立运行时": status must track the real launch condition.
-        import src.me_finder.managed_alignment_runtime as mod
+        import src.me_finder.components.alignment_runtime as mod
 
         manager = self._manager()
         manager.perform({"action": "install"})
@@ -588,7 +588,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
     def test_model_downloader_routes_through_installed_runtime(self) -> None:
         # [P2] With an independent runtime installed, model download runs in that
         # runtime (subprocess), not the main process.
-        from src.me_finder.managed_alignment_runtime import make_model_downloader
+        from src.me_finder.components.alignment_runtime import make_model_downloader
 
         manager = self._manager()
         manager.perform({"action": "install"})
@@ -606,13 +606,13 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
         self.assertTrue(Path(str(cache_dir) + ".downloaded").exists())
 
     def test_model_downloader_falls_back_in_process_without_runtime(self) -> None:
-        import src.me_finder.managed_embedding_models as emod
-        from src.me_finder.managed_alignment_runtime import make_model_downloader
+        import src.me_finder.components.embedding_models as emod
+        from src.me_finder.components.alignment_runtime import make_model_downloader
 
         calls = []
         with mock.patch.object(
             emod, "download_embedding_model", lambda model_id, cache: calls.append(model_id)
-        ), mock.patch("src.me_finder.managed_alignment_runtime._builtin_stack_present", return_value=True):
+        ), mock.patch("src.me_finder.components.alignment_runtime._builtin_stack_present", return_value=True):
             downloader = make_model_downloader(
                 self.runtime,
                 platform_key="test-platform",
@@ -650,7 +650,7 @@ class ManagedAlignmentRuntimeTests(unittest.TestCase):
             self.assertFalse(thread.is_alive())
 
     def test_compute_admission_refused_under_maintenance(self) -> None:
-        from src.me_finder.managed_alignment_runtime import (
+        from src.me_finder.components.alignment_runtime import (
             ComputeUnavailable,
             compute_admission,
         )

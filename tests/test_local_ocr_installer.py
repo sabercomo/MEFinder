@@ -15,8 +15,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from src.me_finder import local_ocr_installer as installer_module
-from src.me_finder.local_ocr_installer import (
+from src.me_finder.components import local_ocr_installer as installer_module
+from src.me_finder.components.local_ocr_installer import (
     LOCAL_OCR_MANIFEST_FILE,
     LocalOCRInstaller,
     load_local_ocr_installer_manifest,
@@ -553,7 +553,7 @@ else:
             return _DownloadResponse(b"def", 206)
 
         with mock.patch(
-            "src.me_finder.local_ocr_installer.urlopen",
+            "src.me_finder.components.local_ocr_installer.urlopen",
             side_effect=open_request,
         ):
             installer._download_file(
@@ -570,7 +570,7 @@ else:
         target.write_bytes(b"abc")
 
         with mock.patch(
-            "src.me_finder.local_ocr_installer.urlopen",
+            "src.me_finder.components.local_ocr_installer.urlopen",
             return_value=_DownloadResponse(b"abcdef", 200),
         ) as opened:
             installer._download_file(
@@ -583,7 +583,7 @@ else:
     def test_download_summary_reports_speed_eta_and_clears_after_transfer(self) -> None:
         installer = self._installer()
         with mock.patch(
-            "src.me_finder.local_ocr_installer.time.monotonic",
+            "src.me_finder.components.local_ocr_installer.time.monotonic",
             side_effect=(100.0, 102.0, 111.0),
         ):
             installer._begin_download_progress("ndlocr-lite", 0, 10)
@@ -622,7 +622,7 @@ else:
             encoding="utf-8",
         )
         with mock.patch(
-            "src.me_finder.local_ocr_installer.time.monotonic",
+            "src.me_finder.components.local_ocr_installer.time.monotonic",
             side_effect=(100.0, 102.0),
         ):
             installer._update_uv_download_progress(

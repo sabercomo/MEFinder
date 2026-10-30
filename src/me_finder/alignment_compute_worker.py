@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         control = _open_control(positional[2])
         model_id, cache_dir = positional[0], positional[1]
         try:
-            from .managed_embedding_models import download_embedding_model
+            from .components.embedding_models import download_embedding_model
 
             download_embedding_model(model_id, Path(cache_dir))
         except BaseException as exc:  # noqa: BLE001 - report any download/load failure

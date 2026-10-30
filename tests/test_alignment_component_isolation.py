@@ -24,7 +24,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.performance_fixture import create_fixture
-from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
+from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 from src.me_finder.search import SearchEngine
 from src.me_finder.text_alignment import (
     generate_alignment,
@@ -210,7 +210,7 @@ finally:
     def test_installed_component_verifies_offline_after_download(self) -> None:
         # The managed download probe embeds locally after fastfetch -- it is
         # the compute stack itself; keep it importable and offline-pinned.
-        from src.me_finder.managed_embedding_models import download_embedding_model
+        from src.me_finder.components.embedding_models import download_embedding_model
 
         with mock.patch(
             "src.me_finder.semantic_alignment.embed_texts"

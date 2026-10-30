@@ -14,16 +14,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
-from .component_catalog import ComponentCatalog
+from .components.catalog import ComponentCatalog
 from .embedding_runtime import embedding_run_active
-from .local_ocr_installer import LOCAL_OCR_MANIFEST_FILE, LocalOCRInstaller
+from .components.local_ocr_installer import LOCAL_OCR_MANIFEST_FILE, LocalOCRInstaller
 from .local_ocr_settings import resolve_local_ocr_config_path
-from .managed_alignment_runtime import (
+from .components.alignment_runtime import (
     ManagedAlignmentRuntime,
     make_model_downloader,
 )
-from .managed_embedding_models import ManagedEmbeddingModels
-from .managed_mineru import ManagedMinerU
+from .components.embedding_models import ManagedEmbeddingModels
+from .components.mineru import ManagedMinerU
 from .mineru_api import resolve_mineru_config_path
 
 _DESKTOP_SHELLS = {"macos", "win32", "linux"}

@@ -8,10 +8,10 @@ import unittest
 from unittest import mock
 
 from tests import test_managed_alignment_runtime as fixtures
-from src.me_finder import managed_alignment_runtime as runtime
-from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
+from src.me_finder.components import alignment_runtime as runtime
+from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 from src.me_finder.managed_component_assembly import assemble_managed_components
-from src.me_finder.local_ocr_installer import LOCAL_OCR_MANIFEST_FILE
+from src.me_finder.components.local_ocr_installer import LOCAL_OCR_MANIFEST_FILE
 
 
 class RuntimeReviewTests(unittest.TestCase):
@@ -84,7 +84,7 @@ class RuntimeReviewTests(unittest.TestCase):
         ready = self.fixture.root / 'ready'
         script = '''import sys,time
 from pathlib import Path
-from src.me_finder.managed_alignment_runtime import compute_admission
+from src.me_finder.components.alignment_runtime import compute_admission
 with compute_admission(Path(sys.argv[1])):
  Path(sys.argv[2]).write_text('ready')
  time.sleep(30)
@@ -156,7 +156,7 @@ with compute_admission(Path(sys.argv[1])):
         self.assertNotEqual(intel.identity(), arm.identity())
 
     def test_catalog_rejects_unpinned_platform_override(self):
-        from src.me_finder.component_catalog import validate_component_catalog, ComponentCatalogError
+        from src.me_finder.components.catalog import validate_component_catalog, ComponentCatalogError
         payload = json.loads(LOCAL_OCR_MANIFEST_FILE.read_text(encoding='utf-8'))
         payload['alignment']['onnxruntime_by_platform'] = {'darwin-x86_64': 'onnxruntime>=1.23.2'}
         with self.assertRaises(ComponentCatalogError):

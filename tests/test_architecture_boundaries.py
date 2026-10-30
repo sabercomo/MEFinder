@@ -39,13 +39,13 @@ NON_SQL_EXECUTE_TARGETS = {
 # C3: direct thread creation must have an explicit lifecycle owner. Startup
 # warm-up and Zotero sync moved to tasks/background_tasks.py.
 THREAD_CREATION_OWNERS = {
-    "component_catalog.py",
+    "components/catalog.py",
     "desktop_backend.py",
     "import_queue.py",
-    "local_ocr_installer.py",
-    "managed_alignment_runtime.py",
-    "managed_embedding_models.py",
-    "managed_mineru.py",
+    "components/local_ocr_installer.py",
+    "components/alignment_runtime.py",
+    "components/embedding_models.py",
+    "components/mineru.py",
     "onefile_cleanup.py",
     "tasks/background_tasks.py",
     "text_alignment_controller.py",
@@ -125,7 +125,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
     def test_component_installers_share_install_mechanics(self) -> None:
         # 2026-10-31(0.6.1):uv 日志进度、下载测速、校验、uv 解包与子进程停止
-        # 收进 component_install.py;三个安装器只保留清单、状态与安装步骤。
+        # 收进 components/install.py;三个安装器只保留清单、状态与安装步骤。
         duplicated = {
             "_UV_DOWNLOAD_PATTERN",
             "_UV_DOWNLOADED_PATTERN",
@@ -134,9 +134,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "_verify_download",
         }
         for name in (
-            "local_ocr_installer.py",
-            "managed_alignment_runtime.py",
-            "managed_mineru.py",
+            "components/local_ocr_installer.py",
+            "components/alignment_runtime.py",
+            "components/mineru.py",
         ):
             tree = ast.parse((PACKAGE / name).read_text(encoding="utf-8"))
             defined = set()
@@ -149,7 +149,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                         target.id for target in node.targets
                         if isinstance(target, ast.Name)
                     )
-                elif isinstance(node, ast.ImportFrom) and node.module == "component_install":
+                elif isinstance(node, ast.ImportFrom) and node.module == "install":
                     imports_kernel = True
             self.assertEqual(defined & duplicated, set(), name)
             self.assertTrue(imports_kernel, name)

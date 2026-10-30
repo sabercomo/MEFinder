@@ -20,7 +20,7 @@ from typing import Callable, Dict, Mapping, Optional, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .component_install import (
+from .install import (
     begin_download_progress,
     copy_response_to_file,
     install_uv_executable,
@@ -30,18 +30,18 @@ from .component_install import (
     uv_download_totals,
     verify_download,
 )
-from .runtime_location import component_runtime_root
-from .import_resume import ResumeManifestError, atomic_write_json
-from .local_ocr_runtime import local_ocr_engine_lock
-from .local_ocr_settings import (
+from ..runtime_location import component_runtime_root
+from ..import_resume import ResumeManifestError, atomic_write_json
+from ..local_ocr_runtime import local_ocr_engine_lock
+from ..local_ocr_settings import (
     LocalOCRError,
     clear_managed_local_ocr_engine,
     configure_managed_local_ocr_engine,
 )
-from .tasks import TaskEvent
+from ..tasks import TaskEvent
 
 
-LOCAL_OCR_MANIFEST_FILE = Path(__file__).with_name("local_ocr_manifest.json")
+LOCAL_OCR_MANIFEST_FILE = Path(__file__).parent.parent / "local_ocr_manifest.json"
 LOCAL_OCR_COMPONENT_DIR = "components/local-ocr"
 ACTIVE_INSTALL_STATES = frozenset(
     {

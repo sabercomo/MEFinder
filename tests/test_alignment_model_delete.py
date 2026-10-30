@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.embedding_models import embedding_model_config
-from src.me_finder.managed_embedding_models import (
+from src.me_finder.components.embedding_models import (
     ManagedEmbeddingModels,
     ManagedEmbeddingModelsError,
 )

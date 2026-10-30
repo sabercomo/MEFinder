@@ -11,7 +11,7 @@ from typing import Callable, Dict, Mapping, Optional
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from .import_resume import atomic_write_json
+from ..import_resume import atomic_write_json
 
 
 DEFAULT_COMPONENT_CATALOG_URL = (

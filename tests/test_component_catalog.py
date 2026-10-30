@@ -7,13 +7,13 @@ import threading
 import unittest
 from pathlib import Path
 
-from src.me_finder.component_catalog import (
+from src.me_finder.components.catalog import (
     COMPONENT_CATALOG_CHECK_INTERVAL_SECONDS,
     ComponentCatalog,
     ComponentCatalogError,
     validate_component_catalog,
 )
-from src.me_finder.local_ocr_installer import LOCAL_OCR_MANIFEST_FILE
+from src.me_finder.components.local_ocr_installer import LOCAL_OCR_MANIFEST_FILE
 
 
 class _Response(io.BytesIO):

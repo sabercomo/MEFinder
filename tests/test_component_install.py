@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 from unittest import mock
 
-from src.me_finder.component_install import (
+from src.me_finder.components.install import (
     begin_download_progress,
     copy_response_to_file,
     extract_archive_member,

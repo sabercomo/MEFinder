@@ -28,11 +28,11 @@ from .mineru_local_settings import (
     save_mineru_local_config,
     test_mineru_local_connection,
 )
-from .managed_mineru import ManagedMinerUError
-from .managed_embedding_models import ManagedEmbeddingModelsError
-from .managed_alignment_runtime import ManagedAlignmentRuntimeError
+from .components.mineru import ManagedMinerUError
+from .components.embedding_models import ManagedEmbeddingModelsError
+from .components.alignment_runtime import ManagedAlignmentRuntimeError
 from .import_resume import ResumeManifestError
-from .local_ocr_installer import LocalOCRInstallerError
+from .components.local_ocr_installer import LocalOCRInstallerError
 from .local_ocr_settings import (
     LocalOCRError,
     local_ocr_config_summary,
@@ -40,7 +40,7 @@ from .local_ocr_settings import (
     save_local_ocr_config,
     test_local_ocr_engine,
 )
-from .managed_component import ManagedComponent
+from .components.contract import ManagedComponent
 from .parser_provider import ParserProviderError
 from .parser_statistics import build_parser_statistics
 from .general_model import (

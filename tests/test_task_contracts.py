@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from src.me_finder.managed_component import ManagedComponent
+from src.me_finder.components.contract import ManagedComponent
 from src.me_finder.tasks import TaskEvent
 
 

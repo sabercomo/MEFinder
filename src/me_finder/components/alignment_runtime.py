@@ -17,7 +17,7 @@ prefers an installed runtime lives there too (``installed_runtime_command``).
 
 The mechanics (uv download + isolated venv, staging → publish → previous swap,
 receipts, cancellation, download verification) deliberately mirror
-:mod:`me_finder.managed_mineru`, the proven reference for a managed local
+:mod:`me_finder.components.mineru`, the proven reference for a managed local
 runtime, so the two share operational behaviour and reviewer intuition.
 """
 
@@ -43,8 +43,8 @@ from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from .alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
-from .alignment_runtime_lock import (
+from ..alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
+from ..alignment_runtime_lock import (
     RuntimeFileLock,
     ComputeUnavailable as ComputeUnavailable,
     compute_admission as compute_admission,
@@ -57,14 +57,14 @@ from .local_ocr_installer import (
     current_platform_key,
     load_local_ocr_installer_manifest,
 )
-from .component_install import (
+from .install import (
     copy_response_to_file,
     install_uv_executable,
     stop_process,
     verify_download,
 )
-from .import_resume import atomic_write_json
-from .runtime_location import component_runtime_root
+from ..import_resume import atomic_write_json
+from ..runtime_location import component_runtime_root
 from .transfer_rate import TransferRate
 
 # Component identifier used in the managed-component registry and HTTP layer.
@@ -1439,7 +1439,7 @@ def make_model_downloader(
                 raise ManagedAlignmentRuntimeError(
                     "对齐计算运行时未安装：请先安装对齐计算组件后再下载模型。"
                 )
-            from .managed_embedding_models import download_embedding_model
+            from .embedding_models import download_embedding_model
 
             download_embedding_model(model_id, cache_dir)
             return
@@ -1511,7 +1511,7 @@ def default_worker_context() -> tuple[str, Path]:
             return "me_finder.alignment_compute_worker", Path(meipass)
         # Defensive fallback for a frozen build without _MEIPASS (unexpected):
         # the bundle resources directory, next to which datas are placed.
-        from .runtime_location import app_root
+        from ..runtime_location import app_root
 
         return "me_finder.alignment_compute_worker", app_root()
-    return "src.me_finder.alignment_compute_worker", Path(__file__).resolve().parents[2]
+    return "src.me_finder.alignment_compute_worker", Path(__file__).resolve().parents[3]

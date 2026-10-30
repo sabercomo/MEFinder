@@ -10,7 +10,7 @@ from src.me_finder.embedding_models import (
     embedding_model_config,
     embedding_model_summaries,
 )
-from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
+from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 
 
 class ManagedEmbeddingModelsTests(unittest.TestCase):
@@ -215,7 +215,7 @@ class ManagedEmbeddingModelsTests(unittest.TestCase):
                 for item in embedding_model_summaries()
             ]
             with mock.patch(
-                "src.me_finder.managed_embedding_models.embedding_model_summaries",
+                "src.me_finder.components.embedding_models.embedding_model_summaries",
                 return_value=fake_totals,
             ):
                 model = next(

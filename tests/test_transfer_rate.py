@@ -1,6 +1,6 @@
 import unittest
 
-from src.me_finder.transfer_rate import TransferRate
+from src.me_finder.components.transfer_rate import TransferRate
 
 
 class TransferRateTests(unittest.TestCase):

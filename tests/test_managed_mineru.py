@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src.me_finder.managed_mineru import (
+from src.me_finder.components.mineru import (
     ManagedMinerU,
     ManagedMinerUError,
     detect_mineru_hardware,
@@ -537,7 +537,7 @@ else:
     def test_download_progress_reports_speed_and_eta(self) -> None:
         manager = self._manager()
         with mock.patch(
-            "src.me_finder.managed_mineru.time.monotonic",
+            "src.me_finder.components.mineru.time.monotonic",
             side_effect=[0.0, 2.0],
         ):
             manager._begin_download_progress("vlm", 0, 10, total_is_estimate=True)
@@ -557,7 +557,7 @@ else:
     def test_download_speed_keeps_rolling_average_during_short_pause(self) -> None:
         manager = self._manager()
         with mock.patch(
-            "src.me_finder.managed_mineru.time.monotonic",
+            "src.me_finder.components.mineru.time.monotonic",
             side_effect=[0.0, 2.0, 12.0],
         ):
             manager._begin_download_progress("vlm", 0, 100)
@@ -580,7 +580,7 @@ else:
             encoding="utf-8",
         )
         with mock.patch(
-            "src.me_finder.managed_mineru.time.monotonic",
+            "src.me_finder.components.mineru.time.monotonic",
             side_effect=[0.0, 2.0],
         ):
             manager._update_uv_download_progress("vlm", log, start_offset=0)
@@ -599,7 +599,7 @@ else:
         with (
             mock.patch.dict("os.environ", {}, clear=True),
             mock.patch(
-                "src.me_finder.managed_mineru.getproxies",
+                "src.me_finder.components.mineru.getproxies",
                 return_value={
                     "http": "http://127.0.0.1:1082",
                     "https": "http://127.0.0.1:1082",
@@ -659,7 +659,7 @@ else:
         with (
             mock.patch.object(manager, "_run_command", side_effect=run_command),
             mock.patch(
-                "src.me_finder.managed_mineru._MODEL_DOWNLOAD_RETRY_DELAYS",
+                "src.me_finder.components.mineru._MODEL_DOWNLOAD_RETRY_DELAYS",
                 (0, 0),
             ),
         ):
@@ -693,7 +693,7 @@ else:
         with (
             mock.patch.object(manager, "_run_command", side_effect=run_command),
             mock.patch(
-                "src.me_finder.managed_mineru._MODEL_DOWNLOAD_RETRY_DELAYS",
+                "src.me_finder.components.mineru._MODEL_DOWNLOAD_RETRY_DELAYS",
                 (0, 0),
             ),
         ):
@@ -856,7 +856,7 @@ else:
             stdout = str(16 * 1024 * 1024 * 1024)
 
         with mock.patch(
-            "src.me_finder.managed_mineru.platform.mac_ver",
+            "src.me_finder.components.mineru.platform.mac_ver",
             return_value=("14.6.1", ("", "", ""), ""),
         ):
             detected = detect_mineru_hardware(
@@ -875,7 +875,7 @@ if __name__ == "__main__":
 
 class HardwareDetectionWindowTests(unittest.TestCase):
     def test_windows_nvidia_smi_probe_hides_console_window(self):
-        from src.me_finder.managed_mineru import detect_mineru_hardware
+        from src.me_finder.components.mineru import detect_mineru_hardware
 
         runner = mock.Mock(side_effect=OSError("no nvidia-smi"))
         detect_mineru_hardware(platform_key="win32-x86_64", command_runner=runner)

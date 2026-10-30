@@ -22,7 +22,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Callable, Mapping, Optional, Protocol, Tuple
 
-from .import_resume import atomic_write_json
+from ..import_resume import atomic_write_json
 
 UV_DOWNLOAD_PATTERN = re.compile(
     r"^Downloading (.+) \(([0-9]+(?:\.[0-9]+)?)(KiB|MiB|GiB)\)\r?$",
