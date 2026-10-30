@@ -28,7 +28,7 @@ def _drop(anchors, sp, tp, limit):
     lengths = [1] * (sp.shape[0] - 1)
     return av.drop_false_friend_anchors(
         anchors, sp, tp, lengths, lengths, sg, tg, 0.0,
-        align_partition=sa._align_partition, context_prefixes=sa._CONTEXT_GATED_ANCHOR_PREFIXES,
+        align_partition=sa._align_partition, context_prefixes=sa.CONTEXT_GATED_ANCHOR_PREFIXES,
         displacement_limit=limit, better_alt_margin=sa._ANCHOR_BETTER_ALT_MARGIN,
     )
 

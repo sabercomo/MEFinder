@@ -12,10 +12,10 @@ from unittest.mock import patch
 from src.me_finder import database as database_module
 from src.me_finder.database import (
     DATABASE_BACKUP_RETENTION,
-    _backup_database,
     build_database,
     replace_source_in_database,
 )
+from src.me_finder.database_backup import create_database_backup
 
 
 def extracted_source(number: int) -> dict[str, list[dict[str, object]]]:
@@ -126,7 +126,7 @@ class LargeIndexResilienceTests(unittest.TestCase):
                 "copy2",
                 side_effect=observe_copy,
             ):
-                _backup_database(database_path)
+                create_database_backup(database_path)
 
             self.assertEqual(
                 counts_before_copy,
@@ -159,7 +159,7 @@ class LargeIndexResilienceTests(unittest.TestCase):
                 patch.object(database_module.shutil, "copy2") as copy,
             ):
                 with self.assertRaises(OSError) as caught:
-                    _backup_database(database_path)
+                    create_database_backup(database_path)
             self.assertEqual(caught.exception.errno, errno.ENOSPC)
             self.assertIn("磁盘空间不足", str(caught.exception))
             self.assertIn("backups", str(caught.exception))
@@ -185,7 +185,7 @@ class LargeIndexResilienceTests(unittest.TestCase):
                 side_effect=partial_copy,
             ):
                 with self.assertRaises(OSError) as caught:
-                    _backup_database(database_path)
+                    create_database_backup(database_path)
 
             self.assertEqual(caught.exception.errno, errno.EIO)
             self.assertEqual(known_good.read_bytes(), b"known good snapshot")
@@ -211,7 +211,7 @@ class LargeIndexResilienceTests(unittest.TestCase):
                 return real_open(path, mode, *args, **kwargs)
 
             with patch.object(Path, "open", autospec=True, side_effect=observe_open):
-                _backup_database(database_path)
+                create_database_backup(database_path)
 
             self.assertEqual(backup_open_modes, ["rb+"])
 

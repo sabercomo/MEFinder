@@ -9,7 +9,7 @@ from src.me_finder.application.import_job_store import (
     ImportJobCancelled,
     ImportJobStore,
 )
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class ImportJobStoreTests(unittest.TestCase):
@@ -153,7 +153,7 @@ class ImportJobStoreTests(unittest.TestCase):
         self.assertFalse(context["force_mineru"])
         self.assertEqual(context["vision_provider_id"], "provider-one")
         with self.assertRaisesRegex(
-            MinerUError,
+            UserFacingError,
             "\u6062\u590d\u4fe1\u606f\u4e0d\u5b58\u5728",
         ):
             self.store.switch_job_route(
@@ -167,7 +167,7 @@ class ImportJobStoreTests(unittest.TestCase):
     def test_source_availability_checks_keep_existing_messages(self) -> None:
         self.store.reserve_source("pending")
         with self.assertRaisesRegex(
-            MinerUError,
+            UserFacingError,
             "\u6b63\u5728\u51c6\u5907\u5bfc\u5165",
         ):
             self.store.add_import_job(
@@ -176,12 +176,12 @@ class ImportJobStoreTests(unittest.TestCase):
             )
 
         self.store.begin_source_deletion("deleting")
-        with self.assertRaisesRegex(MinerUError, "\u6b63\u5728\u5220\u9664"):
+        with self.assertRaisesRegex(UserFacingError, "\u6b63\u5728\u5220\u9664"):
             self.store.reserve_source("deleting")
 
         self.add("active", "running")
         with self.assertRaisesRegex(
-            MinerUError,
+            UserFacingError,
             "\u5df2\u6709\u89e3\u6790\u4efb\u52a1",
         ):
             self.store.reserve_source("running")
@@ -204,14 +204,14 @@ class ImportJobStoreTests(unittest.TestCase):
         entered = threading.Event()
         attempted = threading.Event()
         finished = threading.Event()
-        errors: list[MinerUError] = []
+        errors: list[UserFacingError] = []
 
         def competing_delete() -> None:
             entered.wait()
             attempted.set()
             try:
                 self.store.begin_source_deletion("actual")
-            except MinerUError as exc:
+            except UserFacingError as exc:
                 errors.append(exc)
             finally:
                 finished.set()
@@ -229,7 +229,7 @@ class ImportJobStoreTests(unittest.TestCase):
         self.assertFalse(thread.is_alive())
         self.assertTrue(finished.is_set())
         self.assertEqual(len(errors), 1)
-        self.assertIsInstance(errors[0], MinerUError)
+        self.assertIsInstance(errors[0], UserFacingError)
         self.assertIn("正在准备导入", str(errors[0]))
         self.store.release_reservation("actual")
         self.store.begin_source_deletion("actual")
@@ -279,7 +279,7 @@ class ImportJobStoreTests(unittest.TestCase):
         self.assertEqual(restored["status"], "processing")
         self.assertEqual(context["source_file_id"], "source-resume")
         with self.assertRaisesRegex(
-            MinerUError,
+            UserFacingError,
             "\u5f53\u524d\u4e0d\u80fd\u7ee7\u7eed",
         ):
             self.store.begin_resume("resumable", updates)
@@ -311,12 +311,12 @@ class ImportJobStoreTests(unittest.TestCase):
                         self.job("other", "source-one"),
                         self.context("source-one"),
                     )
-                with self.assertRaisesRegex(MinerUError, message):
+                with self.assertRaisesRegex(UserFacingError, message):
                     store.begin_resume("resume", {"status": "processing"})
 
     def test_deletion_coordination_and_cleanup_queries_are_narrow(self) -> None:
         self.add("processing", "source-active")
-        with self.assertRaises(MinerUError) as raised:
+        with self.assertRaises(UserFacingError) as raised:
             self.store.begin_source_deletion("source-active")
         self.assertEqual(
             str(raised.exception),

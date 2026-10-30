@@ -10,13 +10,16 @@ from .database import open_database
 from .markdown_export_normalize import build_page_artifact_profile, reader_heading_spans
 from .persistence import structured_reader_reads as reader_reads
 from .structured_reader import (
-    SourceNotFound, StructuredReaderError, UnsupportedSourceType, _validate_source_id,
+    SourceNotFound,
+    StructuredReaderError,
+    UnsupportedSourceType,
+    validate_source_id,
 )
 
 
 def get_document_outline(db_path: Path, source_id: str) -> dict[str, object]:
     """Return level-1/2 titles and natural positions in Unicode code points."""
-    source_id = _validate_source_id(source_id)
+    source_id = validate_source_id(source_id)
     if not Path(db_path).is_file():
         raise StructuredReaderError(f"索引数据库不存在：{db_path}")
     connection = open_database(db_path)

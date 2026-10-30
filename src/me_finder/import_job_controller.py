@@ -9,7 +9,7 @@ from .application.document_query_service import DocumentQueryError
 from .application.import_job_lifecycle import ImportJobRetrySwapFailed
 from .application.import_orchestrator import ImportOrchestrator
 from .import_resume import ResumeManifestError
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 from .tasks import TaskEvent
 from .vision_api import VisionAPIError
 
@@ -83,7 +83,7 @@ class ImportJobController:
         try:
             record = self._source_record(source_file_id)
             if not record or str(record.get("source_type")) != "pdf":
-                raise MinerUError("PDF 文献未找到。")
+                raise UserFacingError("PDF 文献未找到。")
             running = self._imports.active_job_for_source(source_file_id)
             if running:
                 return 200, {
@@ -104,7 +104,7 @@ class ImportJobController:
                 force_mineru=True,
                 display_file_name=str(record.get("file_name") or ""),
             )
-        except (MinerUError, DocumentQueryError) as exc:
+        except (UserFacingError, DocumentQueryError) as exc:
             return 400, {"error": str(exc)}
         except Exception as exc:
             return 500, {"error": f"提交 MinerU 解析失败：{exc}"}
@@ -152,7 +152,7 @@ class ImportJobController:
                     previous_job.get("file_name") or ""
                 ),
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (
             ImportJobRetrySwapFailed,
@@ -198,7 +198,7 @@ class ImportJobController:
                 previous_job_id,
                 context,
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (KeyError, OSError, ValueError) as exc:
             return 500, {"error": f"创建重试任务失败：{exc}"}
@@ -229,7 +229,7 @@ class ImportJobController:
                     previous_job.get("file_name") or ""
                 ),
             )
-        except (MinerUError, VisionAPIError) as exc:
+        except (UserFacingError, VisionAPIError) as exc:
             return 400, {"error": str(exc)}
         except (
             ImportJobRetrySwapFailed,
@@ -274,7 +274,7 @@ class ImportJobController:
             return 400, {"error": "只有失败的在线 MinerU 任务可以切换到本地部署。"}
         try:
             if not self._local_mineru_summary().get("enabled"):
-                raise MinerUError("请先在设置中启用 MinerU 本地部署。")
+                raise UserFacingError("请先在设置中启用 MinerU 本地部署。")
             target = self._imports.validated_import_target(
                 previous_job_id,
                 context,
@@ -291,7 +291,7 @@ class ImportJobController:
                 force_mineru=True,
                 display_file_name=str(previous_job.get("file_name") or ""),
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (
             ImportJobRetrySwapFailed,
@@ -317,7 +317,7 @@ class ImportJobController:
             return 400, {"error": "缺少待继续的导入任务。"}
         try:
             resumed = self._imports.resume_import_job(job_id)
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (KeyError, OSError, ValueError, ResumeManifestError) as exc:
             return 500, {"error": f"继续导入任务失败：{exc}"}
@@ -337,7 +337,7 @@ class ImportJobController:
             return 400, {"error": "缺少待移除的导入任务。"}
         try:
             dismiss_state = self._imports.dismiss_import_job(job_id)
-        except (MinerUError, ValueError) as exc:
+        except (UserFacingError, ValueError) as exc:
             return 400, {"error": str(exc)}
         except (KeyError, OSError, ResumeManifestError) as exc:
             return 500, {"error": f"移除导入任务失败：{exc}"}

@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Callable
 
 from .connection import open_build_target
-from .fts_index import _install_fts5_search_index
-from .index_build import _json
+from .fts_index import install_fts5_search_index
+from .index_build import compact_json
 from .index_schema import SCHEMA
 from .paragraph_payload import PARAGRAPH_PAYLOAD_OMITTED_FIELDS
 
@@ -112,9 +112,9 @@ def optimize_database_storage(
 
         connection.execute(
             "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            ("paragraph_payload_storage", _json("sparse_text_v1")),
+            ("paragraph_payload_storage", compact_json("sparse_text_v1")),
         )
-        if not _install_fts5_search_index(connection, rebuild=True):
+        if not install_fts5_search_index(connection, rebuild=True):
             raise sqlite3.OperationalError("FTS5 trigram tokenizer is unavailable")
         source_count = connection.execute(
             "SELECT COUNT(*) FROM legacy.paragraphs"

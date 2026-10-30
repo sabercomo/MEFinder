@@ -24,14 +24,14 @@ from .markdown_export_normalize import (
     FOOTNOTE_ROLES,
     PageArtifactProfile,
     PageMarker,
-    _block_role,
-    _block_y_center,
-    _page_scale,
-    _physical_page,
-    _printed_page_raw,
+    block_role,
+    block_y_center,
     build_page_artifact_profile,
     heading_level,
+    page_scale,
+    physical_page_number,
     prepare_export_structure,
+    printed_page_raw,
     resolve_page_marker,
 )
 
@@ -78,7 +78,7 @@ class NormalizedDocument:
 
 
 def _is_unmarked_note(block: Mapping[str, object]) -> bool:
-    return _block_role(block) in FOOTNOTE_ROLES and not _NOTE_START.match(
+    return block_role(block) in FOOTNOTE_ROLES and not _NOTE_START.match(
         str(block.get("text") or "").strip()
     )
 
@@ -117,8 +117,8 @@ def normalize_document_export(
         )
 
     for page_position, (page, blocks) in enumerate(zip(pages, prepared)):
-        physical = _physical_page(page)
-        width, height = _page_scale(page)
+        physical = physical_page_number(page)
+        width, height = page_scale(page)
         chapters = []
         for block in blocks:
             chapter = block["_export_scope_id"]
@@ -137,7 +137,7 @@ def normalize_document_export(
                 "reason": "NO_REFERENCE" if kind == "note" else "NO_NOTE_BODY",
                 "source_file_id": page.get("source_file_id"),
                 "source_page_index": page.get("pdf_page_index"),
-                "source_physical_page": physical, "source_printed_page": _printed_page_raw(page),
+                "source_physical_page": physical, "source_printed_page": printed_page_raw(page),
                 "source_block_index": block["_export_index"], "scope_id": chapters[position],
                 "marker": marker, "text": str(block["text"]).strip(),
                 "source_cross_page": bool(block.get("_export_source_cross_page") or block.get("cross_page")),
@@ -156,7 +156,7 @@ def normalize_document_export(
                     source_printed_page=fragment.source_printed_page,
                     export_page_index=page.get("pdf_page_index"),
                     export_physical_page=physical,
-                    export_printed_page=_printed_page_raw(page),
+                    export_printed_page=printed_page_raw(page),
                     source_start=source_start + start if start is not None else None,
                     source_end=source_start + end if end is not None else None,
                 )
@@ -170,11 +170,11 @@ def normalize_document_export(
                     unstructured_pages.append({"source_file_id": page.get("source_file_id"),
                                                "source_page_index": page.get("pdf_page_index"),
                                                "source_physical_page": physical,
-                                               "source_printed_page": _printed_page_raw(page),
+                                               "source_printed_page": printed_page_raw(page),
                                                "reason": "UNSTRUCTURED_PAGE", "text": text})
                 continue
             start = _NOTE_START.match(text)
-            tagged = _block_role(block) in FOOTNOTE_ROLES
+            tagged = block_role(block) in FOOTNOTE_ROLES
             if tagged or (start and heading_level(block) is None):
                 note_positions.add(position)
                 stats["note_blocks"] += 1
@@ -186,7 +186,7 @@ def normalize_document_export(
                     if FOOTNOTE_MARKER_RE.search(text[start.end():]) or not text[start.end():].strip():
                         blocked_notes[position] = "UNSUPPORTED_NOTE_BODY" if text[start.end():].strip() else "NO_NOTE_BODY"
                         unresolved("unsupported_note_body", physical, block["_export_index"], marker)
-                    y = _block_y_center(block, width, height)
+                    y = block_y_center(block, width, height)
                     if not tagged and (y is None or y < 0.84):
                         blocked_notes.setdefault(position, "UNCONFIRMED_NOTE_LAYOUT")
                         unresolved("unconfirmed_note_layout", physical, block["_export_index"], marker)
@@ -216,14 +216,14 @@ def normalize_document_export(
             previous_note = position
         if note_positions and page_position + 1 < len(pages):
             next_page = pages[page_position + 1]
-            if physical is not None and _physical_page(next_page) == physical + 1:
-                next_notes = [b for b in prepared[page_position + 1] if _block_role(b) in FOOTNOTE_ROLES]
+            if physical is not None and physical_page_number(next_page) == physical + 1:
+                next_notes = [b for b in prepared[page_position + 1] if block_role(b) in FOOTNOTE_ROLES]
                 if next_notes and _is_unmarked_note(next_notes[0]):
                     last = max(note_positions)
                     blocked_notes.setdefault(last, "POSSIBLE_CROSS_PAGE_CONTINUATION")
                     unresolved("possible_continuation", physical, blocks[last]["_export_index"])
                 if next_notes and not any(
-                    _block_role(b) not in FOOTNOTE_ROLES | {"header", "page_header", "footer", "page_footer", "page_number"}
+                    block_role(b) not in FOOTNOTE_ROLES | {"header", "page_header", "footer", "page_footer", "page_number"}
                     for b in prepared[page_position + 1]
                 ):
                     # Observed MinerU output: a following page has only notes,
@@ -304,7 +304,7 @@ def normalize_document_export(
                 ))
             notes_by_chapter[owner].append(Footnote(
                 note_id, owner, number, body, marker, physical,
-                _printed_page_raw(page), source_index, tuple(reference_ids),
+                printed_page_raw(page), source_index, tuple(reference_ids),
             ))
             removed.add(position)
             matched_markers.add(marker)

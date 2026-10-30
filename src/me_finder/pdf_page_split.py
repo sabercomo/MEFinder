@@ -16,7 +16,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Set
 
 from .document_export import DocumentExportError
 from .export_page_reconstruction import attach_export_layout, reconstruct_export_pages
-from .markdown_export_normalize import _page_scale
+from .markdown_export_normalize import page_scale
 from .persistence.parser_job_reads import read_slice_job_id
 
 SPLIT_METHOD = "mineru_layout_spans"
@@ -159,7 +159,7 @@ def _public_block(block: Mapping[str, object]) -> Dict[str, object]:
 
 def _mark_fragment(block: Dict[str, object], fragment, page: Mapping[str, object]) -> None:
     moved = fragment.target_page_index != fragment.source_page_index
-    width, height = _page_scale(page)
+    width, height = page_scale(page)
     normalized = [float(value) for value in fragment.bbox_normalized]
     block["bbox_normalized"] = normalized
     block["bbox"] = [

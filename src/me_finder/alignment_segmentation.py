@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Tuple
 
-from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
+from .auto_page_mapping import layout_bbox_scale, normalized_page_bbox
 
 
 MAX_SEGMENT_LENGTH = 1200
@@ -180,7 +180,7 @@ def segment_pdf_text(full_text: str, pages: Sequence[PageText]) -> List[SegmentD
         blocks = page.payload.get("blocks")
         if not isinstance(blocks, list):
             continue
-        width, height = _layout_bbox_scale(
+        width, height = layout_bbox_scale(
             blocks,
             float(page.payload.get("page_width") or 1000.0),
             float(page.payload.get("page_height") or 1000.0),
@@ -190,7 +190,7 @@ def segment_pdf_text(full_text: str, pages: Sequence[PageText]) -> List[SegmentD
         for block in blocks:
             if not isinstance(block, dict):
                 continue
-            bbox = _normalized_page_bbox(block, width, height)
+            bbox = normalized_page_bbox(block, width, height)
             text = " ".join(str(block.get("text") or "").split())
             if not text or bbox is None:
                 continue
@@ -221,7 +221,7 @@ def segment_pdf_text(full_text: str, pages: Sequence[PageText]) -> List[SegmentD
             ).strip().casefold()
             excluded = role in _NON_ALIGNMENT_BLOCK_ROLES
             text = " ".join(str(block.get("text") or "").split())
-            bbox = _normalized_page_bbox(block, width, height)
+            bbox = normalized_page_bbox(block, width, height)
             if bbox is not None and text:
                 x_center = (bbox[0] + bbox[2]) / 2.0
                 y_center = (bbox[1] + bbox[3]) / 2.0

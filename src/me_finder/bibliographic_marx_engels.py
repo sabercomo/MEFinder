@@ -11,7 +11,7 @@ import unicodedata
 from pathlib import Path
 from typing import Dict, Tuple
 
-from .bibliographic_values import _CHINESE_DIGITS
+from .bibliographic_values import CHINESE_DIGITS
 
 
 MARX_ENGELS_FIRST_EDITION_YEARS = {
@@ -112,10 +112,10 @@ def _chinese_volume_numeral(volume: int) -> str:
     """Render 1–50 the way the volume title pages do (三十一, not 31)."""
 
     if volume < 10:
-        return _CHINESE_DIGITS[volume]
+        return CHINESE_DIGITS[volume]
     tens, ones = divmod(volume, 10)
-    prefix = "十" if tens == 1 else f"{_CHINESE_DIGITS[tens]}十"
-    return prefix + (_CHINESE_DIGITS[ones] if ones else "")
+    prefix = "十" if tens == 1 else f"{CHINESE_DIGITS[tens]}十"
+    return prefix + (CHINESE_DIGITS[ones] if ones else "")
 
 
 def marx_engels_second_edition_metadata(file_name: object) -> Dict[str, str]:

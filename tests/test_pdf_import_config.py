@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from src.me_finder.pdf_extractors import file_sha256
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 from src.me_finder.pdf_import_service import (
     attach_mineru_manifest,
     load_import_config,
@@ -184,7 +184,7 @@ class PDFImportConfigTests(unittest.TestCase):
             config_path.write_text("not-json", encoding="utf-8")
 
             for _ in range(2):
-                with self.assertRaisesRegex(MinerUError, "无法自动恢复"):
+                with self.assertRaisesRegex(UserFacingError, "无法自动恢复"):
                     load_import_config(config_path)
 
             self.assertEqual(

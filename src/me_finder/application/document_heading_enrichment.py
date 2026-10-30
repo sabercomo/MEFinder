@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Protocol, Tuple
 
-from ..database import _sanitize_surrogates_in_place
+from ..database import sanitize_surrogates_in_place
 from ..document_heading import (
     DOCUMENT_HEADING_VERSION,
     HEADING_SOURCE_PDF_OUTLINE,
@@ -209,9 +209,9 @@ def ensure_document_headings(
     # UTF-8, which forbids them, and the write below would otherwise raise
     # "surrogates not allowed" and abort the whole operation.  Scrub in place so
     # the re-enriched payloads (and the Markdown later built from them) stay clean.
-    _sanitize_surrogates_in_place(source)
+    sanitize_surrogates_in_place(source)
     for page in pages:
-        _sanitize_surrogates_in_place(page)
+        sanitize_surrogates_in_place(page)
 
     with write_window():
         outcome = store.write_if_unchanged(

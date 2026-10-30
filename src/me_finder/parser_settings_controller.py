@@ -11,10 +11,10 @@ from typing import Callable, Dict, Mapping, Tuple
 from urllib.parse import urlparse
 
 from .app_context import AppPaths
+from .errors import UserFacingError
 from .large_document.mineru_accounts import MinerUAccountService
 from .mineru_api import (
     DEFAULT_MINERU_API_BASE,
-    MinerUError,
     clear_legacy_mineru_token,
     load_mineru_config,
     mineru_config_summary,
@@ -228,7 +228,7 @@ class ParserSettingsController:
         try:
             return 200, self._mineru_accounts_payload()
         except (
-            MinerUError,
+            UserFacingError,
             OSError,
             ValueError,
             json.JSONDecodeError,
@@ -242,7 +242,7 @@ class ParserSettingsController:
         try:
             accounts = self._mineru_account_service.list_accounts()
         except (
-            MinerUError,
+            UserFacingError,
             OSError,
             ValueError,
             json.JSONDecodeError,
@@ -256,7 +256,7 @@ class ParserSettingsController:
                 self._clear_legacy_mineru(
                     self._resolve_mineru_config(self._paths.runtime_root)
                 )
-            except (MinerUError, OSError, json.JSONDecodeError) as exc:
+            except (UserFacingError, OSError, json.JSONDecodeError) as exc:
                 self._legacy_migration_error = exc
             return
         if self._mineru_account_service.private_config_exists():
@@ -266,7 +266,7 @@ class ParserSettingsController:
             legacy = self._read_mineru_config(legacy_path)
             config = self._load_mineru(legacy_path)
             token = self._normalize_mineru(config.token)
-        except (MinerUError, OSError, json.JSONDecodeError):
+        except (UserFacingError, OSError, json.JSONDecodeError):
             return
         except (ValueError, sqlite3.Error) as exc:
             self._legacy_migration_error = exc
@@ -281,7 +281,7 @@ class ParserSettingsController:
             )
             self._clear_legacy_mineru(legacy_path)
         except (
-            MinerUError,
+            UserFacingError,
             OSError,
             ValueError,
             json.JSONDecodeError,
@@ -315,7 +315,7 @@ class ParserSettingsController:
         config_path = self._resolve_mineru_config(self._paths.runtime_root)
         try:
             payload = self._summarize_mineru(config_path)
-        except (MinerUError, OSError, json.JSONDecodeError):
+        except (UserFacingError, OSError, json.JSONDecodeError):
             return 500, {"error": "本机 MinerU 配置文件无法读取。"}
         return 200, payload
 
@@ -339,7 +339,7 @@ class ParserSettingsController:
             if "enabled" in payload and not isinstance(
                 payload["enabled"], bool
             ):
-                raise MinerUError("enabled 必须是布尔值。")
+                raise UserFacingError("enabled 必须是布尔值。")
             raw_api_base = str(payload.get("api_base") or "").strip()
             if raw_api_base:
                 parsed_base = urlparse(raw_api_base)
@@ -347,7 +347,7 @@ class ParserSettingsController:
                     parsed_base.scheme not in {"http", "https"}
                     or not parsed_base.netloc
                 ):
-                    raise MinerUError(
+                    raise UserFacingError(
                         "API 地址必须是以 http:// 或 https:// 开头的网址。"
                     )
             summary = self._mineru_account_service.save_account(
@@ -380,7 +380,7 @@ class ParserSettingsController:
                 )
             response = self._mineru_accounts_payload()
             response["saved_account_id"] = summary.account_id
-        except (MinerUError, ValueError) as exc:
+        except (UserFacingError, ValueError) as exc:
             return 400, {"error": str(exc)}
         except (OSError, json.JSONDecodeError, sqlite3.Error):
             logging.exception("MinerU account configuration save failed")
@@ -402,7 +402,7 @@ class ParserSettingsController:
             response["deleted_account_id"] = account_id
         except KeyError:
             return 404, {"error": "该 MinerU 账号不存在或已删除。"}
-        except (MinerUError, ValueError) as exc:
+        except (UserFacingError, ValueError) as exc:
             return 400, {"error": str(exc)}
         except (OSError, json.JSONDecodeError, sqlite3.Error):
             logging.exception("MinerU account deletion failed")
@@ -420,10 +420,10 @@ class ParserSettingsController:
         try:
             account_id = str(payload.get("account_id") or "").strip()
             if not account_id:
-                raise MinerUError("请选择要测试的 MinerU 账号。")
+                raise UserFacingError("请选择要测试的 MinerU 账号。")
             record = self._mineru_account_service.get_account(account_id)
             if not record.configured:
-                raise MinerUError("该 MinerU 账号尚未保存有效 Token。")
+                raise UserFacingError("该 MinerU 账号尚未保存有效 Token。")
             global_config = self._read_mineru_config(
                 self._resolve_mineru_config(self._paths.runtime_root)
             )
@@ -437,7 +437,7 @@ class ParserSettingsController:
                 ),
             )
             result["account_id"] = account_id
-        except (MinerUError, KeyError) as exc:
+        except (UserFacingError, KeyError) as exc:
             return 400, {"error": str(exc)}
         return 200, result
 
@@ -454,7 +454,7 @@ class ParserSettingsController:
                 parsed_base.scheme not in {"http", "https"}
                 or not parsed_base.netloc
             ):
-                raise MinerUError(
+                raise UserFacingError(
                     "API 地址必须是以 http:// 或 https:// 开头的网址。"
                 )
             self._save_mineru(
@@ -462,7 +462,7 @@ class ParserSettingsController:
                 self._resolve_mineru_config(self._paths.runtime_root),
             )
             response = self._mineru_accounts_payload()
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (OSError, json.JSONDecodeError):
             logging.exception("MinerU service address save failed")
@@ -476,7 +476,7 @@ class ParserSettingsController:
         config_path = self._resolve_mineru_config(self._paths.runtime_root)
         try:
             summary = self._save_mineru(payload, config_path)
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (OSError, json.JSONDecodeError):
             return 500, {
@@ -488,7 +488,7 @@ class ParserSettingsController:
         config_path = self._resolve_mineru_config(self._paths.runtime_root)
         try:
             result = self._test_mineru_connection(config_path)
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (OSError, ValueError):
             return 500, {
@@ -505,7 +505,7 @@ class ParserSettingsController:
         config_path = self._resolve_mineru_config(self._paths.runtime_root)
         try:
             summary = self._save_mineru_local(payload, config_path)
-        except (MinerUError, ValueError) as exc:
+        except (UserFacingError, ValueError) as exc:
             return 400, {"error": str(exc)}
         except (OSError, json.JSONDecodeError):
             logging.exception("MinerU Local configuration save failed")
@@ -521,7 +521,7 @@ class ParserSettingsController:
         config_path = self._resolve_mineru_config(self._paths.runtime_root)
         try:
             result = self._test_mineru_local(payload, config_path)
-        except (MinerUError, ParserProviderError, ValueError) as exc:
+        except (UserFacingError, ParserProviderError, ValueError) as exc:
             return 400, {"error": str(exc)}
         return 200, result
 

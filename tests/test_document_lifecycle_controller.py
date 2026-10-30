@@ -10,7 +10,7 @@ from src.me_finder.application.document_deletion_coordinator import (
 from src.me_finder.document_lifecycle_controller import (
     DocumentLifecycleController,
 )
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class FakeDeletionCoordinator:
@@ -120,7 +120,7 @@ class DocumentLifecycleControllerTests(unittest.TestCase):
 
     def test_single_remove_maps_conflict_rejection_and_failure(self) -> None:
         cases = [
-            (MinerUError("文献正在导入"), 409, "文献正在导入"),
+            (UserFacingError("文献正在导入"), 409, "文献正在导入"),
             (DocumentDeletionRejected(""), 400, "删除文献失败。"),
             (DocumentDeletionFailed("索引重载失败"), 500, "索引重载失败"),
         ]

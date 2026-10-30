@@ -23,9 +23,11 @@ from .semantic_alignment import EmbeddingProvider
 from .text_alignment import (
     ALIGNMENT_ALGORITHM,
     RESTORABLE_ALIGNMENT_VERSIONS,
-    _default_alignment_model_cache,
-    _generate_alignment_on_connection,
-    _json_object,
+)
+from .alignment_generation import (
+    default_alignment_model_cache,
+    generate_alignment_on_connection,
+    json_object,
 )
 
 
@@ -44,7 +46,7 @@ def read_alignment_recipe_snapshot(db_path: Path) -> Dict[str, list]:
                 "target_source_file_id": row["target_source_file_id"],
                 "algorithm": row["algorithm"],
                 "algorithm_version": row["algorithm_version"],
-                "embedding_model_id": _json_object(
+                "embedding_model_id": json_object(
                     row["parameters_json"]
                 ).get("embedding_model_id", DEFAULT_EMBEDDING_MODEL_ID),
             }
@@ -63,7 +65,7 @@ def restore_alignment_recipe_snapshot(
     install_text_alignment_schema(connection)
     if model_cache_dir is None:
         database_file = alignment_database_file(connection)
-        model_cache_dir = _default_alignment_model_cache(Path(database_file))
+        model_cache_dir = default_alignment_model_cache(Path(database_file))
     restored = 0
     for pair in snapshot.get("alignment_pairs", []):
         if not isinstance(pair, Mapping):
@@ -81,7 +83,7 @@ def restore_alignment_recipe_snapshot(
         )
         if not recipe_sources_and_group_exist(connection, group_id, pivot_id, target_id):
             continue
-        _generate_alignment_on_connection(
+        generate_alignment_on_connection(
             connection,
             group_id,
             pivot_id,
@@ -108,7 +110,7 @@ def replace_alignment_recipe_snapshot(
             model_cache_dir=(
                 Path(model_cache_dir)
                 if model_cache_dir is not None
-                else _default_alignment_model_cache(Path(db_path))
+                else default_alignment_model_cache(Path(db_path))
             ),
             embedding_provider=embedding_provider,
         )

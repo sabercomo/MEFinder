@@ -13,7 +13,8 @@ from src.me_finder.application.document_import_coordinator import (
 )
 from src.me_finder.chunked_upload import ChunkedUploadError, ChunkedUploadStore
 from src.me_finder.import_resume import sha256_file
-from src.me_finder.mineru_api import MinerUError, resolve_mineru_config_path
+from src.me_finder.errors import UserFacingError
+from src.me_finder.mineru_api import resolve_mineru_config_path
 from src.me_finder.mineru_local_settings import save_mineru_local_config
 
 
@@ -219,7 +220,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
         self.assertEqual(stored[0].read_bytes(), payload)
 
     def test_incomplete_stream_removes_temp_file_and_reservation(self) -> None:
-        with self.assertRaisesRegex(MinerUError, "上传数据不完整"):
+        with self.assertRaisesRegex(UserFacingError, "上传数据不完整"):
             self.coordinator.import_stream(
                 "paper.pdf",
                 5,
@@ -233,9 +234,9 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
     def test_stream_validates_type_options_and_size_with_original_messages(
         self,
     ) -> None:
-        with self.assertRaisesRegex(MinerUError, "只支持 PDF、DOCX 或 EPUB"):
+        with self.assertRaisesRegex(UserFacingError, "只支持 PDF、DOCX 或 EPUB"):
             self.coordinator.import_stream("paper.txt", 1, io.BytesIO(b"x"))
-        with self.assertRaisesRegex(MinerUError, "PDF 解析方式无效"):
+        with self.assertRaisesRegex(UserFacingError, "PDF 解析方式无效"):
             self.coordinator.import_stream(
                 "paper.pdf",
                 1,
@@ -243,7 +244,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
                 pdf_parse_mode="invalid",
             )
         with self.assertRaisesRegex(
-            MinerUError,
+            UserFacingError,
             "请选择一个其他解析 API",
         ):
             self.coordinator.import_stream(
@@ -252,14 +253,14 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
                 io.BytesIO(b"x"),
                 pdf_parse_mode="vision",
             )
-        with self.assertRaisesRegex(MinerUError, "请先在设置中启用"):
+        with self.assertRaisesRegex(UserFacingError, "请先在设置中启用"):
             self.coordinator.import_stream(
                 "paper.pdf",
                 1,
                 io.BytesIO(b"x"),
                 pdf_parse_mode="mineru-local",
             )
-        with self.assertRaisesRegex(MinerUError, "文件为空"):
+        with self.assertRaisesRegex(UserFacingError, "文件为空"):
             self.coordinator.import_stream("paper.pdf", 0, io.BytesIO())
 
     def test_stream_can_start_directly_with_enabled_local_mineru(self) -> None:
@@ -354,7 +355,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
             self.paths,
             self.jobs,
             detect_pdf=lambda _path: (_ for _ in ()).throw(
-                MinerUError("detection failed")
+                UserFacingError("detection failed")
             ),
         )
         try:
@@ -368,7 +369,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
                 io.BytesIO(payload),
             )
 
-            with self.assertRaisesRegex(MinerUError, "detection failed"):
+            with self.assertRaisesRegex(UserFacingError, "detection failed"):
                 coordinator.finish_chunked(upload_id)
 
             self.assertEqual(
@@ -403,7 +404,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
             chunked_uploads=store,
         )
         try:
-            with self.assertRaisesRegex(MinerUError, "PDF 解析方式无效"):
+            with self.assertRaisesRegex(UserFacingError, "PDF 解析方式无效"):
                 coordinator.finish_chunked(upload_id)
 
             self.assertEqual(list(store.directory.glob("*.part")), [])
@@ -417,7 +418,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
     def test_admission_rejection_happens_before_stream_storage(self) -> None:
         @contextmanager
         def reject_admission():
-            raise MinerUError("imports unavailable")
+            raise UserFacingError("imports unavailable")
             yield
 
         coordinator = DocumentImportCoordinator(
@@ -426,7 +427,7 @@ class DocumentImportCoordinatorTests(unittest.TestCase):
             admission=reject_admission,
         )
         try:
-            with self.assertRaisesRegex(MinerUError, "imports unavailable"):
+            with self.assertRaisesRegex(UserFacingError, "imports unavailable"):
                 coordinator.import_stream(
                     "paper.pdf",
                     3,

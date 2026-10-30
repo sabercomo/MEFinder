@@ -52,7 +52,7 @@ def _item_language(title: object, author: object, file_name: object = None) -> s
     return "foreign"
 
 
-def _item_language_code(
+def item_language_code(
     sample: object,
     title: object,
     author: object,
@@ -258,7 +258,7 @@ def build_library(
                 item["author"] = explicit_responsibility
             else:
                 item["author"] = inferred_author
-        auto_language_code = _item_language_code(
+        auto_language_code = item_language_code(
             language_samples.get(source_id),
             item.get("title"),
             item.get("author"),

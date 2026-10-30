@@ -11,8 +11,8 @@ import unicodedata
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .bibliographic_values import (
-    _clean_people,
-    _is_plausible_person_name,
+    clean_people,
+    is_plausible_person_name,
     is_valid_bibliographic_value,
 )
 
@@ -58,7 +58,7 @@ _THESIS_INSTITUTION_RE = re.compile(
 )
 
 
-def _looks_like_thesis(texts: Sequence[Tuple[int, str]]) -> bool:
+def looks_like_thesis(texts: Sequence[Tuple[int, str]]) -> bool:
     """Report whether the front pages carry degree-thesis cover markers."""
 
     for page_idx, text in texts:
@@ -101,7 +101,7 @@ def _following_thesis_cover_value(
 _THESIS_TITLE_AUTHOR_PREFIX_SEP = re.compile(r"^[\s\-‐-―－_·・:：]+")
 
 
-def _strip_thesis_author_prefix(
+def strip_thesis_author_prefix(
     result: Dict[str, object],
     evidence: Dict[str, object],
 ) -> None:
@@ -130,7 +130,7 @@ def _strip_thesis_author_prefix(
     evidence["title"] = field_evidence
 
 
-def _extract_thesis_metadata(
+def extract_thesis_metadata(
     texts: Sequence[Tuple[int, str]],
 ) -> Tuple[Dict[str, str], Dict[str, object], Dict[str, float]]:
     """Extract thesis title, author, degree-granting school and defense year.
@@ -167,7 +167,7 @@ def _extract_thesis_metadata(
     ) -> None:
         cleaned = _compact_thesis_cover_text(value)
         if field == "author":
-            cleaned = _clean_people(cleaned)
+            cleaned = clean_people(cleaned)
         elif field == "publisher":
             cleaned = re.sub(r"\s+", "", cleaned)
         elif field == "title":
@@ -177,7 +177,7 @@ def _extract_thesis_metadata(
             cleaned = year.group(1) if year else ""
         if not is_valid_bibliographic_value(cleaned):
             return
-        if field == "author" and not _is_plausible_person_name(cleaned):
+        if field == "author" and not is_plausible_person_name(cleaned):
             return
         candidates[field].append((score, page_idx, line_index, cleaned, evidence_text, rule))
 

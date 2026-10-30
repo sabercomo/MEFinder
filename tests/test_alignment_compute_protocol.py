@@ -67,7 +67,7 @@ class SerializationTests(unittest.TestCase):
             target_language="en",
             reviewed_body_ranges={"pivot": [0, 2], "target": [0, 1]},
         )
-        folio = ac._deserialize_folio(request["inputs"]["folio_candidates"][0])
+        folio = ac.deserialize_folio(request["inputs"]["folio_candidates"][0])
         self.assertEqual(folio, FolioBoundaryCandidate(1, 0, 0, 2, (0.1, 0.2, 0.3, 0.4), 0.9))
         self.assertIsInstance(folio.target_bbox, tuple)
 

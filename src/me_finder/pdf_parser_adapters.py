@@ -374,7 +374,7 @@ def _parse_pdf_with_mineru_accounts(
             job.error_summary or f"MinerU 大文档任务未完成：{job.status}",
             allow_parser_fallback=False,
         )
-    return _publish_mineru_engine_results(
+    return publish_mineru_engine_results(
         root,
         source_file_id,
         ledger=ledger,
@@ -458,7 +458,7 @@ def _parse_pdf_with_mineru_local(
             failed or job.error_summary or f"本地 MinerU 任务未完成：{job.status}",
             allow_parser_fallback=False,
         )
-    return _publish_mineru_engine_results(
+    return publish_mineru_engine_results(
         root,
         source_file_id,
         ledger=ledger,
@@ -468,7 +468,7 @@ def _parse_pdf_with_mineru_local(
     )
 
 
-def _publish_mineru_engine_results(
+def publish_mineru_engine_results(
     root: Path,
     source_file_id: str,
     *,
@@ -738,7 +738,7 @@ def parse_pdf_with_local_ocr(
         raise LocalOCRError(
             failed or job.error_summary or "本地 OCR 未能完成全部页面。"
         )
-    published = _publish_mineru_engine_results(
+    published = publish_mineru_engine_results(
         root,
         source_file_id,
         ledger=ledger,

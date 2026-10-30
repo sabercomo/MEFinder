@@ -11,7 +11,7 @@ from .application.document_query_service import DocumentQueryError
 from .document_group_controller import DocumentGroupController
 from .import_assembly import ImportAssembly
 from .library_query_controller import LibraryQueryController
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 from .preferences import resolve_preferences_path
 
 
@@ -50,8 +50,8 @@ def assemble_library(
             target = document_queries.source_path(source_id)
         except DocumentQueryError as exc:
             # DesktopShellController preserves the existing 400 response for
-            # user-facing source lookup failures by handling MinerUError.
-            raise MinerUError(str(exc)) from exc
+            # user-facing source lookup failures by handling UserFacingError.
+            raise UserFacingError(str(exc)) from exc
         suffix = target.suffix.lower()
         if suffix == ".pdf":
             return open_pdf_with_platform(

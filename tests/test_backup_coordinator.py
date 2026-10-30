@@ -11,7 +11,7 @@ from src.me_finder.application.backup_coordinator import (
     BackupQueueError,
 )
 from src.me_finder.import_queue import ImportQueueFullError
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class FakeIndex:
@@ -281,11 +281,11 @@ class BackupCoordinatorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             coordinator, jobs, _events = self._coordinator(root)
-            with self.assertRaisesRegex(MinerUError, "不存在"):
+            with self.assertRaisesRegex(UserFacingError, "不存在"):
                 coordinator.start_restore(str(root / "missing.zip"))
             text = root / "backup.txt"
             text.write_text("not zip", encoding="utf-8")
-            with self.assertRaisesRegex(MinerUError, "\\.zip"):
+            with self.assertRaisesRegex(UserFacingError, "\\.zip"):
                 coordinator.start_restore(str(text))
             self.assertEqual(jobs.registered, [])
 

@@ -32,10 +32,10 @@ from .embedding_runtime import (
 
 from .alignment_anchors import (
     AnchorExtractorRegistry,
+    CONTEXT_GATED_ANCHOR_PREFIXES,
     DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     HeadingAnchor,
-    _CONTEXT_GATED_ANCHOR_PREFIXES,
-    _MAX_ANCHOR_CORRIDOR_RATIO,
+    MAX_ANCHOR_CORRIDOR_RATIO,
 )
 from .alignment_anchor_validation import drop_false_friend_anchors
 from .alignment_segment_quality import (
@@ -43,18 +43,18 @@ from .alignment_segment_quality import (
     demote_note_block_links,
 )
 from .alignment_structure import (
-    _CHINESE_HEADING,
-    _ENDNOTES_HEADING,
-    _EXPLICIT_TRANSLATOR_NOTE,
-    _INLINE_NOTE_MARKER,
-    _MAX_HEADING_NUMBER,
-    _NumberedNoteBlock,
-    _TOC_LEADER,
-    _chinese_number,
-    _collected_note_blocks,
-    _heading_lines,
-    _latin_toc_titles,
-    _normalized_heading_title,
+    CHINESE_HEADING,
+    ENDNOTES_HEADING,
+    EXPLICIT_TRANSLATOR_NOTE,
+    INLINE_NOTE_MARKER,
+    MAX_HEADING_NUMBER,
+    NumberedNoteBlock,
+    TOC_LEADER,
+    chinese_number,
+    collected_note_blocks,
+    heading_lines,
+    latin_toc_titles,
+    normalized_heading_title,
 )
 
 EMBEDDING_RUNTIME_VERSION = "fastembed-0.8.0-mean-pooling"
@@ -87,7 +87,7 @@ _TRANSITIONS: Tuple[Tuple[int, int, float], ...] = (
     (1, 0, 2.2),
     (0, 1, 2.2),
 )
-_DECIMAL_SECTION = re.compile(r"^(\d{1,2})\.\s*(\d{1,2})\.?\s+(\D.*)$")
+DECIMAL_SECTION = re.compile(r"^(\d{1,2})\.\s*(\d{1,2})\.?\s+(\D.*)$")
 _OCR_DIGIT_CHARACTERS = "0-9IlOoSs"
 _OCR_NUMBER_TOKEN = (
     rf"[{_OCR_DIGIT_CHARACTERS}](?:\s*[{_OCR_DIGIT_CHARACTERS}]){{0,4}}"
@@ -111,7 +111,7 @@ _AUTHOR_PREFACE_HEADING = re.compile(
 # foreword, or an editor's reading guide (导读). It may carry a subtitle on the
 # same line ("导论 社会性别意识形态…"), so match the leading token, not the whole
 # line. 导读 is deliberately excluded — it is front matter.
-_INTRODUCTION_HEADING = re.compile(
+INTRODUCTION_HEADING = re.compile(
     r"^\s*(?:导论|導論|导言|導言|绪论|緒論|绪言|緒言|引言|introduction)"
     r"(?=$|[\s：:.。，,—–-])",
     re.IGNORECASE,
@@ -399,7 +399,7 @@ def _number_token(value: str) -> int:
     if normalized.isdigit():
         return int(normalized)
     if all(character in "零〇一二两三四五六七八九十百" for character in normalized):
-        return _chinese_number(normalized)
+        return chinese_number(normalized)
     return 0
 
 
@@ -430,12 +430,12 @@ def _paragraph_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
             for raw_line in text.splitlines()
         ]
         lines = [line for line in lines if line]
-        if have_numbered_body and any(_ENDNOTES_HEADING.fullmatch(line) for line in lines):
+        if have_numbered_body and any(ENDNOTES_HEADING.fullmatch(line) for line in lines):
             break
         numbered = [
             (line, _paragraph_number(line))
             for line in lines
-            if not _TOC_LEADER.search(line)
+            if not TOC_LEADER.search(line)
         ]
         numbered.extend(
             (f"第{lines[line_index + 1]}", _paragraph_number(f"第{lines[line_index + 1]}"))
@@ -500,16 +500,16 @@ def _paragraph_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
 
 
 
-def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
+def document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
     positions: Dict[str, int] = {}
     decimal_positions: Dict[str, int] = {}
     numbered_sections = any(
         match is not None and match.group(2) in {"章", "篇", "部"}
         for text in texts
         for line in text.splitlines()
-        for match in [_CHINESE_HEADING.fullmatch(line.strip())]
+        for match in [CHINESE_HEADING.fullmatch(line.strip())]
     )
-    toc_titles, toc_indices = _latin_toc_titles(
+    toc_titles, toc_indices = latin_toc_titles(
         texts, numbered_sections=numbered_sections
     )
     last_heading_index = max(
@@ -518,9 +518,9 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
             for index, text in enumerate(texts)
             if index not in toc_indices
             and (
-                _heading_lines(text, numbered_sections=numbered_sections)
+                heading_lines(text, numbered_sections=numbered_sections)
                 or any(
-                    _normalized_heading_title(line) in toc_titles
+                    normalized_heading_title(line) in toc_titles
                     for line in text.splitlines()
                 )
             )
@@ -537,7 +537,7 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
         if index in toc_indices:
             continue
         if index > last_heading_index and (positions or decimal_positions) and any(
-            _ENDNOTES_HEADING.fullmatch(line) for line in normalized_lines
+            ENDNOTES_HEADING.fullmatch(line) for line in normalized_lines
         ):
             break
         # Decimal chapter.section ordinals survive even when the parser omits
@@ -547,23 +547,23 @@ def _document_heading_positions(texts: Sequence[str]) -> Dict[str, int]:
         # next heading; it does not change that heading's structural ordinal.
         if re.fullmatch(r"\$\^\{\d+\}\$", first_line) and len(normalized_lines) > 1:
             first_line = normalized_lines[1]
-        decimal = _DECIMAL_SECTION.fullmatch(first_line)
+        decimal = DECIMAL_SECTION.fullmatch(first_line)
         if (
             decimal is not None and len(first_line) <= 100
             and not first_line.endswith((".", ";", ":", "。", "；", "："))
             and not re.search(r"\d$", first_line)
-            and not _TOC_LEADER.search(first_line)
+            and not TOC_LEADER.search(first_line)
         ):
             chapter_number, section_number = int(decimal[1]), int(decimal[2])
-            if 0 < chapter_number <= _MAX_HEADING_NUMBER and 0 < section_number <= _MAX_HEADING_NUMBER:
+            if 0 < chapter_number <= MAX_HEADING_NUMBER and 0 < section_number <= MAX_HEADING_NUMBER:
                 decimal_positions.setdefault(f"chapter:{chapter_number}:section:{section_number}", index)
         if not decimal_positions and any(
             _AUTHOR_PREFACE_HEADING.fullmatch(line) for line in normalized_lines
         ):
             positions.setdefault("preface:author", index)
-        matches = _heading_lines(text, numbered_sections=numbered_sections)
+        matches = heading_lines(text, numbered_sections=numbered_sections)
         for line in normalized_lines:
-            toc_key = toc_titles.get(_normalized_heading_title(line))
+            toc_key = toc_titles.get(normalized_heading_title(line))
             if toc_key is not None:
                 positions.setdefault(toc_key, index)
                 parts = toc_key.split(":")
@@ -603,8 +603,8 @@ def find_heading_anchors(
 ) -> List[HeadingAnchor]:
     """Pair chapter/section headings by structural ordinal, excluding TOC blocks."""
 
-    source = _document_heading_positions(source_texts)
-    target = _document_heading_positions(target_texts)
+    source = document_heading_positions(source_texts)
+    target = document_heading_positions(target_texts)
     candidates = sorted(
         (
             HeadingAnchor(source[key], target[key], key)
@@ -1009,7 +1009,7 @@ def _validate_soft_anchors(
     surface token is a false friend -- the same phrase or number in unrelated
     passages -- so it must not act as a hard structural landmark (A class).  A
     surviving soft anchor whose corridor against the previous kept anchor
-    compresses one side by more than ``_MAX_ANCHOR_CORRIDOR_RATIO`` is a runaway
+    compresses one side by more than ``MAX_ANCHOR_CORRIDOR_RATIO`` is a runaway
     jump, e.g. a note number reused across chapters (B class).  Structural
     anchors (paragraph/chapter/section/note/folio ordinals) are edition-
     independent and always pass through untouched.
@@ -1018,7 +1018,7 @@ def _validate_soft_anchors(
     validated: List[HeadingAnchor] = []
     previous: HeadingAnchor | None = None
     for anchor in anchors:
-        if anchor.key.startswith(_CONTEXT_GATED_ANCHOR_PREFIXES):
+        if anchor.key.startswith(CONTEXT_GATED_ANCHOR_PREFIXES):
             similarity = _similarity(
                 source_prefix,
                 target_prefix,
@@ -1036,7 +1036,7 @@ def _validate_soft_anchors(
                     source_delta > 0
                     and target_delta > 0
                     and max(source_delta, target_delta)
-                    > _MAX_ANCHOR_CORRIDOR_RATIO * min(source_delta, target_delta)
+                    > MAX_ANCHOR_CORRIDOR_RATIO * min(source_delta, target_delta)
                 ):
                     continue
         validated.append(anchor)
@@ -1046,7 +1046,7 @@ def _validate_soft_anchors(
             validated, source_prefix, target_prefix, source_lengths,
             target_lengths, source_groups, target_groups, low_threshold,
             align_partition=_align_partition,
-            context_prefixes=_CONTEXT_GATED_ANCHOR_PREFIXES,
+            context_prefixes=CONTEXT_GATED_ANCHOR_PREFIXES,
             displacement_limit=_ANCHOR_DISPLACEMENT_LIMIT,
             better_alt_margin=_ANCHOR_BETTER_ALT_MARGIN,
         )
@@ -1240,7 +1240,7 @@ def _align_monotonic_sequences(
 def _body_chapter_positions(texts: Sequence[str]) -> List[Tuple[int, int]]:
     return sorted(
         (index, int(key.split(":")[1]))
-        for key, index in _document_heading_positions(texts).items()
+        for key, index in document_heading_positions(texts).items()
         if re.fullmatch(r"chapter:\d+", key)
     )
 
@@ -1261,9 +1261,9 @@ def _inline_note_candidates(
             chapter_cursor += 1
         if not current_chapter:
             continue
-        if not include_translator and _EXPLICIT_TRANSLATOR_NOTE.search(text):
+        if not include_translator and EXPLICIT_TRANSLATOR_NOTE.search(text):
             continue
-        for match in _INLINE_NOTE_MARKER.finditer(text):
+        for match in INLINE_NOTE_MARKER.finditer(text):
             key = (current_chapter, int(match.group(1)), index)
             if key in seen:
                 continue
@@ -1275,13 +1275,13 @@ def _inline_note_candidates(
 def _note_marker_inventory(
     texts: Sequence[str],
 ) -> Tuple[List[_InlineNoteCandidate], set[int]]:
-    blocks = _collected_note_blocks(texts)
+    blocks = collected_note_blocks(texts)
     if blocks:
         points: List[_InlineNoteCandidate] = []
         translator_chapters: set[int] = set()
         for block in blocks:
             probe = " ".join(texts[block.start : min(block.end, block.start + 3)])
-            if _EXPLICIT_TRANSLATOR_NOTE.search(probe):
+            if EXPLICIT_TRANSLATOR_NOTE.search(probe):
                 translator_chapters.add(block.chapter_number)
                 continue
             points.append(
@@ -1297,12 +1297,12 @@ def _note_marker_inventory(
     translator_chapters = {
         point.chapter_number
         for point in raw
-        if _EXPLICIT_TRANSLATOR_NOTE.search(texts[point.start])
+        if EXPLICIT_TRANSLATOR_NOTE.search(texts[point.start])
     }
     return [
         point
         for point in raw
-        if not _EXPLICIT_TRANSLATOR_NOTE.search(texts[point.start])
+        if not EXPLICIT_TRANSLATOR_NOTE.search(texts[point.start])
     ], translator_chapters
 
 
@@ -1407,7 +1407,7 @@ def _structural_note_marker_overrides(
 
 
 def _best_inline_note_window(
-    block: _NumberedNoteBlock,
+    block: NumberedNoteBlock,
     candidate: _InlineNoteCandidate,
     source_prefix: np.ndarray,
     target_prefix: np.ndarray,
@@ -1440,7 +1440,7 @@ def _directional_note_overrides(
     thresholds: AlignmentThresholds,
 ) -> List[SemanticLink]:
     import numpy as np
-    blocks = _collected_note_blocks(collected_texts)
+    blocks = collected_note_blocks(collected_texts)
     candidates = _inline_note_candidates(inline_texts)
     if not blocks or not candidates:
         return []
@@ -1458,7 +1458,7 @@ def _directional_note_overrides(
         ]
     )
     proposals: List[
-        Tuple[float, _NumberedNoteBlock, _InlineNoteCandidate, int]
+        Tuple[float, NumberedNoteBlock, _InlineNoteCandidate, int]
     ] = []
     for block in blocks:
         matching = [
@@ -1494,7 +1494,7 @@ def _directional_note_overrides(
 
     occupied_inline_segments: set[int] = set()
     selected: List[
-        Tuple[float, _NumberedNoteBlock, _InlineNoteCandidate, int]
+        Tuple[float, NumberedNoteBlock, _InlineNoteCandidate, int]
     ] = []
     for score, block, candidate, end in sorted(
         proposals, key=lambda item: item[0], reverse=True

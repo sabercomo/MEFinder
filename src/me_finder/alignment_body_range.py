@@ -31,19 +31,21 @@ from .persistence.alignment_store import (
     segment_count,
     segment_set_owner,
 )
-from .semantic_alignment import _document_heading_positions
+from .semantic_alignment import document_heading_positions
 from .text_alignment import (
     InvalidAlignmentRequest,
     WriteWindow,
-    _json_object,
-    _require_pair,
-    _segment_set,
-    _segment_set_language,
-    _source_kind,
-    _source_row,
-    _validate_nonnegative_integer,
-    _validate_source_id,
     latest_reviewed_body_ranges,
+)
+from .alignment_generation import (
+    json_object,
+    require_pair,
+    segment_set,
+    segment_set_language,
+    source_kind_of,
+    source_row,
+    validate_nonnegative_integer,
+    validate_source_id,
 )
 
 
@@ -72,7 +74,7 @@ def _outline(texts: Sequence[str]) -> List[Dict[str, object]]:
     indices = sorted(
         {
             index
-            for key, index in _document_heading_positions(texts).items()
+            for key, index in document_heading_positions(texts).items()
             if key.startswith("chapter:") or key.startswith("preface:")
         }
     )
@@ -93,7 +95,7 @@ def _pdf_page_anchors(
     anchors: Dict[int, Dict[str, object]] = {}
     for page_index in sorted(set(pages.values())):
         row = page_rows[page_index]
-        fields = _json_object(row["payload_json"]) if row is not None else {}
+        fields = json_object(row["payload_json"]) if row is not None else {}
         fields.update({"source_type": "pdf", "pdf_page_index": page_index})
         display = build_page_display(fields)
         anchors[page_index] = {
@@ -117,7 +119,7 @@ def _paragraph_anchors(
     anchors: Dict[int, Dict[str, object]] = {}
     for paragraph_index in sorted(set(positions.values())):
         row = paragraph_rows[paragraph_index]
-        fields = _json_object(row["payload_json"]) if row is not None else {}
+        fields = json_object(row["payload_json"]) if row is not None else {}
         if row is not None:
             fields.update(
                 {
@@ -212,23 +214,23 @@ def read_pair_body_ranges(
     group_id = str(document_group_id or "").strip()
     if not group_id:
         raise InvalidAlignmentRequest("document_group_id is required")
-    pivot_id = _validate_source_id(pivot_source_file_id)
-    target_id = _validate_source_id(target_source_file_id)
+    pivot_id = validate_source_id(pivot_source_file_id)
+    target_id = validate_source_id(target_source_file_id)
     transaction_window = write_window or nullcontext
     with transaction_window():
         with body_range_write_transaction(db_path) as connection:
-            _require_pair(connection, group_id, pivot_id, target_id)
+            require_pair(connection, group_id, pivot_id, target_id)
             sides: List[Dict[str, object]] = []
             prepared = []
             for side, source_id in (("pivot", pivot_id), ("target", target_id)):
-                segment_set_id, segments = _segment_set(connection, source_id)
+                segment_set_id, segments = segment_set(connection, source_id)
                 prepared.append((side, source_id, segment_set_id, segments))
             reviewed = latest_reviewed_body_ranges(
                 connection, prepared[0][2], prepared[1][2]
             )
             for side, source_id, segment_set_id, segments in prepared:
                 texts = [text for _segment_id, text in segments]
-                source_kind = _source_kind(_source_row(connection, source_id))
+                source_kind = source_kind_of(source_row(connection, source_id))
                 start, end = _current_bounds(reviewed, side, texts)
                 bound_ids = [segments[start][0], segments[end - 1][0]]
                 anchors = _anchors(connection, source_id, source_kind, bound_ids)
@@ -238,7 +240,7 @@ def read_pair_body_ranges(
                         "source_file_id": source_id,
                         "segment_set_id": segment_set_id,
                         "source_kind": source_kind,
-                        "language_code": _segment_set_language(
+                        "language_code": segment_set_language(
                             connection, segment_set_id
                         ),
                         "segment_count": len(segments),
@@ -281,24 +283,24 @@ def read_body_range_segments(
 ) -> Dict[str, object]:
     """Return one window of indexed segments with their existing page anchors."""
 
-    source_id = _validate_source_id(source_file_id)
+    source_id = validate_source_id(source_file_id)
     set_id = str(segment_set_id or "").strip()
     if not set_id:
         raise InvalidAlignmentRequest("segment_set_id 必须提供。")
-    requested_start = _validate_nonnegative_integer("start", start)
-    window = _validate_nonnegative_integer("count", count)
+    requested_start = validate_nonnegative_integer("start", start)
+    window = validate_nonnegative_integer("count", count)
     if not 1 <= window <= MAX_SEGMENT_WINDOW:
         raise InvalidAlignmentRequest(
             f"count 必须在 1 到 {MAX_SEGMENT_WINDOW} 之间。"
         )
     page_number = (
         None if pdf_page is None
-        else _validate_nonnegative_integer("pdf_page", pdf_page)
+        else validate_nonnegative_integer("pdf_page", pdf_page)
     )
     with alignment_read_connection(db_path) as connection:
         if segment_set_owner(connection, set_id) != source_id:
             raise InvalidAlignmentRequest("Segment 集与文献不匹配，请重新打开正文范围")
-        source_kind = _source_kind(_source_row(connection, source_id))
+        source_kind = source_kind_of(source_row(connection, source_id))
         total = segment_count(connection, set_id)
         if total == 0:
             raise InvalidAlignmentRequest("文献没有可用于对齐的 Segment。")

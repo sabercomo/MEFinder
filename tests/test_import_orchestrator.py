@@ -30,6 +30,7 @@ from src.me_finder.import_job_journal import ImportJobJournal
 from src.me_finder.import_queue import ImportQueueFullError
 from src.me_finder.import_resume import sha256_file
 from src.me_finder.lifecycle import DurableOperationGate
+from src.me_finder.errors import UserFacingError
 from src.me_finder.mineru_api import MinerUError
 from src.me_finder.mineru_local_settings import save_mineru_local_config
 
@@ -307,7 +308,7 @@ class ImportOrchestratorTests(unittest.TestCase):
         self.assertEqual(target, original)
         self.assertTrue(original.is_file())
         self.assertFalse(incoming.exists())
-        with self.assertRaisesRegex(MinerUError, "正在准备导入"):
+        with self.assertRaisesRegex(UserFacingError, "正在准备导入"):
             orchestrator.register_pdf_for_import(original)
         orchestrator.release_import_reservation(source_id)
 
@@ -352,7 +353,7 @@ class ImportOrchestratorTests(unittest.TestCase):
         ]
         orchestrator = self._orchestrator()
 
-        with self.assertRaisesRegex(MinerUError, "已有多条相同 PDF"):
+        with self.assertRaisesRegex(UserFacingError, "已有多条相同 PDF"):
             orchestrator.register_pdf_for_import(original)
 
         self.assertFalse((self.root / "config" / "pdf_imports.json").exists())
@@ -630,7 +631,7 @@ class ImportOrchestratorTests(unittest.TestCase):
         self.assertFalse(register_thread.is_alive())
         self.assertEqual(registration_results[0][1], "pdf-registered-order")
         self.assertEqual(orchestrator.job_status(job_id)["status"], "completed")
-        with self.assertRaisesRegex(MinerUError, "正在准备导入"):
+        with self.assertRaisesRegex(UserFacingError, "正在准备导入"):
             store.reserve_source("pdf-registered-order")
         predicted_source_id = f"pdf-import-{sha256_file(target)[:16]}"
         store.reserve_source(predicted_source_id)
@@ -1020,7 +1021,7 @@ class ImportOrchestratorTests(unittest.TestCase):
         target.write_bytes(b"replacement-body")
         self.queue.failure = None
 
-        with self.assertRaisesRegex(MinerUError, "内容已经变化"):
+        with self.assertRaisesRegex(UserFacingError, "内容已经变化"):
             orchestrator.resume_import_job(job_id)
 
         status = orchestrator.job_status(job_id)
@@ -1087,7 +1088,7 @@ class ImportOrchestratorTests(unittest.TestCase):
         )
 
         orchestrator.begin_source_deletion("word-delete")
-        with self.assertRaisesRegex(MinerUError, "正在删除"):
+        with self.assertRaisesRegex(UserFacingError, "正在删除"):
             orchestrator.start_import_job(
                 target,
                 {"detected_pdf_type": "docx"},
@@ -1109,7 +1110,7 @@ class ImportOrchestratorTests(unittest.TestCase):
             False,
         )
 
-        with self.assertRaisesRegex(MinerUError, "仍在解析中"):
+        with self.assertRaisesRegex(UserFacingError, "仍在解析中"):
             orchestrator.begin_source_deletion("word-active")
 
     def test_index_missing_source_keeps_display_name_in_error(self) -> None:
@@ -1142,7 +1143,7 @@ class ImportOrchestratorTests(unittest.TestCase):
         orchestrator = self._orchestrator(extract_pdf=extract_pdf)
 
         with self.assertRaisesRegex(
-            MinerUError,
+            UserFacingError,
             "论文原名.pdf 未能进入索引：写入后未找到文献记录",
         ):
             orchestrator.index_registered_pdf("job-one", "pdf-one")

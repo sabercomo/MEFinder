@@ -8,7 +8,7 @@ from src.me_finder.application.document_query_service import (
 )
 from src.me_finder.import_job_controller import ImportJobController
 from src.me_finder.import_resume import ResumeManifestError
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 from src.me_finder.vision_api import VisionAPIError
 
 
@@ -371,7 +371,7 @@ class ImportJobControllerTests(unittest.TestCase):
 
     def test_retry_with_mineru_does_not_dismiss_after_validation_error(self) -> None:
         self._vision_retry_inputs()
-        self.imports.errors["validated_target"] = MinerUError(
+        self.imports.errors["validated_target"] = UserFacingError(
             "原文件已变化。"
         )
         self.assertEqual(
@@ -555,7 +555,7 @@ class ImportJobControllerTests(unittest.TestCase):
     def test_provider_retry_maps_target_summary_and_start_errors(self) -> None:
         self._vision_retry_inputs()
         request = {"job_id": "old-job", "provider_id": "provider-one"}
-        self.imports.errors["validated_target"] = MinerUError("原文件已变化。")
+        self.imports.errors["validated_target"] = UserFacingError("原文件已变化。")
         self.assertEqual(
             self.controller.retry_with_provider(request),
             (400, {"error": "原文件已变化。"}),
@@ -583,7 +583,7 @@ class ImportJobControllerTests(unittest.TestCase):
                 }
             ]
         }
-        self.imports.errors["start_retry"] = MinerUError("无法创建任务。")
+        self.imports.errors["start_retry"] = UserFacingError("无法创建任务。")
         self.assertEqual(
             self.controller.retry_with_provider(request),
             (400, {"error": "无法创建任务。"}),
@@ -659,7 +659,7 @@ class ImportJobControllerTests(unittest.TestCase):
             ),
         )
 
-        self.imports.errors["resume"] = MinerUError("任务不可继续。")
+        self.imports.errors["resume"] = UserFacingError("任务不可继续。")
         self.assertEqual(
             self.controller.resume({"job_id": "resume-one"}),
             (400, {"error": "任务不可继续。"}),

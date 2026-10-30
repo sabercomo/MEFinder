@@ -24,7 +24,7 @@ DATABASE_BACKUP_FREE_SPACE_MARGIN = 64 * 1024 * 1024
 
 DATABASE_REBUILD_ESTIMATE_FLOOR = 16 * 1024 * 1024
 
-def _prune_database_backups(
+def prune_database_backups(
     backup_dir: Path, db_path: Path, keep: int = DATABASE_BACKUP_RETENTION
 ) -> List[Path]:
     """Drop all but the newest ``keep`` snapshots of ``db_path``."""
@@ -48,7 +48,7 @@ def _prune_database_backups(
             continue
     return removed
 
-def _backup_database(
+def create_database_backup(
     db_path: Path,
     *,
     additional_required_bytes: int = 0,
@@ -139,10 +139,10 @@ def _backup_database(
                 "最近一次可用备份仍已保留。",
             ) from exc
         raise
-    _prune_database_backups(backup_dir, db_path)
+    prune_database_backups(backup_dir, db_path)
     return backup_path
 
 def backup_database(db_path: Path = DEFAULT_DATABASE_PATH) -> Path:
     """Create one durable, retention-managed snapshot of the index."""
 
-    return _backup_database(Path(db_path))
+    return create_database_backup(Path(db_path))

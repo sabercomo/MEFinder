@@ -95,7 +95,7 @@ def _serialize_folio(candidate: FolioBoundaryCandidate) -> dict:
     return data
 
 
-def _deserialize_folio(data: Mapping[str, object]) -> FolioBoundaryCandidate:
+def deserialize_folio(data: Mapping[str, object]) -> FolioBoundaryCandidate:
     bbox = tuple(float(v) for v in data["target_bbox"])  # type: ignore[arg-type]
     similarity = data.get("similarity")
     return FolioBoundaryCandidate(

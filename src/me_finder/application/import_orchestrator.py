@@ -28,7 +28,8 @@ from ..import_queue import (
 )
 from ..import_resume import sha256_file
 from ..lifecycle import DurableOperationGate
-from ..mineru_api import MinerUError, resolve_mineru_config_path
+from ..errors import UserFacingError
+from ..mineru_api import resolve_mineru_config_path
 from ..mineru_local_settings import mineru_local_config_summary
 from ..mineru_local_provider import MINERU_LOCAL_PROVIDER_ID
 from ..local_ocr_settings import local_ocr_available
@@ -356,15 +357,15 @@ class ImportOrchestrator:
             None,
         )
         if document is None:
-            raise MinerUError(f"PDF 配置中找不到该文献：{source_file_id}")
+            raise UserFacingError(f"PDF 配置中找不到该文献：{source_file_id}")
         file_name = str(document.get("file_name") or "").strip()
         if not file_name:
-            raise MinerUError("PDF 配置缺少文件名。")
+            raise UserFacingError("PDF 配置缺少文件名。")
         path = Path(file_name)
         if not path.is_absolute():
             path = self._root / "corpus" / "raw_pdf" / path
         if not path.is_file():
-            raise MinerUError(f"PDF 原文件不存在：{path.name}")
+            raise UserFacingError(f"PDF 原文件不存在：{path.name}")
         return path, document
 
     def rebuild_runtime_index(
@@ -405,7 +406,7 @@ class ImportOrchestrator:
                     parsed_dir=self._root / "corpus" / "parsed" / "pdf",
                 )
             except Exception as exc:
-                raise MinerUError(
+                raise UserFacingError(
                     f"{display_name} 未能进入索引：{type(exc).__name__}: {exc}"
                 ) from exc
             extracted_sources = [
@@ -418,7 +419,7 @@ class ImportOrchestrator:
                 or str(extracted_sources[0].get("source_file_id") or "")
                 != source_file_id
             ):
-                raise MinerUError(
+                raise UserFacingError(
                     f"{display_name} 未能进入索引："
                     "解析结果缺少对应的文献记录。"
                 )
@@ -437,7 +438,7 @@ class ImportOrchestrator:
                 except RuntimeError as exc:
                     if not str(exc).startswith("写入后未找到文献记录："):
                         raise
-                    raise MinerUError(
+                    raise UserFacingError(
                         f"{display_name} 未能进入索引：写入后未找到文献记录。"
                     ) from exc
 
@@ -726,7 +727,7 @@ class ImportOrchestrator:
             ]
             if matching_ids and predicted_source_id not in matching_ids:
                 if len(matching_ids) != 1:
-                    raise MinerUError("书库中已有多条相同 PDF 的记录，请先确认要保留的文献。")
+                    raise UserFacingError("书库中已有多条相同 PDF 的记录，请先确认要保留的文献。")
                 predicted_source_id = matching_ids[0]
             with self._job_store.atomic():
                 self._job_store.reserve_source(predicted_source_id)
@@ -985,7 +986,7 @@ class ImportOrchestrator:
                         resolve_mineru_config_path(self._root)
                     ).get("enabled")
                 )
-            except (MinerUError, OSError, ValueError):
+            except (UserFacingError, OSError, ValueError):
                 local_enabled = False
         public_job["can_retry_with_local_mineru"] = bool(
             local_retry_candidate and local_enabled
@@ -1178,7 +1179,7 @@ class ImportOrchestrator:
                 )
         except (ImportQueueFullError, ImportQueueClosedError) as exc:
             self.fail_import_at_queue(job_id)
-            raise MinerUError(
+            raise UserFacingError(
                 "导入任务暂时无法进入处理队列，已保留为可继续任务。"
             ) from exc
         return transition.job

@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 
-from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
+from .auto_page_mapping import layout_bbox_scale, normalized_page_bbox
 from .document_heading import normalize_heading_text
 
 
@@ -147,7 +147,7 @@ FOOTNOTE_ROLES = frozenset({"footnote", "page_footnote"})
 
 
 def has_footnote_signal(block: Mapping[str, object]) -> bool:
-    return _block_role(block) in FOOTNOTE_ROLES or bool(
+    return block_role(block) in FOOTNOTE_ROLES or bool(
         FOOTNOTE_MARKER_RE.search(str(block.get("text") or ""))
     )
 
@@ -165,7 +165,7 @@ _BARE_ROMAN = re.compile(r"\s*([ivxlcdm]{1,7})\s*\Z", re.IGNORECASE)
 _MIN_ARTIFACT_COUNT = 3
 
 
-def _block_role(block: Mapping[str, object]) -> str:
+def block_role(block: Mapping[str, object]) -> str:
     return (
         str(
             block.get("mineru_type")
@@ -182,19 +182,19 @@ def _has_heading_level(block: Mapping[str, object]) -> bool:
     return heading_level(block) is not None
 
 
-def _page_scale(page: Mapping[str, object]) -> Tuple[float, float]:
+def page_scale(page: Mapping[str, object]) -> Tuple[float, float]:
     blocks = page.get("blocks")
-    return _layout_bbox_scale(
+    return layout_bbox_scale(
         blocks if isinstance(blocks, list) else [],
         float(page.get("page_width") or 1000.0),
         float(page.get("page_height") or 1000.0),
     )
 
 
-def _block_y_center(
+def block_y_center(
     block: Mapping[str, object], width: float, height: float
 ) -> Optional[float]:
-    bbox = _normalized_page_bbox(dict(block), width, height)
+    bbox = normalized_page_bbox(dict(block), width, height)
     if not bbox:
         return None
     return (float(bbox[1]) + float(bbox[3])) / 2.0
@@ -256,7 +256,7 @@ def _folio_int(text: str) -> Optional[int]:
     return value
 
 
-def _printed_page_raw(page: Mapping[str, object]) -> Optional[str]:
+def printed_page_raw(page: Mapping[str, object]) -> Optional[str]:
     for key in ("citation_page", "printed_page", "logical_page", "book_page"):
         value = page.get(key)
         if value not in (None, ""):
@@ -302,7 +302,7 @@ def _is_visible_page_number(
     text = str(block.get("text") or "").strip()
     if not text:
         return False
-    if _block_role(block) in _PAGE_NUMBER_ROLES:
+    if block_role(block) in _PAGE_NUMBER_ROLES:
         # Parser-identified folio: only delete when it truly is a short number
         # (guards against a mislabeled body block).
         return _folio_int(text) is not None or bool(_BARE_ROMAN.fullmatch(text))
@@ -362,7 +362,7 @@ def _page_region_texts(
     candidates are protected before they can contribute to these statistics.
     """
 
-    width, height = _page_scale(page)
+    width, height = page_scale(page)
     ordered = _ordered_body_blocks(page)
     top: set = set()
     bottom: set = set()
@@ -372,7 +372,7 @@ def _page_region_texts(
         norm = normalize_heading_text(block.get("text"))
         if not norm:
             continue
-        region = _region_of(index, len(ordered), _block_y_center(block, width, height))
+        region = _region_of(index, len(ordered), block_y_center(block, width, height))
         if region == "top":
             top.add(norm)
         elif region == "bottom":
@@ -395,9 +395,9 @@ def build_page_artifact_profile(
             continue
         total += 1
         top, bottom = _page_region_texts(page)
-        width, height = _page_scale(page)
+        width, height = page_scale(page)
         for block in _ordered_body_blocks(page):
-            y = _block_y_center(block, width, height)
+            y = block_y_center(block, width, height)
             if y is not None and _TOP_BAND < y < _BOTTOM_BAND and not has_footnote_signal(block):
                 body_texts.add(normalize_heading_text(block.get("text")))
         for norm in top:
@@ -444,12 +444,12 @@ def normalize_export_blocks(
     ordered = _ordered_body_blocks(page)
     if not ordered:
         return []
-    width, height = _page_scale(page)
-    printed = _printed_page_raw(page)
+    width, height = page_scale(page)
+    printed = printed_page_raw(page)
 
     result: List[Mapping[str, object]] = []
     for index, block in enumerate(ordered):
-        region = _region_of(index, len(ordered), _block_y_center(block, width, height))
+        region = _region_of(index, len(ordered), block_y_center(block, width, height))
         decision = trusted_heading(block, page=page, region=region, profile=profile)
         block = {**block, "_export_heading": decision}
         # Protect both note bodies and their references BEFORE any deletion,
@@ -535,14 +535,14 @@ def iter_decoration_spans(
     if blocks is None or not blocks_aligned_with_text(blocks, text_raw):
         return []
 
-    width, height = _page_scale(page)
-    printed = _printed_page_raw(page)
+    width, height = page_scale(page)
+    printed = printed_page_raw(page)
     spans: List[Tuple[int, int, str]] = []
     for index, block in enumerate(ordered):
         if has_footnote_signal(block):
             continue
         region = _region_of(
-            index, len(ordered), _block_y_center(block, width, height)
+            index, len(ordered), block_y_center(block, width, height)
         )
         kind: Optional[str] = None
         if options.remove_visible_page_numbers and _is_visible_page_number(
@@ -616,7 +616,7 @@ def trusted_heading(block, *, page, region, profile) -> HeadingDecision:
         return block["_export_heading"]
     text = str(block.get("text") or "").strip()
     structural_title = str(block.get("document_heading_title")
-                           or _strip_heading_folio_prefix(block, _printed_page_raw(page)) or text)
+                           or _strip_heading_folio_prefix(block, printed_page_raw(page)) or text)
     kind = "chapter" if _CHAPTER_TITLE.match(structural_title) else (
         "part" if _PART_TITLE.match(structural_title) else (
             "section" if _SECTION_TITLE.match(structural_title) else "heading"
@@ -629,7 +629,7 @@ def trusted_heading(block, *, page, region, profile) -> HeadingDecision:
     located = source == "pdf_outline" or (
         source == "document_toc"
         and block.get("document_heading_printed_page") is not None
-        and str(block["document_heading_printed_page"]) == _printed_page_raw(page)
+        and str(block["document_heading_printed_page"]) == printed_page_raw(page)
     )
     norm = normalize_heading_text(text)
     repeated = (region == "top" and profile.is_running_header(norm)) or (
@@ -637,9 +637,9 @@ def trusted_heading(block, *, page, region, profile) -> HeadingDecision:
     )
     if repeated and not located:
         return HeadingDecision(None, kind, "REPEATED_EDGE_TEXT")
-    if _block_role(block) in _DECORATION_ROLES and not located:
+    if block_role(block) in _DECORATION_ROLES and not located:
         return HeadingDecision(None, kind, "PAGE_DECORATION")
-    if _block_role(block) in FOOTNOTE_ROLES:
+    if block_role(block) in FOOTNOTE_ROLES:
         return HeadingDecision(None, kind, "NOTE_BODY")
     if level is not None:
         return HeadingDecision(level, kind, source.upper() if source else "PARSER_TITLE_WITHOUT_DECORATION")
@@ -656,7 +656,7 @@ def reader_heading_spans(page, *, profile) -> list[dict]:
     blocks = _ordered_body_blocks(page)
     if not blocks or not blocks_aligned_with_text(blocks, raw):
         return []
-    width, height = _page_scale(page)
+    width, height = page_scale(page)
     headings = []
     cursor = 0
     for index, block in enumerate(blocks):
@@ -669,7 +669,7 @@ def reader_heading_spans(page, *, profile) -> list[dict]:
                 continue
             end = start + len(text)
         cursor = end
-        region = _region_of(index, len(blocks), _block_y_center(block, width, height))
+        region = _region_of(index, len(blocks), block_y_center(block, width, height))
         decision = trusted_heading(block, page=page, region=region, profile=profile)
         if decision.level in (1, 2):
             headings.append({
@@ -704,12 +704,12 @@ def prepare_export_structure(pages, *, profile, options) -> ExportStructure:
         if not isinstance(blocks, (list, tuple)) or not blocks_aligned_with_text(blocks, raw):
             prepared.append([{"text": raw}] if raw else [])
             continue
-        width, height = _page_scale(page)
+        width, height = page_scale(page)
         indexed = []
         for index, block in enumerate(blocks):
             if not isinstance(block, Mapping) or not str(block.get("text") or "").strip():
                 continue
-            region = _region_of(index, len(blocks), _block_y_center(block, width, height))
+            region = _region_of(index, len(blocks), block_y_center(block, width, height))
             decision = trusted_heading(block, page=page, region=region, profile=profile)
             if heading_level(block) is not None and decision.level is None:
                 issues.append({
@@ -717,8 +717,8 @@ def prepare_export_structure(pages, *, profile, options) -> ExportStructure:
                     "kind": decision.kind, "text": block["text"],
                     "source_file_id": page.get("source_file_id"),
                     "source_page_index": page.get("pdf_page_index"),
-                    "source_physical_page": _physical_page(page),
-                    "source_printed_page": _printed_page_raw(page), "source_block_index": block.get("_export_index", index),
+                    "source_physical_page": physical_page_number(page),
+                    "source_printed_page": printed_page_raw(page), "source_block_index": block.get("_export_index", index),
                 })
             indexed.append({**block, "_export_index": block.get("_export_index", index), "_export_heading": decision})
         # Parser arrays can append a discarded header after its own body. Move
@@ -728,12 +728,12 @@ def prepare_export_structure(pages, *, profile, options) -> ExportStructure:
             block = indexed[position]
             if heading_level(block) is None:
                 continue
-            bbox = _normalized_page_bbox(block, width, height)
+            bbox = normalized_page_bbox(block, width, height)
             if bbox is None:
                 continue
             target = position
             while target > 0:
-                previous = _normalized_page_bbox(indexed[target - 1], width, height)
+                previous = normalized_page_bbox(indexed[target - 1], width, height)
                 if previous is None or bbox[3] > previous[1]:
                     break
                 if min(bbox[2], previous[2]) <= max(bbox[0], previous[0]):
@@ -746,8 +746,8 @@ def prepare_export_structure(pages, *, profile, options) -> ExportStructure:
     has_parts = any(heading_level(b) is not None and b["_export_heading"].kind == "part"
                     for blocks in prepared for b in blocks)
     scopes = [{"scope_id": 0, "kind": "document", "title": None, "part_title": None,
-               "source_physical_page": _physical_page(pages[0]) if pages else None,
-               "source_printed_page": _printed_page_raw(pages[0]) if pages else None,
+               "source_physical_page": physical_page_number(pages[0]) if pages else None,
+               "source_printed_page": printed_page_raw(pages[0]) if pages else None,
                "source_block_index": None, "boundary_reason": "NO_TRUSTED_CHAPTER"}]
     scope_id = 0
     part_title = None
@@ -766,8 +766,8 @@ def prepare_export_structure(pages, *, profile, options) -> ExportStructure:
                     scopes[0].update(kind="preface", boundary_reason="BEFORE_FIRST_CHAPTER")
                     scopes.append({"scope_id": scope_id, "kind": "chapter", "title": str(block["text"]).strip(),
                                    "part_title": part_title, "boundary_reason": decision.reason,
-                                   "source_physical_page": _physical_page(page),
-                                   "source_printed_page": _printed_page_raw(page),
+                                   "source_physical_page": physical_page_number(page),
+                                   "source_printed_page": printed_page_raw(page),
                                    "source_block_index": block["_export_index"]})
                     chapter_level = 2 if has_parts else decision.level
                     block["_export_heading"] = HeadingDecision(chapter_level,
@@ -928,7 +928,7 @@ class PageMarker:
         return self.printed_page is None and self.physical_page is None
 
 
-def _physical_page(page: Mapping[str, object]) -> Optional[int]:
+def physical_page_number(page: Mapping[str, object]) -> Optional[int]:
     for key in ("pdf_page_number_1based", "physical_pdf_page"):
         value = page.get(key)
         if value not in (None, ""):
@@ -967,7 +967,7 @@ def resolve_page_marker(
     if mode == PAGE_MARKER_NONE:
         return None
 
-    printed = _printed_page_raw(page)
+    printed = printed_page_raw(page)
 
     if mode == PAGE_MARKER_PRINTED:
         if printed is None:
@@ -975,6 +975,6 @@ def resolve_page_marker(
         return PageMarker(printed_page=printed)
 
     # full — expose the physical PDF page too.
-    physical = _physical_page(page)
+    physical = physical_page_number(page)
     marker = PageMarker(printed_page=printed, physical_page=physical)
     return None if marker.is_empty else marker

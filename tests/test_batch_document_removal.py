@@ -142,8 +142,8 @@ class BatchDatabaseDeletionTests(unittest.TestCase):
             database_path = self._build(root, ids)
             with patch.object(
                 database_module,
-                "_backup_database",
-                wraps=database_module._backup_database,
+                "create_database_backup",
+                wraps=database_module.create_database_backup,
             ) as backup:
                 result = delete_sources_from_database(ids, database_path)
             self.assertEqual(backup.call_count, 1)
@@ -301,12 +301,12 @@ class BatchDocumentDeletionServiceTests(unittest.TestCase):
         ids = [f"pdf-{i}" for i in range(6)]
         temp_dir, root, database_path = self._service_root(ids)
         with temp_dir:
-            # 这条路径走公开的 backup_database（与 _backup_database 同在
+            # 这条路径走公开的 backup_database（与 create_database_backup 同在
             # database_backup 模块），所以 patch 必须打在该模块上。
             with patch.object(
                 database_backup_module,
-                "_backup_database",
-                wraps=database_backup_module._backup_database,
+                "create_database_backup",
+                wraps=database_backup_module.create_database_backup,
             ) as backup:
                 result = DocumentDeletionService(root, database_path).remove_many(
                     ids[:4]

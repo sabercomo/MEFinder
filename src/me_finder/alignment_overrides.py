@@ -13,11 +13,13 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Dict, Mapping, Sequence
 
+from .alignment_generation import now, source_row, validate_source_id
 from .persistence.alignment_store import (
     alignment_read_connection,
     confirm_pending_override,
     insert_pending_override,
     load_override,
+    ordered_segments_in_set,
     override_write_transaction,
     read_override_rows,
     revoke_expired_override,
@@ -27,13 +29,9 @@ from .text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
     WriteWindow,
-    _now,
-    _ordered_segments_in_set,
-    _resolve_alignment_route,
-    _segment_key,
-    _segment_set_id_for_source,
-    _source_row,
-    _validate_source_id,
+    resolve_alignment_route,
+    segment_key,
+    segment_set_id_for_source,
 )
 
 
@@ -56,8 +54,8 @@ def resolve_override_context(
     correction can never point at segments the live alignment does not use.
     """
 
-    source_id = _validate_source_id(source_file_id)
-    target_id = _validate_source_id(target_source_file_id)
+    source_id = validate_source_id(source_file_id)
+    target_id = validate_source_id(target_source_file_id)
     if source_id == target_id:
         raise InvalidAlignmentRequest("源版本和目标版本不能相同。")
     source_ids = [str(value) for value in source_segment_ids]
@@ -65,19 +63,19 @@ def resolve_override_context(
     if not source_ids or (not target_ids and not allow_empty_target):
         raise InvalidAlignmentRequest("源和目标 Segment 都不能为空。")
     with alignment_read_connection(db_path) as connection:
-        _source_row(connection, source_id)
-        _source_row(connection, target_id)
-        route_runs, _via = _resolve_alignment_route(connection, source_id, target_id)
+        source_row(connection, source_id)
+        source_row(connection, target_id)
+        route_runs, _via = resolve_alignment_route(connection, source_id, target_id)
         source_run = route_runs[0]
         final_run = route_runs[-1]
-        source_set_id = _segment_set_id_for_source(source_run, source_id)
-        target_set_id = _segment_set_id_for_source(final_run, target_id)
-        source_rows = _ordered_segments_in_set(connection, source_set_id, source_ids)
+        source_set_id = segment_set_id_for_source(source_run, source_id)
+        target_set_id = segment_set_id_for_source(final_run, target_id)
+        source_rows = ordered_segments_in_set(connection, source_set_id, source_ids)
         if len(source_rows) != len(set(source_ids)):
             raise InvalidAlignmentRequest(
                 "部分源 Segment 不属于当前版本的对齐段落，请用最新查询结果重试。"
             )
-        target_rows = _ordered_segments_in_set(connection, target_set_id, target_ids)
+        target_rows = ordered_segments_in_set(connection, target_set_id, target_ids)
         if len(target_rows) != len(set(target_ids)):
             raise InvalidAlignmentRequest(
                 "部分目标 Segment 不属于当前版本的对齐段落，请用最新查询结果重试。"
@@ -90,7 +88,7 @@ def resolve_override_context(
             "target_source_file_id": target_id,
             "source_segment_set_id": source_set_id,
             "target_segment_set_id": target_set_id,
-            "source_segment_key": _segment_key(ordered_source_ids),
+            "source_segment_key": segment_key(ordered_source_ids),
             "source_segment_ids": ordered_source_ids,
             "target_segment_ids": ordered_target_ids,
             "source_segments": [
@@ -130,7 +128,7 @@ def create_override_proposal(
     evidence_json = json.dumps(
         dict(evidence or {}), ensure_ascii=False, separators=(",", ":")
     )
-    timestamp = _now()
+    timestamp = now()
     transaction_window = write_window or nullcontext
     with transaction_window():
         with override_write_transaction(db_path) as connection:
@@ -166,7 +164,7 @@ def confirm_override(
     if not override_id_value or not token_value:
         raise InvalidAlignmentRequest("override_id 和 confirmation_token 都必填。")
     transaction_window = write_window or nullcontext
-    timestamp = _now()
+    timestamp = now()
     with transaction_window():
         with override_write_transaction(db_path) as connection:
             row = load_override(connection, override_id_value)
@@ -180,24 +178,24 @@ def confirm_override(
                 raise InvalidAlignmentRequest("确认令牌不匹配。")
             source_id = str(row["source_file_id"])
             target_id = str(row["target_source_file_id"])
-            route_runs, _via = _resolve_alignment_route(
+            route_runs, _via = resolve_alignment_route(
                 connection, source_id, target_id
             )
-            current_source_set = _segment_set_id_for_source(route_runs[0], source_id)
-            current_target_set = _segment_set_id_for_source(route_runs[-1], target_id)
+            current_source_set = segment_set_id_for_source(route_runs[0], source_id)
+            current_target_set = segment_set_id_for_source(route_runs[-1], target_id)
             stored_source_ids = json.loads(str(row["source_segment_ids_json"] or "[]"))
             stored_target_ids = json.loads(str(row["target_segment_ids_json"] or "[]"))
             still_valid = (
                 current_source_set == str(row["source_segment_set_id"])
                 and current_target_set == str(row["target_segment_set_id"])
                 and len(
-                    _ordered_segments_in_set(
+                    ordered_segments_in_set(
                         connection, current_source_set, stored_source_ids
                     )
                 )
                 == len(set(stored_source_ids))
                 and len(
-                    _ordered_segments_in_set(
+                    ordered_segments_in_set(
                         connection, current_target_set, stored_target_ids
                     )
                 )
@@ -232,7 +230,7 @@ def revoke_override(
     if not override_id_value:
         raise InvalidAlignmentRequest("override_id 必填。")
     transaction_window = write_window or nullcontext
-    timestamp = _now()
+    timestamp = now()
     with transaction_window():
         with override_write_transaction(db_path) as connection:
             row = load_override(connection, override_id_value)
@@ -261,9 +259,9 @@ def list_overrides(
 ) -> Dict[str, object]:
     """Read stored corrections for review and audit."""
 
-    source_id = _validate_source_id(source_file_id) if source_file_id is not None else None
+    source_id = validate_source_id(source_file_id) if source_file_id is not None else None
     target_id = (
-        _validate_source_id(target_source_file_id)
+        validate_source_id(target_source_file_id)
         if target_source_file_id is not None else None
     )
     status_value = str(status) if status is not None else None

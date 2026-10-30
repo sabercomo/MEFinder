@@ -148,7 +148,7 @@ def detect_pdf_page_layout(
         blocks = page.get("blocks")
         if width is None or height is None or not isinstance(blocks, list):
             continue
-        bbox_width, bbox_height = _layout_bbox_scale(blocks, width, height)
+        bbox_width, bbox_height = layout_bbox_scale(blocks, width, height)
         weights = {"left": 0, "center": 0, "right": 0}
         left_edges: List[float] = []
         right_edges: List[float] = []
@@ -158,7 +158,7 @@ def detect_pdf_page_layout(
             text = str(block.get("text") or "").strip()
             if len(text) < 20:
                 continue
-            bbox = _normalized_page_bbox(block, bbox_width, bbox_height)
+            bbox = normalized_page_bbox(block, bbox_width, bbox_height)
             if bbox is None:
                 continue
             x0, _, x1, _ = bbox
@@ -279,7 +279,7 @@ def detect_pdf_page_layout(
     }
 
 
-def _layout_bbox_scale(
+def layout_bbox_scale(
     blocks: Sequence[object],
     page_width: float,
     page_height: float,
@@ -646,7 +646,7 @@ def extract_native_pdf_edge_candidates(
         blocks = page.get("blocks") or []
         if not isinstance(blocks, list):
             continue
-        bbox_width, bbox_height = _layout_bbox_scale(
+        bbox_width, bbox_height = layout_bbox_scale(
             blocks,
             width or 1000.0,
             height or 1000.0,
@@ -655,7 +655,7 @@ def extract_native_pdf_edge_candidates(
         for block in blocks:
             if not isinstance(block, dict):
                 continue
-            bbox = _normalized_page_bbox(block, bbox_width, bbox_height)
+            bbox = normalized_page_bbox(block, bbox_width, bbox_height)
             is_outer_vertical = _is_outer_lower_margin_bbox(bbox, thresholds)
             if not _is_edge_bbox(bbox, thresholds) and not is_outer_vertical:
                 continue
@@ -1536,7 +1536,7 @@ def _merged_vertical_cjk_digit_blocks(
         text = re.sub(r"[\s\u3000]+", "", str(block.get("text") or ""))
         if not _CJK_PAGE_DIGIT_RE.fullmatch(text):
             continue
-        bbox = _normalized_page_bbox(block, bbox_width, bbox_height)
+        bbox = normalized_page_bbox(block, bbox_width, bbox_height)
         if not _is_outer_lower_margin_bbox(bbox, thresholds):
             continue
         assert bbox is not None
@@ -1615,7 +1615,7 @@ def _positive_float(value: object) -> Optional[float]:
     return number if number > 0 else None
 
 
-def _normalized_page_bbox(
+def normalized_page_bbox(
     block: Dict[str, object],
     page_width: Optional[float],
     page_height: Optional[float],

@@ -13,7 +13,7 @@ from src.me_finder.application.document_query_service import DocumentQueryError
 from src.me_finder.application.page_mapping_coordinator import (
     PageMappingCoordinator,
 )
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class RecordingGate:
@@ -525,7 +525,7 @@ class PageMappingCoordinatorTests(unittest.TestCase):
             config=config,
         )
 
-        with self.assertRaisesRegex(MinerUError, "必须明确确认"):
+        with self.assertRaisesRegex(UserFacingError, "必须明确确认"):
             coordinator.apply_live_auto_mapping("pdf-one", [], {}, False)
 
         self.assertEqual(config.saved, [])
@@ -634,7 +634,7 @@ class PageMappingCoordinatorTests(unittest.TestCase):
             },
         )
         jobs = RecordingJobs(events)
-        jobs.rebuild_error = MinerUError("accept rebuild rejected")
+        jobs.rebuild_error = UserFacingError("accept rebuild rejected")
         coordinator, _index, _jobs, _queries = self._coordinator(
             events=events,
             config=config,
@@ -642,7 +642,7 @@ class PageMappingCoordinatorTests(unittest.TestCase):
             jobs=jobs,
         )
 
-        with self.assertRaisesRegex(MinerUError, "accept rebuild rejected"):
+        with self.assertRaisesRegex(UserFacingError, "accept rebuild rejected"):
             coordinator.accept_auto_page_mapping("pdf-one")
 
         self.assertEqual(jobs.updates[-1][1]["status"], "failed")
@@ -661,7 +661,7 @@ class PageMappingCoordinatorTests(unittest.TestCase):
             index=index,
         )
 
-        with self.assertRaisesRegex(MinerUError, "没有可接受"):
+        with self.assertRaisesRegex(UserFacingError, "没有可接受"):
             coordinator.accept_auto_page_mapping("pdf-one")
 
         self.assertEqual(jobs.registered, [])

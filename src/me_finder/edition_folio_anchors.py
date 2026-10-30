@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import numpy as np
 
-from .auto_page_mapping import _layout_bbox_scale, _normalized_page_bbox
+from .auto_page_mapping import layout_bbox_scale, normalized_page_bbox
 
 
 MIN_FOLIO_CHAIN = 4
@@ -65,7 +65,7 @@ def _body_blocks(
     blocks = payload.get("blocks")
     if not isinstance(blocks, list):
         return []
-    width, height = _layout_bbox_scale(
+    width, height = layout_bbox_scale(
         blocks,
         float(payload.get("page_width") or 1000.0),
         float(payload.get("page_height") or 1000.0),
@@ -75,7 +75,7 @@ def _body_blocks(
         if not isinstance(block, dict) or _block_role(block) in _NON_BODY_ROLES:
             continue
         text = str(block.get("text") or "").strip()
-        bbox = _normalized_page_bbox(block, width, height)
+        bbox = normalized_page_bbox(block, width, height)
         if not text or bbox is None or _ARABIC_FOLIO.fullmatch(text):
             continue
         result.append((block, bbox))
@@ -91,7 +91,7 @@ def _margin_folios(
     body = _body_blocks(payload)
     if not body:
         return []
-    width, height = _layout_bbox_scale(
+    width, height = layout_bbox_scale(
         blocks,
         float(payload.get("page_width") or 1000.0),
         float(payload.get("page_height") or 1000.0),
@@ -106,7 +106,7 @@ def _margin_folios(
         if role and role != "page_number":
             continue
         match = _ARABIC_FOLIO.fullmatch(str(block.get("text") or ""))
-        bbox = _normalized_page_bbox(block, width, height)
+        bbox = normalized_page_bbox(block, width, height)
         if match is None or bbox is None:
             continue
         number = int(match.group(1))

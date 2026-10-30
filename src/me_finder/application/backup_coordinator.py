@@ -14,7 +14,7 @@ from ..backup_service import restore_backup, write_backup
 from ..document_groups import replace_document_group_snapshot
 from ..alignment_snapshots import replace_alignment_recipe_snapshot
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
-from ..mineru_api import MinerUError
+from ..errors import UserFacingError
 from ..import_config_store import import_config_lock
 
 
@@ -52,7 +52,7 @@ AlignmentSnapshotRestorer = Callable[[Mapping[str, object], Path], int]
 ConfigLock = Callable[[], AbstractContextManager[None]]
 
 
-class BackupQueueError(MinerUError):
+class BackupQueueError(UserFacingError):
     """A registered restore job could not enter the background queue."""
 
 
@@ -104,9 +104,9 @@ class BackupCoordinator:
     def start_restore(self, source_path: str) -> str:
         path = Path(str(source_path)).expanduser()
         if not path.is_file():
-            raise MinerUError("备份文件不存在。")
+            raise UserFacingError("备份文件不存在。")
         if path.suffix.lower() != ".zip":
-            raise MinerUError("请选择 .zip 备份文件。")
+            raise UserFacingError("请选择 .zip 备份文件。")
 
         job_id = f"restore-{uuid.uuid4().hex[:12]}"
         self._jobs.register_background_job(
@@ -173,7 +173,7 @@ class BackupCoordinator:
                 ),
             )
         except (
-            MinerUError,
+            UserFacingError,
             OSError,
             ValueError,
             RuntimeError,

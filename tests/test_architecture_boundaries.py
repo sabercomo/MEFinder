@@ -51,6 +51,17 @@ THREAD_CREATION_OWNERS = {
     "text_alignment_controller.py",
 }
 
+# 2026-10-31(0.6.1):通用的用户可见错误改为 errors.UserFacingError。MinerUError
+# 只留给确实与 MinerU 解析打交道的模块(读取 retry_with_new_task /
+# allow_parser_fallback 或抛出 MinerU 任务错误);其他模块不得再借用它。
+MINERU_ERROR_IMPORTERS = {
+    "application/import_parser_executor.py",
+    "large_document/mineru_accounts.py",
+    "mineru_local_settings.py",
+    "mineru_provider.py",
+    "pdf_parser_adapters.py",
+}
+
 
 def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], dict[str, int]]:
     """Count connection and execute calls, excluding reviewed service targets."""
@@ -95,6 +106,41 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                 ):
                     owners.add(path.relative_to(PACKAGE).as_posix())
         self.assertEqual(owners, THREAD_CREATION_OWNERS)
+
+    def test_mineru_error_is_imported_only_by_mineru_modules(self) -> None:
+        importers = set()
+        for path in PACKAGE.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and any(
+                    alias.name == "MinerUError" for alias in node.names
+                ):
+                    importers.add(path.relative_to(PACKAGE).as_posix())
+        self.assertEqual(
+            importers,
+            MINERU_ERROR_IMPORTERS,
+            "通用的用户可见错误请用 errors.UserFacingError;MinerUError 只用于 "
+            "MinerU 解析相关模块。",
+        )
+
+    def test_modules_do_not_import_each_others_private_names(self) -> None:
+        # 2026-10-31(0.6.1):跨模块共用的辅助函数/常量一律公开命名，并从定义
+        # 它的模块直接导入，不经旧模块转手。下划线名只在本模块内使用。
+        violations = []
+        for path in sorted(PACKAGE.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom) or not node.level:
+                    continue
+                for alias in node.names:
+                    if alias.name.startswith("_") and not alias.name.startswith("__"):
+                        violations.append(
+                            f"{path.relative_to(PACKAGE).as_posix()}: "
+                            f"{'.' * node.level}{node.module or ''}.{alias.name}"
+                        )
+        self.assertEqual(violations, [])
 
     def test_sqlite_connect_outside_persistence_only_shrinks(self) -> None:
         connects, _executes = _sqlite_usage_outside_persistence()

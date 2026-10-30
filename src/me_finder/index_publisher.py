@@ -13,7 +13,7 @@ from .import_config_store import (
     save_import_config,
 )
 from .indexer import build_index
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 
 
 ProgressCallback = Callable[[Dict[str, object]], None]
@@ -58,7 +58,7 @@ def rebuild_local_index(
         # Refuse only when Word documents are indexed, since rebuilding without
         # originals would silently drop them from search.
         if indexed_word_source_count(resolved_database_path):
-            raise MinerUError(
+            raise UserFacingError(
                 "找不到 Word 原始语料目录 corpus\\raw_docx，但索引中仍有 Word 文献。"
                 "为避免它们从索引中消失，本次没有重建；请恢复该目录后重试。"
             )

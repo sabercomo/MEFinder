@@ -10,7 +10,7 @@ from .application.document_deletion_coordinator import (
     DocumentDeletionFailed,
     DocumentDeletionRejected,
 )
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 
 
 DocumentLifecycleResponse = Tuple[int, Dict[str, object]]
@@ -38,7 +38,7 @@ class DocumentLifecycleController:
                     payload.get("delete_internal_copy", False)
                 ),
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 409, {"error": str(exc)}
         except DocumentDeletionRejected as exc:
             return 400, {"error": str(exc) or "删除文献失败。"}

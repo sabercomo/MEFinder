@@ -20,7 +20,7 @@ from src.me_finder import database as database_module
 from src.me_finder.database import build_database
 from src.me_finder.database import replace_source_in_database as real_replace_source
 from src.me_finder.import_queue import ImportQueueFullError
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 from src.me_finder.pdf_import_service import rebuild_local_index
 from src.me_finder.preferences import save_preferences
 from src.me_finder.search import SearchEngine as RealSearchEngine
@@ -234,7 +234,7 @@ class BatchDirectoryImportTests(unittest.TestCase):
             handler = None
             with patch(
                 "src.me_finder.import_assembly.detect_imported_pdf",
-                side_effect=MinerUError("PDF detection failed"),
+                side_effect=UserFacingError("PDF detection failed"),
             ):
                 try:
                     os.chdir(root)
@@ -432,8 +432,8 @@ class BatchDirectoryImportTests(unittest.TestCase):
                 "src.me_finder.import_assembly.extract_pdf_source",
                 side_effect=fake_native_extraction,
             ), patch(
-                "src.me_finder.database._backup_database",
-                wraps=database_module._backup_database,
+                "src.me_finder.database.create_database_backup",
+                wraps=database_module.create_database_backup,
             ) as backup:
                 try:
                     os.chdir(root)

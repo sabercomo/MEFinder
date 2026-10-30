@@ -63,7 +63,7 @@ def _emit(control: IO[str], **message: object) -> None:
 
 
 def _run_compute(request: dict, result_path: Path, control: IO[str]) -> int:
-    from .alignment_compute import run_in_process, _deserialize_folio
+    from .alignment_compute import run_in_process, deserialize_folio
     from .embedding_models import AlignmentThresholds
 
     inputs = request["inputs"]
@@ -90,7 +90,7 @@ def _run_compute(request: dict, result_path: Path, control: IO[str]) -> int:
         return 5
 
     thresholds = AlignmentThresholds(**inputs["thresholds"])
-    folio_candidates = [_deserialize_folio(c) for c in inputs["folio_candidates"]]
+    folio_candidates = [deserialize_folio(c) for c in inputs["folio_candidates"]]
     reusable = tuple(tuple(seq) for seq in inputs["reusable_sequences"])
 
     last_stage = ""

@@ -23,25 +23,16 @@ from .alignment_generation import (
     TextAlignmentError as TextAlignmentError,
     WriteWindow as WriteWindow,
     AlignmentPreparation as AlignmentPreparation,
-    _now as _now,
-    _json_object as _json_object,
-    _validate_source_id as _validate_source_id,
-    _validate_nonnegative_integer as _validate_nonnegative_integer,
-    _source_row as _source_row,
-    _source_kind as _source_kind,
-    _load_pages as _load_pages,
-    _load_paragraphs as _load_paragraphs,
-    _pdf_source_text_hash as _pdf_source_text_hash,
-    _paragraph_source_text_hash as _paragraph_source_text_hash,
-    _segment_set as _segment_set,
-    _previous_segment_texts as _previous_segment_texts,
-    _segment_set_language as _segment_set_language,
-    _default_alignment_model_cache as _default_alignment_model_cache,
-    _require_pair as _require_pair,
-    _generate_alignment_on_connection as _generate_alignment_on_connection,
     latest_reviewed_body_ranges as latest_reviewed_body_ranges,
     validate_reviewed_body_ranges as validate_reviewed_body_ranges,
     generate_alignment as generate_alignment,
+    default_alignment_model_cache,
+    json_object,
+    segment_set_language,
+    source_kind_of,
+    source_row,
+    validate_nonnegative_integer,
+    validate_source_id,
 )
 from .alignment_kernel import align_segment_sequences as align_segment_sequences
 from .alignment_segmentation import (
@@ -90,7 +81,7 @@ from .persistence.connection import connect_index, table_exists
 from .semantic_alignment import cached_text_sequence_vectors, mutual_nearest_target_index
 
 
-def _segment_set_id_for_source(run: Mapping[str, object], source_id: str) -> str:
+def segment_set_id_for_source(run: Mapping[str, object], source_id: str) -> str:
     if str(run["pivot_source_file_id"]) == source_id:
         return str(run["pivot_segment_set_id"])
     if str(run["target_source_file_id"]) == source_id:
@@ -99,14 +90,14 @@ def _segment_set_id_for_source(run: Mapping[str, object], source_id: str) -> str
 
 
 def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, object]:
-    source_id = _validate_source_id(source_file_id)
+    source_id = validate_source_id(source_file_id)
     connection = connect_index(str(db_path))
     try:
         source = target_source_row(connection, source_id)
         if source is None:
             raise InvalidAlignmentRequest("文献不存在。")
         try:
-            _source_kind(source)
+            source_kind_of(source)
         except InvalidAlignmentRequest:
             return {"source_file_id": source_id, "targets": []}
         if not table_exists(connection, "alignment_runs"):
@@ -137,21 +128,21 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
                 if (
                     source_run is not None
                     and target_run is not None
-                    and _segment_set_id_for_source(source_run, pivot_id)
-                    == _segment_set_id_for_source(target_run, pivot_id)
+                    and segment_set_id_for_source(source_run, pivot_id)
+                    == segment_set_id_for_source(target_run, pivot_id)
                 ):
                     route_runs = [source_run, target_run]
             if not route_runs:
                 continue
             final_run = route_runs[-1]
-            payload = _json_object(member["payload_json"])
+            payload = json_object(member["payload_json"])
             payload.setdefault("source_file_id", target_id)
             payload.setdefault("file_name", member["file_name"])
-            source_language = _segment_set_language(
-                connection, _segment_set_id_for_source(route_runs[0], source_id)
+            source_language = segment_set_language(
+                connection, segment_set_id_for_source(route_runs[0], source_id)
             )
-            language_code = _segment_set_language(
-                connection, _segment_set_id_for_source(final_run, target_id)
+            language_code = segment_set_language(
+                connection, segment_set_id_for_source(final_run, target_id)
             )
             targets.append(
                 {
@@ -170,7 +161,7 @@ def list_alignment_targets(db_path: Path, source_file_id: object) -> Dict[str, o
                     "algorithm": final_run["algorithm"],
                     "algorithm_version": final_run["algorithm_version"],
                     "language_code": language_code or "und",
-                    "source_format": _source_kind(member),
+                    "source_format": source_kind_of(member),
                 }
             )
         return {
@@ -311,7 +302,7 @@ def _map_segments_through_run(
         source_side = "target"
     else:
         raise TextAlignmentError("对齐记录不包含请求的源版本。")
-    parameters = _json_object(run["parameters_json"])
+    parameters = json_object(run["parameters_json"])
     body_range = parameters.get("body_ranges", {}).get(source_side)
     if body_range is not None:
         selected_orders = body_selected_orders(connection, source_segments)
@@ -419,7 +410,7 @@ def _semantic_paragraph_fallback(
     model_cache_dir: Path,
 ) -> List[str]:
     source_is_pivot = str(run["pivot_source_file_id"]) == source_id
-    parameters = _json_object(run["parameters_json"])
+    parameters = json_object(run["parameters_json"])
     model_id = str(
         parameters.get("embedding_model_id") or DEFAULT_EMBEDDING_MODEL_ID
     )
@@ -520,7 +511,7 @@ def _paragraph_anchor_fallback(
     selected_order = int(selected["first_order"])
     anchors = [
         anchor
-        for anchor in _json_object(run["parameters_json"]).get("heading_anchors", [])
+        for anchor in json_object(run["parameters_json"]).get("heading_anchors", [])
         if isinstance(anchor, dict)
         and str(anchor.get("key") or "").startswith("paragraph:")
     ]
@@ -545,7 +536,7 @@ def _paragraph_anchor_fallback(
     return [str(row["segment_id"])] if row is not None else []
 
 
-def _alignment_candidate_segments(
+def alignment_candidate_segments(
     connection: sqlite3.Connection,
     segment_set_id: str,
     source_file_id: str,
@@ -575,7 +566,7 @@ def _alignment_candidate_segments(
         page_indices = sorted({int(row["pdf_page_index"]) for row in span_rows})
         page_rows = candidate_page_rows(connection, source_file_id, page_indices)
         page_payloads = {
-            int(row["pdf_page_index"]): _json_object(row["payload_json"])
+            int(row["pdf_page_index"]): json_object(row["payload_json"])
             for row in page_rows
         }
         for segment_id in candidate_ids:
@@ -595,7 +586,7 @@ def _alignment_candidate_segments(
             int(row["paragraph_index"]): ParagraphText(
                 paragraph_id=str(row["paragraph_id"]),
                 paragraph_index=int(row["paragraph_index"]),
-                payload=_json_object(row["payload_json"]),
+                payload=json_object(row["payload_json"]),
                 text=str(row["text_raw"] or ""),
             )
             for row in paragraph_rows
@@ -649,7 +640,7 @@ def _alignment_candidate_segments(
     return result
 
 
-def _resolve_alignment_route(
+def resolve_alignment_route(
     connection: sqlite3.Connection,
     source_id: str,
     target_id: str,
@@ -673,9 +664,9 @@ def _resolve_alignment_route(
         if source_run is None or target_run is None:
             raise AlignmentNotFound("这两个版本还没有可用的自动对齐。")
         route_runs = [source_run, target_run]
-        if _segment_set_id_for_source(
+        if segment_set_id_for_source(
             route_runs[0], via_source_id
-        ) != _segment_set_id_for_source(route_runs[1], via_source_id):
+        ) != segment_set_id_for_source(route_runs[1], via_source_id):
             raise AlignmentNotFound(
                 "两个对齐使用的基准 Segment 版本不一致，请重新对齐后再定位。"
             )
@@ -690,7 +681,7 @@ def _resolve_alignment_route(
     return route_runs, via_source_id
 
 
-def _segment_key(segment_ids: Sequence[str]) -> str:
+def segment_key(segment_ids: Sequence[str]) -> str:
     """Stable key for a set of source segments (order-independent)."""
 
     unique = sorted({str(segment_id) for segment_id in segment_ids})
@@ -729,7 +720,7 @@ def confirmed_overrides_for_pair(
             continue
         overrides[key] = {
             "override_id": str(row["override_id"]),
-            "origin": str(_json_object(row["evidence_json"]).get("origin") or ""),
+            "origin": str(json_object(row["evidence_json"]).get("origin") or ""),
             "source_segment_ids": [
                 str(item)
                 for item in json.loads(str(row["source_segment_ids_json"] or "[]"))
@@ -749,7 +740,7 @@ def override_for_selection(
     applies the same rule as a single lookup, reading the corrections once.
     """
 
-    exact = overrides.get(_segment_key(source_segments))
+    exact = overrides.get(segment_key(source_segments))
     if exact is not None:
         return exact
     # Reader corrections describe a whole alignment link. Scrolling locates
@@ -781,13 +772,13 @@ def locate_alignment(
     end_offset: object,
     candidate_radius: object = 0,
 ) -> Dict[str, object]:
-    source_id = _validate_source_id(source_file_id)
-    target_id = _validate_source_id(target_source_file_id)
-    start_page = _validate_nonnegative_integer("start_page_index", start_page_index)
-    end_page = _validate_nonnegative_integer("end_page_index", end_page_index)
-    first_offset = _validate_nonnegative_integer("start_offset", start_offset)
-    last_offset = _validate_nonnegative_integer("end_offset", end_offset)
-    radius = _validate_nonnegative_integer("candidate_radius", candidate_radius)
+    source_id = validate_source_id(source_file_id)
+    target_id = validate_source_id(target_source_file_id)
+    start_page = validate_nonnegative_integer("start_page_index", start_page_index)
+    end_page = validate_nonnegative_integer("end_page_index", end_page_index)
+    first_offset = validate_nonnegative_integer("start_offset", start_offset)
+    last_offset = validate_nonnegative_integer("end_offset", end_offset)
+    radius = validate_nonnegative_integer("candidate_radius", candidate_radius)
     if radius > 5:
         raise InvalidAlignmentRequest("candidate_radius 不能大于 5。")
     if source_id == target_id:
@@ -797,17 +788,17 @@ def locate_alignment(
 
     connection = connect_index(str(db_path))
     try:
-        source = _source_row(connection, source_id)
-        source_kind = _source_kind(source)
-        target_source = _source_row(connection, target_id)
-        target_kind = _source_kind(target_source)
+        source = source_row(connection, source_id)
+        source_kind = source_kind_of(source)
+        target_source = source_row(connection, target_id)
+        target_kind = source_kind_of(target_source)
         endpoint_indices = [start_page]
         if end_page != start_page:
             endpoint_indices.append(end_page)
         if source_kind == "pdf":
             endpoint_rows = candidate_page_rows(connection, source_id, endpoint_indices)
             endpoint_payloads = {
-                int(row["pdf_page_index"]): _json_object(row["payload_json"])
+                int(row["pdf_page_index"]): json_object(row["payload_json"])
                 for row in endpoint_rows
             }
             missing_endpoint_message = "选区所在的 PDF 页不存在。"
@@ -828,13 +819,13 @@ def locate_alignment(
             raise InvalidAlignmentRequest(f"start_offset 超出{offset_boundary}范围。")
         if last_offset > len(str(endpoint_payloads[end_page].get("text_raw") or "")):
             raise InvalidAlignmentRequest(f"end_offset 超出{offset_boundary}范围。")
-        route_runs, via_source_id = _resolve_alignment_route(
+        route_runs, via_source_id = resolve_alignment_route(
             connection, source_id, target_id
         )
         source_run = route_runs[0]
         final_run = route_runs[-1]
-        source_set_id = _segment_set_id_for_source(source_run, source_id)
-        target_set_id = _segment_set_id_for_source(final_run, target_id)
+        source_set_id = segment_set_id_for_source(source_run, source_id)
+        target_set_id = segment_set_id_for_source(final_run, target_id)
         selection_function = (
             _selection_pdf_segment_ids
             if source_kind == "pdf"
@@ -859,7 +850,7 @@ def locate_alignment(
             alignment_source = "manual_review"
             manual_override_id: str | None = override["override_id"]
         else:
-            model_cache_dir = _default_alignment_model_cache(Path(db_path))
+            model_cache_dir = default_alignment_model_cache(Path(db_path))
             target_segment_ids = _map_segments_through_run(
                 connection,
                 source_run,
@@ -884,7 +875,7 @@ def locate_alignment(
                 raise AlignmentNotFound("对应 Segment 没有 PDF 位置信息。")
             page_rows = candidate_page_rows(connection, target_id, target_indices)
             page_payloads = {
-                int(row["pdf_page_index"]): _json_object(row["payload_json"])
+                int(row["pdf_page_index"]): json_object(row["payload_json"])
                 for row in page_rows
             }
             match_spans = _merge_page_spans(span_rows, page_payloads)
@@ -902,7 +893,7 @@ def locate_alignment(
                 int(row["paragraph_index"]): ParagraphText(
                     paragraph_id=str(row["paragraph_id"]),
                     paragraph_index=int(row["paragraph_index"]),
-                    payload=_json_object(row["payload_json"]),
+                    payload=json_object(row["payload_json"]),
                     text=str(row["text_raw"] or ""),
                 )
                 for row in paragraph_rows
@@ -910,7 +901,7 @@ def locate_alignment(
             match_spans = _merge_paragraph_spans(span_rows, paragraphs)
             bbox_refs = []
             target_item_type = "word_paragraph"
-        target_payload = _json_object(target_source["payload_json"])
+        target_payload = json_object(target_source["payload_json"])
         title = str(
             target_payload.get("title")
             or target_payload.get("document_title")
@@ -940,7 +931,7 @@ def locate_alignment(
             "precise_highlight_available": True,
         }
         if radius:
-            result["calibration_candidates"] = _alignment_candidate_segments(
+            result["calibration_candidates"] = alignment_candidate_segments(
                 connection,
                 target_set_id,
                 target_id,

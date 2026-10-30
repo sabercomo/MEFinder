@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 from src.me_finder.database import build_database
 from src.me_finder.extractors import extract_source
 from src.me_finder.indexer import build_index
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 from src.me_finder.pdf_extractors import relative_to_root
 from src.me_finder.pdf_import_service import (
     copy_local_document,
@@ -114,7 +114,7 @@ class PortableIndexRebuildTests(unittest.TestCase):
             finally:
                 connection.close()
 
-            with self.assertRaises(MinerUError) as caught:
+            with self.assertRaises(UserFacingError) as caught:
                 rebuild_local_index(root)
             self.assertIn("Word", str(caught.exception))
             self.assertFalse((root / "corpus" / "raw_docx").exists())

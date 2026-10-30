@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Iterator, List, Mapping, Optional
 
 from .import_resume import resume_summary
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 from .vision_api import VisionAPIError
 
 
@@ -365,7 +365,7 @@ def load_import_config(path: Path) -> Dict[str, object]:
                 backup_path.read_text(encoding="utf-8-sig")
             )
             if backup_data is None:
-                raise MinerUError("PDF 导入配置备份已损坏，无法自动恢复。")
+                raise UserFacingError("PDF 导入配置备份已损坏，无法自动恢复。")
             normalized = _normalize_import_config(path, backup_data)
             _atomic_write_import_config_text(
                 path,
@@ -388,7 +388,7 @@ def load_import_config(path: Path) -> Dict[str, object]:
                     recovery_source = "rolling backup"
             if data is None:
                 _preserve_corrupt_import_config(path)
-                raise MinerUError(
+                raise UserFacingError(
                     "PDF 导入配置已损坏，且无法自动恢复。"
                     "损坏文件已保留，请从数据备份恢复。"
                 ) from exc
@@ -405,7 +405,7 @@ def load_import_config(path: Path) -> Dict[str, object]:
             )
             return normalized
         if not isinstance(data, dict):
-            raise MinerUError("PDF 导入配置必须是 JSON 对象。")
+            raise UserFacingError("PDF 导入配置必须是 JSON 对象。")
         return _normalize_import_config(path, data)
 
 
@@ -472,7 +472,7 @@ def attach_mineru_manifest(
             None,
         )
         if document is None:
-            raise MinerUError(f"PDF config not found: {source_file_id}")
+            raise UserFacingError(f"PDF config not found: {source_file_id}")
         document["mineru"] = {
             "manifest": relative_manifest.as_posix(),
             "resume": resume_summary(manifest, manifest_path=relative_manifest),

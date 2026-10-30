@@ -23,7 +23,7 @@ from .alignment_segmentation import (
     segment_paragraph_text,
 )
 from .runtime_location import component_runtime_root
-from .calibration_library import _item_language_code
+from .calibration_library import item_language_code
 from .edition_folio_anchors import (
     FolioBoundaryCandidate,
     detect_folio_boundary_candidates,
@@ -109,11 +109,11 @@ class AlignmentPreparation:
     reviewed_body_ranges: Dict[str, List[int]] | None = None
 
 
-def _now() -> str:
+def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _json_object(value: object) -> Dict[str, object]:
+def json_object(value: object) -> Dict[str, object]:
     try:
         loaded = json.loads(str(value or "{}"))
     except (TypeError, ValueError) as exc:
@@ -123,14 +123,14 @@ def _json_object(value: object) -> Dict[str, object]:
     return loaded
 
 
-def _validate_source_id(value: object) -> str:
+def validate_source_id(value: object) -> str:
     source_id = str(value or "").strip()
     if not _SOURCE_ID_PATTERN.fullmatch(source_id):
         raise InvalidAlignmentRequest("source_id 无效。")
     return source_id
 
 
-def _validate_nonnegative_integer(name: str, value: object) -> int:
+def validate_nonnegative_integer(name: str, value: object) -> int:
     if isinstance(value, bool):
         raise InvalidAlignmentRequest(f"{name} 必须是非负整数。")
     try:
@@ -142,19 +142,19 @@ def _validate_nonnegative_integer(name: str, value: object) -> int:
     return parsed
 
 
-def _source_row(connection: sqlite3.Connection, source_id: str) -> sqlite3.Row:
+def source_row(connection: sqlite3.Connection, source_id: str) -> sqlite3.Row:
     row = generation_source_row(connection, source_id)
     if row is None:
         raise InvalidAlignmentRequest("文献不存在。")
-    _source_kind(row)
+    source_kind_of(row)
     return row
 
 
-def _source_kind(row: Mapping[str, object]) -> str:
+def source_kind_of(row: Mapping[str, object]) -> str:
     source_type = str(row["source_type"] or "").casefold()
     if source_type == "pdf":
         return "pdf"
-    payload = _json_object(row["payload_json"])
+    payload = json_object(row["payload_json"])
     source_format = str(
         payload.get("file_format") or payload.get("source_format") or ""
     ).casefold()
@@ -163,7 +163,7 @@ def _source_kind(row: Mapping[str, object]) -> str:
     raise InvalidAlignmentRequest("自动对齐只支持 PDF 和 EPUB 文献。")
 
 
-def _load_pages(
+def load_pages(
     connection: sqlite3.Connection, source_id: str
 ) -> Tuple[str, List[PageText]]:
     rows = generation_page_rows(connection, source_id)
@@ -171,7 +171,7 @@ def _load_pages(
     pages: List[PageText] = []
     cursor = 0
     for row in rows:
-        payload = _json_object(row["payload_json"])
+        payload = json_object(row["payload_json"])
         text = str(payload.get("text_raw") or "")
         blocks = payload.get("blocks")
         if isinstance(blocks, list):
@@ -213,7 +213,7 @@ def _load_pages(
     return "".join(pieces), pages
 
 
-def _load_paragraphs(
+def load_paragraphs(
     connection: sqlite3.Connection, source_id: str
 ) -> List[ParagraphText]:
     rows = generation_paragraph_rows(connection, source_id)
@@ -221,14 +221,14 @@ def _load_paragraphs(
         ParagraphText(
             paragraph_id=str(row["paragraph_id"]),
             paragraph_index=int(row["paragraph_index"]),
-            payload=_json_object(row["payload_json"]),
+            payload=json_object(row["payload_json"]),
             text=str(row["text_raw"] or ""),
         )
         for row in rows
     ]
 
 
-def _pdf_source_text_hash(pages: Sequence[PageText]) -> str:
+def pdf_source_text_hash(pages: Sequence[PageText]) -> str:
     digest = hashlib.sha256()
     for page in pages:
         digest.update(str(page.page_index).encode("ascii"))
@@ -242,7 +242,7 @@ def _pdf_source_text_hash(pages: Sequence[PageText]) -> str:
     return digest.hexdigest()
 
 
-def _paragraph_source_text_hash(paragraphs: Sequence[ParagraphText]) -> str:
+def paragraph_source_text_hash(paragraphs: Sequence[ParagraphText]) -> str:
     digest = hashlib.sha256()
     for paragraph in paragraphs:
         digest.update(paragraph.paragraph_id.encode("utf-8"))
@@ -254,20 +254,20 @@ def _paragraph_source_text_hash(paragraphs: Sequence[ParagraphText]) -> str:
     return digest.hexdigest()
 
 
-def _segment_set(
+def segment_set(
     connection: sqlite3.Connection, source_id: str
 ) -> Tuple[str, List[Tuple[str, str]]]:
-    source = _source_row(connection, source_id)
-    source_kind = _source_kind(source)
+    source = source_row(connection, source_id)
+    source_kind = source_kind_of(source)
     pages: List[PageText] = []
     paragraphs: List[ParagraphText] = []
     if source_kind == "pdf":
-        full_text, pages = _load_pages(connection, source_id)
-        text_hash = _pdf_source_text_hash(pages)
+        full_text, pages = load_pages(connection, source_id)
+        text_hash = pdf_source_text_hash(pages)
     else:
-        paragraphs = _load_paragraphs(connection, source_id)
+        paragraphs = load_paragraphs(connection, source_id)
         full_text = "\n".join(paragraph.text for paragraph in paragraphs)
-        text_hash = _paragraph_source_text_hash(paragraphs)
+        text_hash = paragraph_source_text_hash(paragraphs)
     if not full_text.strip():
         raise InvalidAlignmentRequest("文献没有可用于对齐的文本。")
     existing = existing_segment_set(
@@ -286,10 +286,10 @@ def _segment_set(
         drafts = segment_pdf_text(full_text, pages)
     else:
         drafts = segment_paragraph_text(paragraphs)
-    payload = _json_object(source["payload_json"])
+    payload = json_object(source["payload_json"])
     language_code = str(payload.get("language_code") or "").strip()
     if not language_code:
-        language_code = _item_language_code(
+        language_code = item_language_code(
             full_text[:8000],
             payload.get("title"),
             payload.get("author"),
@@ -307,7 +307,7 @@ def _segment_set(
         SEGMENTER,
         SEGMENTER_VERSION,
         language_code or "und",
-        _now(),
+        now(),
     )
     segments: List[Tuple[str, str]] = []
     segment_rows: List[Tuple[object, ...]] = []
@@ -349,7 +349,7 @@ def _segment_set(
     return segment_set_id, segments
 
 
-def _previous_segment_texts(
+def previous_segment_texts(
     connection: sqlite3.Connection,
     source_id: str,
     current_segment_set_id: str,
@@ -365,7 +365,7 @@ def _previous_segment_texts(
     )
 
 
-def _segment_set_language(
+def segment_set_language(
     connection: sqlite3.Connection, segment_set_id: str
 ) -> str:
     row = generation_segment_language(connection, segment_set_id)
@@ -374,7 +374,7 @@ def _segment_set_language(
     return str(row["language_code"] or "und")
 
 
-def _default_alignment_model_cache(db_path: Path) -> Path:
+def default_alignment_model_cache(db_path: Path) -> Path:
     index_path = Path(db_path).resolve()
     runtime_root = (
         index_path.parent.parent
@@ -384,7 +384,7 @@ def _default_alignment_model_cache(db_path: Path) -> Path:
     return component_runtime_root(runtime_root) / "components" / "text-alignment" / "models"
 
 
-def _require_pair(
+def require_pair(
     connection: sqlite3.Connection,
     document_group_id: str,
     pivot_source_id: str,
@@ -399,7 +399,7 @@ def _require_pair(
         raise InvalidAlignmentRequest("两本文献都必须属于该作品组。")
 
 
-def _generate_alignment_on_connection(
+def generate_alignment_on_connection(
     connection: sqlite3.Connection,
     document_group_id: str,
     pivot_source_id: str,
@@ -414,19 +414,19 @@ def _generate_alignment_on_connection(
 ) -> Dict[str, object]:
     active_model = embedding_model_config(embedding_model_id)
     active_thresholds = thresholds or active_model.thresholds
-    _require_pair(
+    require_pair(
         connection, document_group_id, pivot_source_id, target_source_id
     )
     if preparation is None:
-        pivot_set_id, pivot_segments = _segment_set(connection, pivot_source_id)
-        target_set_id, target_segments = _segment_set(connection, target_source_id)
+        pivot_set_id, pivot_segments = segment_set(connection, pivot_source_id)
+        target_set_id, target_segments = segment_set(connection, target_source_id)
         preparation = AlignmentPreparation(
             pivot_set_id,
             target_set_id,
             tuple(pivot_segments),
             tuple(target_segments),
-            _previous_segment_texts(connection, pivot_source_id, pivot_set_id),
-            _previous_segment_texts(connection, target_source_id, target_set_id),
+            previous_segment_texts(connection, pivot_source_id, pivot_set_id),
+            previous_segment_texts(connection, target_source_id, target_set_id),
             tuple(
                 detect_folio_boundary_candidates(
                     connection,
@@ -436,8 +436,8 @@ def _generate_alignment_on_connection(
                     target_set_id,
                 )
             ),
-            pivot_language=_segment_set_language(connection, pivot_set_id),
-            target_language=_segment_set_language(connection, target_set_id),
+            pivot_language=segment_set_language(connection, pivot_set_id),
+            target_language=segment_set_language(connection, target_set_id),
         )
     pivot_set_id = preparation.pivot_set_id
     target_set_id = preparation.target_set_id
@@ -463,7 +463,7 @@ def _generate_alignment_on_connection(
     aligned, anchors = computed
     supersede_completed_runs(connection, document_group_id, pivot_source_id, target_source_id)
     run_id = f"alignment-run-{uuid.uuid4().hex}"
-    timestamp = _now()
+    timestamp = now()
     candidate_by_key = {
         candidate.key: candidate for candidate in preparation.folio_candidates
     }
@@ -650,23 +650,23 @@ def generate_alignment(
     group_id = str(document_group_id or "").strip()
     if not group_id:
         raise InvalidAlignmentRequest("document_group_id is required")
-    pivot_id = _validate_source_id(pivot_source_file_id)
-    target_id = _validate_source_id(target_source_file_id)
+    pivot_id = validate_source_id(pivot_source_file_id)
+    target_id = validate_source_id(target_source_file_id)
     active_model = embedding_model_config(embedding_model_id)
     active_thresholds = alignment_thresholds or active_model.thresholds
     cache_dir = (
         Path(model_cache_dir)
         if model_cache_dir is not None
-        else _default_alignment_model_cache(Path(db_path))
+        else default_alignment_model_cache(Path(db_path))
     )
     transaction_window = write_window or nullcontext
     if progress_callback:
         progress_callback({"stage": "preparing"})
     with transaction_window():
         with generation_write_transaction(db_path, install_schema=True) as connection:
-            _require_pair(connection, group_id, pivot_id, target_id)
-            pivot_set_id, pivot_segments = _segment_set(connection, pivot_id)
-            target_set_id, target_segments = _segment_set(connection, target_id)
+            require_pair(connection, group_id, pivot_id, target_id)
+            pivot_set_id, pivot_segments = segment_set(connection, pivot_id)
+            target_set_id, target_segments = segment_set(connection, target_id)
             # Compare inside the preparation transaction, before interpreting
             # indices or creating a run. An in-range index can refer to new text.
             if expected_segment_set_ids is not None and expected_segment_set_ids != {
@@ -686,8 +686,8 @@ def generate_alignment(
                 target_set_id,
                 tuple(pivot_segments),
                 tuple(target_segments),
-                _previous_segment_texts(connection, pivot_id, pivot_set_id),
-                _previous_segment_texts(connection, target_id, target_set_id),
+                previous_segment_texts(connection, pivot_id, pivot_set_id),
+                previous_segment_texts(connection, target_id, target_set_id),
                 tuple(
                     detect_folio_boundary_candidates(
                         connection,
@@ -697,8 +697,8 @@ def generate_alignment(
                         target_set_id,
                     )
                 ),
-                pivot_language=_segment_set_language(connection, pivot_set_id),
-                target_language=_segment_set_language(connection, target_set_id),
+                pivot_language=segment_set_language(connection, pivot_set_id),
+                target_language=segment_set_language(connection, target_set_id),
                 reviewed_body_ranges=reviewed_body_ranges,
             )
             existing = None
@@ -718,7 +718,7 @@ def generate_alignment(
                         row
                         for row in candidates
                         if (
-                            parameters := _json_object(row["parameters_json"])
+                            parameters := json_object(row["parameters_json"])
                         ).get("embedding_model_id")
                         == active_model.id
                         and parameters.get("alignment_region_version")
@@ -740,7 +740,7 @@ def generate_alignment(
                 counts = completed_run_status_counts(
                     connection, str(existing["alignment_run_id"])
                 )
-                parameters = _json_object(existing["parameters_json"])
+                parameters = json_object(existing["parameters_json"])
                 connection.commit()
                 return {
                     "alignment_run_id": str(existing["alignment_run_id"]),
@@ -799,7 +799,7 @@ def generate_alignment(
         progress_callback({"stage": "saving"})
     with transaction_window():
         with generation_write_transaction(db_path) as connection:
-            result = _generate_alignment_on_connection(
+            result = generate_alignment_on_connection(
                 connection,
                 group_id,
                 pivot_id,

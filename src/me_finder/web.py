@@ -17,7 +17,7 @@ from .document_groups import (
     resolve_document_group_source_ids,
 )
 from .database import DEFAULT_DATABASE_PATH
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 from .vision_api import VisionAPIError
 from .preferences import (
     read_preferences,
@@ -50,7 +50,7 @@ from .import_config_store import load_import_config
 from .chunked_upload import ChunkedUploadError
 from .web_assets import (
     HTML,  # noqa: F401 - re-exported for tests and desktop bootstrap
-    _PACKAGE_DIR,
+    PACKAGE_DIR,
     render_html,
 )
 from .web_http import (
@@ -157,7 +157,7 @@ def make_handler(
             resolve_preferences_path=resolve_preferences_path,
             root=runtime.root,
             chunked_upload_error=ChunkedUploadError,
-            mineru_error=MinerUError,
+            user_error=UserFacingError,
             vision_api_error=VisionAPIError,
         )
     )
@@ -188,7 +188,7 @@ def make_handler(
                 ],
             ),
             render_html=render_html,
-            package_dir=_PACKAGE_DIR,
+            package_dir=PACKAGE_DIR,
             read_preferences=read_preferences,
             resolve_preferences_path=resolve_preferences_path,
             data_root_admission_error=DataRootAdmissionError,

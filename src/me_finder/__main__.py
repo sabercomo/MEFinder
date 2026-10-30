@@ -18,6 +18,7 @@ from .indexer import (
     DEFAULT_PDF_CORPUS_DIR,
     build_index,
 )
+from .errors import UserFacingError
 from .mineru_api import (
     DEFAULT_MINERU_AGENT_INPUT_DIR,
     DEFAULT_MINERU_AGENT_RESULT_DIR,
@@ -25,7 +26,6 @@ from .mineru_api import (
     DEFAULT_MINERU_MANIFEST_DIR,
     DEFAULT_MINERU_RESULT_DIR,
     DEFAULT_MINERU_STATE_DIR,
-    MinerUError,
     download_agent_result,
     download_done_results,
     get_agent_task_status,
@@ -208,7 +208,7 @@ def main() -> None:
                 enable_table=args.enable_table,
                 enable_formula=args.enable_formula,
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             raise SystemExit(f"MinerU submit failed: {exc}") from exc
         print("MinerU task submitted.")
         print(f"batch_id: {state['batch_id']}")
@@ -234,7 +234,7 @@ def main() -> None:
                 enable_table=args.enable_table,
                 enable_formula=args.enable_formula,
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             raise SystemExit(f"MinerU segmented submit failed: {exc}") from exc
         print("MinerU segmented tasks prepared.")
         print(f"manifest: {manifest['manifest_path']}")
@@ -260,7 +260,7 @@ def main() -> None:
     elif args.command == "mineru-status":
         try:
             result = get_batch_status(args.batch_id, config_path=Path(args.config), state_dir=Path(args.state_dir))
-        except MinerUError as exc:
+        except UserFacingError as exc:
             raise SystemExit(f"MinerU status failed: {exc}") from exc
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -274,7 +274,7 @@ def main() -> None:
                 state_dir=Path(args.state_dir),
                 result_dir=Path(args.result_dir),
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             raise SystemExit(f"MinerU download failed: {exc}") from exc
         print("Downloaded MinerU result:")
         for path in paths:
@@ -293,7 +293,7 @@ def main() -> None:
                 enable_formula=args.enable_formula,
                 api_base=args.api_base,
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             raise SystemExit(f"MinerU Agent submit failed: {exc}") from exc
         print("MinerU Agent task submitted.")
         print(f"task_id: {state['task_id']}")
@@ -303,7 +303,7 @@ def main() -> None:
     elif args.command == "mineru-agent-status":
         try:
             result = get_agent_task_status(args.task_id, state_dir=Path(args.state_dir), api_base=args.api_base)
-        except MinerUError as exc:
+        except UserFacingError as exc:
             raise SystemExit(f"MinerU Agent status failed: {exc}") from exc
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -317,7 +317,7 @@ def main() -> None:
                 result_dir=Path(args.result_dir),
                 api_base=args.api_base,
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             raise SystemExit(f"MinerU Agent download failed: {exc}") from exc
         print("Downloaded MinerU Agent markdown:")
         print(path)

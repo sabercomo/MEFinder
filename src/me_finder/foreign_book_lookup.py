@@ -35,43 +35,43 @@ class BookLookupError(Exception):
         self.open_url = open_url
 
 
-def _clean(value: object) -> str:
+def clean_text(value: object) -> str:
     return str(value or "").strip()
 
 
-def _normalize_isbn(value: object) -> str:
-    return re.sub(r"[^0-9Xx]", "", _clean(value)).upper()
+def normalize_isbn(value: object) -> str:
+    return re.sub(r"[^0-9Xx]", "", clean_text(value)).upper()
 
 
 def _compact(value: object) -> str:
-    return re.sub(r"[^0-9a-z]+", "", _clean(value).lower())
+    return re.sub(r"[^0-9a-z]+", "", clean_text(value).lower())
 
 
 def _year_of(published_date: object) -> str:
-    match = re.search(r"(1[5-9]\d{2}|20\d{2})", _clean(published_date))
+    match = re.search(r"(1[5-9]\d{2}|20\d{2})", clean_text(published_date))
     return match.group(1) if match else ""
 
 
 def _build_query(metadata: Mapping[str, object]) -> Tuple[str, str]:
     """Return ``(query, isbn)``; ISBN queries are the precise path."""
 
-    isbn = _normalize_isbn(metadata.get("isbn"))
+    isbn = normalize_isbn(metadata.get("isbn"))
     if isbn:
         return f"isbn:{isbn}", isbn
-    title = _clean(metadata.get("title"))
+    title = clean_text(metadata.get("title"))
     if not title:
         return "", ""
     parts = [f'intitle:{title}']
-    author = _clean(metadata.get("author"))
+    author = clean_text(metadata.get("author"))
     if author:
         parts.append(f'inauthor:{author}')
     return " ".join(parts), ""
 
 
-def _open_url(metadata: Mapping[str, object], isbn: str) -> str:
+def book_open_url(metadata: Mapping[str, object], isbn: str) -> str:
     if isbn:
         return f"https://books.google.com/books?vid=ISBN{isbn}"
-    title = _clean(metadata.get("title"))
+    title = clean_text(metadata.get("title"))
     if title:
         return "https://www.google.com/search?tbm=bks&q=" + urllib.parse.quote(title)
     return "https://books.google.com/"
@@ -85,7 +85,7 @@ def lookup_google_books(metadata: Mapping[str, object]) -> Dict[str, object]:
     """
 
     query, isbn = _build_query(metadata)
-    open_url = _open_url(metadata, isbn)
+    open_url = book_open_url(metadata, isbn)
     if not query:
         raise BookLookupError("invalid_query", "请先填写 ISBN 或书名。", open_url)
     params = urllib.parse.urlencode(
@@ -139,18 +139,18 @@ def _candidate_from_item(
     info = item.get("volumeInfo")
     if not isinstance(info, Mapping):
         return None
-    title = _clean(info.get("title"))
+    title = clean_text(info.get("title"))
     if not title:
         return None
-    subtitle = _clean(info.get("subtitle"))
+    subtitle = clean_text(info.get("subtitle"))
     full_title = f"{title}: {subtitle}" if subtitle else title
     authors = info.get("authors")
-    author = ", ".join(_clean(a) for a in authors if _clean(a)) if isinstance(authors, list) else ""
+    author = ", ".join(clean_text(a) for a in authors if clean_text(a)) if isinstance(authors, list) else ""
     candidate_isbns = _isbns_of(info)
     metadata: Dict[str, str] = {"title": full_title}
     if author:
         metadata["author"] = author
-    publisher = _clean(info.get("publisher"))
+    publisher = clean_text(info.get("publisher"))
     if publisher:
         metadata["publisher"] = publisher
     year = _year_of(info.get("publishedDate"))
@@ -159,8 +159,8 @@ def _candidate_from_item(
     resolved_isbn = isbn if isbn in candidate_isbns else (candidate_isbns[0] if candidate_isbns else "")
     if resolved_isbn:
         metadata["isbn"] = resolved_isbn
-    record_url = _clean(info.get("canonicalVolumeLink")) or _clean(info.get("infoLink"))
-    match = _match(requested, full_title, author, candidate_isbns, isbn)
+    record_url = clean_text(info.get("canonicalVolumeLink")) or clean_text(info.get("infoLink"))
+    match = match_book_candidate(requested, full_title, author, candidate_isbns, isbn)
     evidence = {
         field: {
             "source": "google_books",
@@ -175,7 +175,7 @@ def _candidate_from_item(
         "metadata": metadata,
         "match": match,
         "record_url": record_url,
-        "publish_date": _clean(info.get("publishedDate")),
+        "publish_date": clean_text(info.get("publishedDate")),
         "evidence": evidence,
     }
 
@@ -187,13 +187,13 @@ def _isbns_of(info: Mapping[str, object]) -> List[str]:
     result: List[str] = []
     for entry in identifiers:
         if isinstance(entry, Mapping) and str(entry.get("type", "")).startswith("ISBN"):
-            value = _normalize_isbn(entry.get("identifier"))
+            value = normalize_isbn(entry.get("identifier"))
             if value:
                 result.append(value)
     return result
 
 
-def _match(
+def match_book_candidate(
     requested: Mapping[str, object],
     candidate_title: str,
     candidate_author: str,

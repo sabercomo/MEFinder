@@ -219,7 +219,7 @@ class AlignmentWriteWindowAvailabilityTests(
             return _fake_embeddings(texts, cache_dir)
 
         real_folio = alignment_generation_module.detect_folio_boundary_candidates
-        real_publish = alignment_generation_module._generate_alignment_on_connection
+        real_publish = alignment_generation_module.generate_alignment_on_connection
 
         def gated_folio(*args, **kwargs):
             window1_entered.set()
@@ -239,7 +239,7 @@ class AlignmentWriteWindowAvailabilityTests(
             side_effect=gated_folio,
         ), mock.patch.object(
             alignment_generation_module,
-            "_generate_alignment_on_connection",
+            "generate_alignment_on_connection",
             side_effect=gated_publish,
         ):
             worker, outcome = self._run_generate_in_thread(
@@ -310,7 +310,7 @@ class AlignmentWriteWindowAvailabilityTests(
 
     def test_failed_publish_rolls_back_and_search_stays_available(self) -> None:
         warmup = self._warmup_search()
-        real_publish = alignment_generation_module._generate_alignment_on_connection
+        real_publish = alignment_generation_module.generate_alignment_on_connection
 
         def exploding_publish(*args, **kwargs):
             # Run the real publish writes, then fail before the commit so the
@@ -320,7 +320,7 @@ class AlignmentWriteWindowAvailabilityTests(
 
         with mock.patch.object(
             alignment_generation_module,
-            "_generate_alignment_on_connection",
+            "generate_alignment_on_connection",
             side_effect=exploding_publish,
         ):
             with self.assertRaises(TextAlignmentFailed):
@@ -404,7 +404,7 @@ class AlignmentWriteWindowAvailabilityTests(
             with lock:
                 timeline["change-done"] = time.perf_counter()
 
-        real_publish = alignment_generation_module._generate_alignment_on_connection
+        real_publish = alignment_generation_module.generate_alignment_on_connection
 
         def gated_publish(*args, **kwargs):
             result = real_publish(*args, **kwargs)
@@ -414,7 +414,7 @@ class AlignmentWriteWindowAvailabilityTests(
 
         with mock.patch.object(
             alignment_generation_module,
-            "_generate_alignment_on_connection",
+            "generate_alignment_on_connection",
             side_effect=gated_publish,
         ):
             worker, outcome = self._run_generate_in_thread(

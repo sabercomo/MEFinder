@@ -58,7 +58,7 @@ def _database_uses_sparse_paragraph_payload(connection: sqlite3.Connection) -> b
         return False
 
 
-def _install_fts5_search_index(
+def install_fts5_search_index(
     connection: sqlite3.Connection,
     *,
     rebuild: bool,
@@ -180,7 +180,7 @@ def ensure_database_search_index(
         )
         try:
             connection.execute("BEGIN IMMEDIATE")
-            installed = _install_fts5_search_index(connection, rebuild=True)
+            installed = install_fts5_search_index(connection, rebuild=True)
             if installed:
                 connection.commit()
             else:

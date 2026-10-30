@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional
 
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 
 
 # Keep internal corpus paths comfortably below the legacy Windows MAX_PATH
@@ -168,7 +168,7 @@ def release_document_storage_target(target: Path) -> None:
         )
 
 
-def document_storage_error(file_name: str, exc: OSError) -> MinerUError:
+def document_storage_error(file_name: str, exc: OSError) -> UserFacingError:
     """Translate filesystem failures without exposing the private data path."""
 
     display_name = Path(str(file_name)).name or "该文件"
@@ -183,7 +183,7 @@ def document_storage_error(file_name: str, exc: OSError) -> MinerUError:
         message = f"无法保存“{display_name}”：应用数据目录没有写入权限。"
     else:
         message = f"无法保存“{display_name}”。请检查磁盘空间和目录权限后重试。"
-    return MinerUError(message)
+    return UserFacingError(message)
 
 
 def copy_local_document(root: Path, source_path: Path) -> Path:
@@ -193,7 +193,7 @@ def copy_local_document(root: Path, source_path: Path) -> Path:
     source_path = Path(source_path)
     suffix = source_path.suffix.lower()
     if suffix not in {".pdf", ".docx", ".epub"}:
-        raise MinerUError("只支持 PDF、DOCX 或 EPUB 文件。")
+        raise UserFacingError("只支持 PDF、DOCX 或 EPUB 文件。")
     directory = root / "corpus" / ("raw_pdf" if suffix == ".pdf" else "raw_docx")
     target: Optional[Path] = None
     temp_path: Optional[Path] = None

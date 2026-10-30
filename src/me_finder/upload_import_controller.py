@@ -30,7 +30,7 @@ class UploadImportController:
         resolve_preferences_path: Callable[[Path], Path],
         root: Path,
         chunked_upload_error: type[Exception],
-        mineru_error: type[Exception],
+        user_error: type[Exception],
         vision_api_error: type[Exception],
     ) -> None:
         self._imports = document_imports
@@ -39,7 +39,7 @@ class UploadImportController:
         self._resolve_preferences_path = resolve_preferences_path
         self._root = root
         self._chunked_upload_error = chunked_upload_error
-        self._mineru_error = mineru_error
+        self._user_error = user_error
         self._vision_api_error = vision_api_error
 
     def import_stream(self, request: RawRequest) -> tuple[int, object]:
@@ -52,7 +52,7 @@ class UploadImportController:
                 request.headers.get("X-PDF-Parse-Mode", "auto"),
                 request.headers.get("X-Vision-Provider-ID", ""),
             )
-        except (self._mineru_error, self._vision_api_error, ValueError) as exc:
+        except (self._user_error, self._vision_api_error, ValueError) as exc:
             # Rejected before the upload body is consumed; drain it first so the
             # 400 reaches the client instead of a reset socket on Windows.
             request.drain()
@@ -67,7 +67,7 @@ class UploadImportController:
                 vision_provider_id=vision_provider_id,
             )
             return 200, result
-        except (self._mineru_error, self._vision_api_error, ValueError) as exc:
+        except (self._user_error, self._vision_api_error, ValueError) as exc:
             return 400, {"error": str(exc)}
         except OSError:
             logging.exception("legacy import request failed")
@@ -112,7 +112,7 @@ class UploadImportController:
             return 200, result
         except self._chunked_upload_error as exc:
             return exc.status, {"error": str(exc)}
-        except (self._mineru_error, ValueError, OSError) as exc:
+        except (self._user_error, ValueError, OSError) as exc:
             return 400, {"error": str(exc)}
         except Exception:
             logging.exception("chunked import session start failed")
@@ -134,7 +134,7 @@ class UploadImportController:
             return 200, self._imports.finish_chunked(upload_id)
         except self._chunked_upload_error as exc:
             return exc.status, {"error": str(exc)}
-        except (self._mineru_error, self._vision_api_error, ValueError) as exc:
+        except (self._user_error, self._vision_api_error, ValueError) as exc:
             return 400, {"error": str(exc)}
         except OSError:
             logging.exception("chunked import finalization failed")
@@ -156,7 +156,7 @@ class UploadImportController:
                 payload.get("pdf_parse_mode", "auto"),
                 payload.get("vision_provider_id", ""),
             )
-        except self._mineru_error as exc:
+        except self._user_error as exc:
             return 400, {"error": str(exc)}
         try:
             # Only files under the user's configured scan directories may be

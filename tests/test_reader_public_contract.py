@@ -5,13 +5,13 @@ import subprocess
 import re
 import unittest
 
-from src.me_finder.web_assets import HTML, READER_WINDOW_HTML, _PACKAGE_DIR, _load_asset
+from src.me_finder.web_assets import HTML, PACKAGE_DIR, READER_WINDOW_HTML, _load_asset
 from tests.reader_source import alignment_jobs_source, reader_js_source, reader_runtime_source
 
 
 class ReaderPublicContractTests(unittest.TestCase):
     def test_reader_state_has_one_writer_per_domain(self) -> None:
-        directory = _PACKAGE_DIR / "static" / "reader"
+        directory = PACKAGE_DIR / "static" / "reader"
         owners = {
             "05-dom.js": "elements",
             "10-citation.js": "citationLoading citationMenuOpen citationRange citationRequestSerial selectionDragging",
@@ -35,7 +35,7 @@ class ReaderPublicContractTests(unittest.TestCase):
                 self.assertNotRegex(source, r"\bstate\.comparison\.[A-Za-z]\w*\s*(?:=(?!=)|\+=|\.clear\(|\.set\()")
 
     def test_reader_modules_are_ordered_bounded_and_dom_safe(self) -> None:
-        directory = _PACKAGE_DIR / "static" / "reader"
+        directory = PACKAGE_DIR / "static" / "reader"
         modules = sorted(directory.glob("*.js"))
         self.assertEqual([path.name for path in modules], [
             "00-core.js", "05-dom.js", "10-citation.js", "20-work-context.js",

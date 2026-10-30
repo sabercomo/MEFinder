@@ -86,7 +86,7 @@ PUBLISHER_ALIASES = {
 }
 
 
-_CHINESE_DIGITS = "零一二三四五六七八九"
+CHINESE_DIGITS = "零一二三四五六七八九"
 
 
 MIN_AUTO_CONFIDENCE = {
@@ -103,20 +103,20 @@ MIN_AUTO_CONFIDENCE = {
 }
 
 
-_CHINESE_PUBLISHER_SUFFIX = (
+CHINESE_PUBLISHER_SUFFIX = (
     r"(?:出版(?:集团|集團)(?:股份有限公司|有限公司)?|"
     r"出版中心|出版社|印书馆|印書館|书局|書局)"
 )
 
 
-_CHINESE_NAME_CHARS = r"\u3400-\u4dbf\u4e00-\u9fff·•.．・‧\-—A-Za-z"
+CHINESE_NAME_CHARS = r"\u3400-\u4dbf\u4e00-\u9fff·•.．・‧\-—A-Za-z"
 
 
-_ENGLISH_NAME_CHARS = r"A-Za-zÀ-ÖØ-öø-ÿĀ-ž'’.\-\s"
+ENGLISH_NAME_CHARS = r"A-Za-zÀ-ÖØ-öø-ÿĀ-ž'’.\-\s"
 
 
 @dataclass(frozen=True)
-class _MetadataCandidate:
+class MetadataCandidate:
     value: str
     page_idx: int
     evidence_text: str
@@ -125,7 +125,7 @@ class _MetadataCandidate:
 
 
 def canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
-    return _canonical_metadata(value)
+    return canonicalize_metadata(value)
 
 
 def is_valid_bibliographic_value(value: object) -> bool:
@@ -138,15 +138,15 @@ def is_valid_bibliographic_value(value: object) -> bool:
     return bool(re.search(r"[A-Za-z0-9\u4e00-\u9fff]", text))
 
 
-def _has_suspicious_person_punctuation(value: object) -> bool:
+def has_suspicious_person_punctuation(value: object) -> bool:
     """Question marks inside a person's name usually indicate encoding loss."""
 
     text = str(value or "").strip()
     return bool(re.search(r"[A-Za-z\u3400-\u9fff][?？][A-Za-z\u3400-\u9fff]", text))
 
 
-def _add_candidate(
-    candidates: Dict[str, List[_MetadataCandidate]],
+def add_candidate(
+    candidates: Dict[str, List[MetadataCandidate]],
     field: str,
     value: object,
     page_idx: int,
@@ -159,11 +159,11 @@ def _add_candidate(
         cleaned = PUBLISHER_ALIASES.get(cleaned, cleaned)
     if not cleaned or not is_valid_bibliographic_value(cleaned):
         return
-    if field in {"author", "translator"} and not _is_plausible_person_name(cleaned):
+    if field in {"author", "translator"} and not is_plausible_person_name(cleaned):
         return
     if field == "publish_place" and cleaned in INVALID_PUBLICATION_PLACES:
         return
-    candidate = _MetadataCandidate(cleaned, page_idx, evidence_text, confidence, rule)
+    candidate = MetadataCandidate(cleaned, page_idx, evidence_text, confidence, rule)
     for index, item in enumerate(candidates[field]):
         if (
             item.value == candidate.value
@@ -176,14 +176,14 @@ def _add_candidate(
     candidates[field].append(candidate)
 
 
-def _compact_value_key(value: str) -> str:
+def compact_value_key(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9㐀-鿿]", "", str(value or "")).casefold()
 
 
-def _repair_english_title_casing(title: str, texts: Sequence[Tuple[int, str]]) -> Optional[str]:
+def repair_english_title_casing(title: str, texts: Sequence[Tuple[int, str]]) -> Optional[str]:
     """LoC CIP 的书名是全小写；若书名页有大小写规范的同一书名，用其写法。"""
 
-    target = _compact_value_key(title)
+    target = compact_value_key(title)
     if not target:
         return None
     for _page_idx, text in texts:
@@ -194,7 +194,7 @@ def _repair_english_title_casing(title: str, texts: Sequence[Tuple[int, str]]) -
                 if len(parts) < width:
                     break
                 joined = " ".join(parts)
-                if _compact_value_key(joined) != target:
+                if compact_value_key(joined) != target:
                     continue
                 if joined.upper() == joined:
                     continue  # 全大写的书名页写法不如 CIP 原文
@@ -204,11 +204,11 @@ def _repair_english_title_casing(title: str, texts: Sequence[Tuple[int, str]]) -
     return None
 
 
-def _candidate_group_score(items: Sequence[_MetadataCandidate]) -> float:
+def candidate_group_score(items: Sequence[MetadataCandidate]) -> float:
     return max(item.confidence for item in items) + min(0.04, 0.015 * (len(items) - 1))
 
 
-def _candidate_values_are_compatible(first: str, second: str) -> bool:
+def candidate_values_are_compatible(first: str, second: str) -> bool:
     def compact(value: str) -> str:
         return re.sub(r"[^A-Za-z0-9\u3400-\u9fff]", "", value).casefold()
 
@@ -224,7 +224,7 @@ _ARTIFACT_AUTHOR_NAMES = {
 }
 
 
-def _is_plausible_person_name(value: str) -> bool:
+def is_plausible_person_name(value: str) -> bool:
     compact = re.sub(r"\s+", "", value)
     # 产库/软件署名不是作者（知网 PDF 的内嵌 Author 常是"CNKI"）。
     if compact.casefold() in _ARTIFACT_AUTHOR_NAMES:
@@ -236,7 +236,7 @@ def _is_plausible_person_name(value: str) -> bool:
     return bool(re.search(r"[A-Za-z\u3400-\u9fff]", compact))
 
 
-def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
+def canonicalize_metadata(value: Mapping[str, object]) -> Dict[str, object]:
     nested = value.get("bibliographic_metadata")
     source = dict(nested) if isinstance(nested, Mapping) else dict(value)
     result: Dict[str, object] = {}
@@ -274,11 +274,11 @@ def _canonical_metadata(value: Mapping[str, object]) -> Dict[str, object]:
     return result
 
 
-def _clean_person(value: str) -> str:
-    return _clean_people(value)
+def clean_person(value: str) -> str:
+    return clean_people(value)
 
 
-def _clean_people(value: str) -> str:
+def clean_people(value: str) -> str:
     text = unicodedata.normalize("NFKC", str(value or ""))
     text = text.replace("•", "·").replace("・", "·").replace("‧", "·")
     text = re.sub(r"^[\[［【(（〔][^\]］】)）〕]{1,8}[\]］】)）〕]\s*", "", text)
@@ -301,7 +301,7 @@ def _clean_people(value: str) -> str:
     return text
 
 
-def _clean_publisher(value: str) -> str:
+def clean_publisher(value: str) -> str:
     text = unicodedata.normalize("NFKC", str(value or ""))
     text = text.replace("•", "·").replace("・", "·").replace("‧", "·")
     text = text.strip(" ,，:：;；.。[]［］【】〔〕()（）")
@@ -311,5 +311,5 @@ def _clean_publisher(value: str) -> str:
     return text.strip(" ,，:：;；.。")
 
 
-def _json(value: object) -> str:
+def compact_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))

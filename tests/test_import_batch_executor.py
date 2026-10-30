@@ -9,7 +9,7 @@ from src.me_finder.application.import_batch_executor import ImportBatchExecutor
 from src.me_finder.application.import_job_lifecycle import ImportJobCleanupFailed
 from src.me_finder.application.import_job_store import ImportJobCancelled
 from src.me_finder.import_queue import ImportQueueFullError
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class _RecordingQueue:
@@ -385,7 +385,7 @@ class ImportBatchExecutorTests(unittest.TestCase):
     def test_native_mixed_batch_isolates_a_pdf_index_failure(self) -> None:
         queue = _RecordingQueue()
         jobs = _Jobs()
-        jobs.index_failures["job-pdf"] = MinerUError("missing PDF")
+        jobs.index_failures["job-pdf"] = UserFacingError("missing PDF")
         executor = ImportBatchExecutor(queue)
 
         executor.submit_native(
@@ -408,7 +408,7 @@ class ImportBatchExecutorTests(unittest.TestCase):
         self.assertEqual(jobs.rebuild_calls, [])
         self.assertEqual(jobs.finalized, [("job-word", "word-one", False)])
         self.assertEqual(jobs.index_failures_recorded[0][0], "job-pdf")
-        self.assertIsInstance(jobs.index_failures_recorded[0][1], MinerUError)
+        self.assertIsInstance(jobs.index_failures_recorded[0][1], UserFacingError)
         self.assertFalse(jobs.index_failures_recorded[0][2])
 
     def test_native_pdf_failure_does_not_stop_the_next_pdf(self) -> None:

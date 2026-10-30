@@ -11,11 +11,11 @@ from __future__ import annotations
 import re
 from typing import Sequence, Tuple
 
+from .alignment_structure import CHINESE_HEADING
 from .semantic_alignment import (
-    _CHINESE_HEADING,
-    _DECIMAL_SECTION,
-    _INTRODUCTION_HEADING,
-    _document_heading_positions,
+    DECIMAL_SECTION,
+    INTRODUCTION_HEADING,
+    document_heading_positions,
 )
 
 
@@ -36,12 +36,12 @@ def alignment_body_bounds(texts: Sequence[str]) -> Tuple[int, int]:
     Only leading title lines open backmatter; a prose mention never does.
     Inline footnotes inside the body are left to the existing note workflow.
     """
-    positions = _document_heading_positions(texts)
+    positions = document_heading_positions(texts)
     body_positions = [
         index for key, index in positions.items()
         if key.startswith("chapter:")
         # Roman-numbered prose and CIP entries are not body boundaries.
-        and (key.count(":") == 1 or _DECIMAL_SECTION.fullmatch(texts[index].splitlines()[0].strip()))
+        and (key.count(":") == 1 or DECIMAL_SECTION.fullmatch(texts[index].splitlines()[0].strip()))
         and not re.match(r"^\d+\s+[a-z]", texts[index].strip())
     ]
     if "paragraph:1" in positions and re.match(
@@ -56,7 +56,7 @@ def alignment_body_bounds(texts: Sequence[str]) -> Tuple[int, int]:
         for index, text in enumerate(texts)
         if (lines := text.strip().splitlines())
         and len(lines[0]) <= 80
-        and _INTRODUCTION_HEADING.match(lines[0])
+        and INTRODUCTION_HEADING.match(lines[0])
     ]
     first_chapter = min(body_positions, default=None)
     if first_chapter is not None:
@@ -101,7 +101,7 @@ def alignment_body_bounds(texts: Sequence[str]) -> Tuple[int, int]:
                 len(note_positions) > 1
                 or any(
                     any(
-                        (match := _CHINESE_HEADING.fullmatch(line.strip())) is not None
+                        (match := CHINESE_HEADING.fullmatch(line.strip())) is not None
                         and match.group(2) in {"章", "篇", "部"}
                         for line in text.splitlines()
                     )

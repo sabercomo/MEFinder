@@ -19,7 +19,7 @@ from typing import Dict, List, Mapping, Optional
 from .page_display import page_source_note, resolve_citation_page
 from .pdf_page_mapping import int_to_roman, page_range_display
 from .persistence.page_mapping_reads import read_page_mapping_evidence
-from .structured_reader import SourceNotFound, StructuredReaderError, _validate_source_id
+from .structured_reader import SourceNotFound, StructuredReaderError, validate_source_id
 
 MAX_SEGMENTS = 200
 _ROMAN_RE = re.compile(r"(?i)m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})")
@@ -29,7 +29,7 @@ _ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000
 def describe_page_mapping(db_path: Path, source_id: str) -> Dict[str, object]:
     """Return mapping runs, coverage and the stored mapping record."""
 
-    source_id = _validate_source_id(source_id)
+    source_id = validate_source_id(source_id)
     if not Path(db_path).is_file():
         raise StructuredReaderError(f"索引数据库不存在：{db_path}")
     evidence = read_page_mapping_evidence(Path(db_path), source_id)

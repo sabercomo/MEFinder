@@ -6,10 +6,10 @@ import threading
 from contextlib import contextmanager
 from typing import Iterator
 
-from ..mineru_api import MinerUError
+from ..errors import UserFacingError
 
 
-class DataRootAdmissionError(MinerUError):
+class DataRootAdmissionError(UserFacingError):
     """A current-root operation conflicts with data-location migration."""
 
 

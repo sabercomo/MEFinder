@@ -11,8 +11,8 @@ import unicodedata
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .bibliographic_values import (
-    _clean_person,
-    _is_plausible_person_name,
+    clean_person,
+    is_plausible_person_name,
     is_valid_bibliographic_value,
 )
 
@@ -47,7 +47,7 @@ _BOOK_ONLY_MARKERS = _BOOK_STRONG_MARKERS + ("ISBN",)
 # 无版权页/CIP 标记且总页数不超过该阈值的 PDF 视为单篇论文而非专著。学位论文
 # 另由封面标记识别、与页数无关；阈值取 60 以容纳较长的外文期刊论文，真实专著
 # 通常在 200 页以上，不会被误判。
-_JOURNAL_MAX_FALLBACK_PAGES = 60
+JOURNAL_MAX_FALLBACK_PAGES = 60
 
 
 # 从中文期刊首页版式里认出刊名用的后缀与佐证词。多数近年期刊会把刊名印在首页
@@ -149,7 +149,7 @@ def normalize_issn(value: object) -> Optional[str]:
     return compact[:4] + "-" + compact[4:]
 
 
-def _has_book_only_markers(texts: Sequence[Tuple[int, str]]) -> bool:
+def has_book_only_markers(texts: Sequence[Tuple[int, str]]) -> bool:
     """Report whether any scanned page shows a book copyright/CIP marker.
 
     Strong CIP markers count on any page; a bare ISBN counts only on the front
@@ -176,7 +176,7 @@ def _looks_like_english_journal(line: str) -> bool:
     return any(word in stripped for word in _JOURNAL_EN_HINTS)
 
 
-def _extract_journal_name(
+def extract_journal_name(
     texts: Sequence[Tuple[int, str]],
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Read the journal title from the first page's masthead when it is printed.
@@ -225,7 +225,7 @@ def _extract_journal_name(
     return None, None, None
 
 
-def _extract_journal_article(
+def extract_journal_article(
     texts: Sequence[Tuple[int, str]],
     file_stem: str,
 ) -> Tuple[Dict[str, str], Dict[str, object], Dict[str, float]]:
@@ -319,7 +319,7 @@ def _extract_journal_article(
         for line in lines[:12]:
             statement = _AUTHOR_STATEMENT_RE.match(line)
             if statement:
-                record("author", _clean_person(statement.group("author")), 0, "author_statement", 0.93, line, "journal_author_statement")
+                record("author", clean_person(statement.group("author")), 0, "author_statement", 0.93, line, "journal_author_statement")
                 break
         heading: List[str] = []
         for line in lines:
@@ -328,15 +328,15 @@ def _extract_journal_article(
             heading.append(line)
         if heading:
             record("title", heading[0], 0, "journal_title_line", 0.9, heading[0], "journal_title_line")
-            if len(heading) > 1 and _is_plausible_person_name(heading[1]):
-                record("author", _clean_person(heading[1]), 0, "journal_author_line", 0.9, heading[1], "journal_author_line")
+            if len(heading) > 1 and is_plausible_person_name(heading[1]):
+                record("author", clean_person(heading[1]), 0, "journal_author_line", 0.9, heading[1], "journal_author_line")
 
     # CNKI 导出件的文件名是「篇名_作者」，可为版面抽取提供独立佐证。
     stem_match = re.match(r"^(?P<title>.+?)_(?P<author>[^_]{2,20})$", file_stem.strip())
     if stem_match:
         record("title", stem_match.group("title").strip(), None, "file_name", 0.75, file_stem, "cnki_underscore_filename")
         candidate = stem_match.group("author").strip()
-        if _is_plausible_person_name(candidate):
-            record("author", _clean_person(candidate), None, "file_name", 0.75, file_stem, "cnki_underscore_filename")
+        if is_plausible_person_name(candidate):
+            record("author", clean_person(candidate), None, "file_name", 0.75, file_stem, "cnki_underscore_filename")
 
     return values, evidence, confidence

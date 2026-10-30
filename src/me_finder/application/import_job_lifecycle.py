@@ -8,7 +8,7 @@ from typing import Callable, Dict, Mapping, NamedTuple, Optional, Sequence
 
 from ..import_job_journal import ImportJobJournal
 from ..import_resume import ResumeManifestError, sha256_file
-from ..mineru_api import MinerUError
+from ..errors import UserFacingError
 from .import_job_store import ImportJobStore, Job, JobContext
 
 
@@ -517,7 +517,7 @@ class ImportJobLifecycle:
             can_resume=False,
             message=message,
         )
-        raise MinerUError(message)
+        raise UserFacingError(message)
 
     def begin_resume(
         self,

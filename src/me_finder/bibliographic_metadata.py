@@ -10,10 +10,10 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .collection_metadata import infer_collection_metadata
 from .bibliographic_journal import (
-    _JOURNAL_MAX_FALLBACK_PAGES,
-    _extract_journal_article,
-    _extract_journal_name,
-    _has_book_only_markers,
+    JOURNAL_MAX_FALLBACK_PAGES,
+    extract_journal_article,
+    extract_journal_name,
+    has_book_only_markers,
     looks_like_journal_article as looks_like_journal_article,
     normalize_doi as normalize_doi,
     normalize_issn as normalize_issn,
@@ -24,38 +24,38 @@ from .bibliographic_marx_engels import (
     marx_engels_second_edition_metadata as marx_engels_second_edition_metadata,
 )
 from .bibliographic_thesis import (
-    _extract_thesis_metadata,
-    _looks_like_thesis,
-    _strip_thesis_author_prefix,
+    extract_thesis_metadata,
+    looks_like_thesis,
+    strip_thesis_author_prefix,
 )
 from .bibliographic_values import (
+    CHINESE_NAME_CHARS,
+    CHINESE_PUBLISHER_SUFFIX,
     DOCUMENT_TYPES as DOCUMENT_TYPES,
+    ENGLISH_NAME_CHARS,
     INVALID_PLACEHOLDERS as INVALID_PLACEHOLDERS,
     INVALID_PUBLICATION_PLACES,
     KNOWN_PUBLISHERS,
     MANUAL_LANGUAGE_CODES as MANUAL_LANGUAGE_CODES,
     METADATA_FIELDS as METADATA_FIELDS,
     MIN_AUTO_CONFIDENCE as MIN_AUTO_CONFIDENCE,
+    MetadataCandidate,
     PUBLISHER_ALIASES,
     PUBLISHER_PLACES,
     RESPONSIBILITY_STATUSES as RESPONSIBILITY_STATUSES,
-    _CHINESE_NAME_CHARS,
-    _CHINESE_PUBLISHER_SUFFIX,
-    _ENGLISH_NAME_CHARS,
-    _MetadataCandidate,
-    _add_candidate,
-    _candidate_group_score,
-    _candidate_values_are_compatible,
-    _canonical_metadata,
-    _clean_people,
-    _clean_publisher,
-    _compact_value_key,
-    _has_suspicious_person_punctuation,
-    _is_plausible_person_name,
-    _json,
-    _repair_english_title_casing,
+    add_candidate,
+    candidate_group_score,
+    candidate_values_are_compatible,
     canonical_metadata as canonical_metadata,
+    canonicalize_metadata,
+    clean_people,
+    clean_publisher,
+    compact_json,
+    compact_value_key,
+    has_suspicious_person_punctuation,
+    is_plausible_person_name,
     is_valid_bibliographic_value as is_valid_bibliographic_value,
+    repair_english_title_casing,
 )
 from .persistence.bibliographic_metadata_store import (
     metadata_write_transaction,
@@ -88,7 +88,7 @@ def invalid_metadata_fields(metadata: Mapping[str, object]) -> List[str]:
         if metadata.get(field) not in (None, "")
         and (
             not is_valid_bibliographic_value(metadata.get(field))
-            or (field in {"author", "translator"} and _has_suspicious_person_punctuation(metadata.get(field)))
+            or (field in {"author", "translator"} and has_suspicious_person_punctuation(metadata.get(field)))
         )
     ]
 
@@ -127,8 +127,8 @@ def detect_pdf_bibliographic_metadata(
     path = Path(path)
     existing = dict(existing or {})
     if existing.get("metadata_source") == "manual" and not force:
-        return _canonical_metadata(existing)
-    result = _canonical_metadata(existing)
+        return canonicalize_metadata(existing)
+    result = canonicalize_metadata(existing)
     evidence: Dict[str, object] = dict(existing.get("metadata_evidence") or {})
     confidence: Dict[str, object] = {}
     rejected_evidence: Dict[str, object] = {}
@@ -192,15 +192,15 @@ def detect_pdf_bibliographic_metadata(
     for field in ("author", "translator"):
         person_value = result.get(field)
         if person_value and (
-            _has_suspicious_person_punctuation(person_value)
-            or not _is_plausible_person_name(str(person_value))
+            has_suspicious_person_punctuation(person_value)
+            or not is_plausible_person_name(str(person_value))
         ):
             rejected_evidence[field] = {
                 "source": "existing_metadata",
                 "evidence_text": person_value,
                 "reason": (
                     "suspicious_person_punctuation"
-                    if _has_suspicious_person_punctuation(person_value)
+                    if has_suspicious_person_punctuation(person_value)
                     else "artifact_person_name"
                 ),
             }
@@ -216,14 +216,14 @@ def detect_pdf_bibliographic_metadata(
                 "reason": "pdf_file_name_is_not_a_title",
             }
             continue
-        if field == "author" and _has_suspicious_person_punctuation(embedded_value):
+        if field == "author" and has_suspicious_person_punctuation(embedded_value):
             rejected_evidence[field] = {
                 "source": "pdf_metadata",
                 "evidence_text": embedded_value,
                 "reason": "suspicious_person_punctuation",
             }
             continue
-        if field == "author" and embedded_value and not _is_plausible_person_name(str(embedded_value)):
+        if field == "author" and embedded_value and not is_plausible_person_name(str(embedded_value)):
             rejected_evidence[field] = {
                 "source": "pdf_metadata",
                 "evidence_text": embedded_value,
@@ -266,8 +266,8 @@ def detect_pdf_bibliographic_metadata(
 
     # 期刊单篇与专著的版式完全不同：专著的版权页/CIP 规则用在期刊首页上只会
     # 把院系、基金项目当成出版社。两条抽取链路互斥。
-    is_thesis = _looks_like_thesis(texts)
-    has_book_markers = _has_book_only_markers(texts)
+    is_thesis = looks_like_thesis(texts)
+    has_book_markers = has_book_only_markers(texts)
     is_journal_by_marker = any(
         page_idx < 2 and looks_like_journal_article(text) for page_idx, text in texts
     )
@@ -275,10 +275,10 @@ def detect_pdf_bibliographic_metadata(
     # 前置页提取，避免从糊掉的老扫描页里抽出垃圾作者。兜底只影响类型标签，
     # 且在提取完成、掌握出版社等证据后再判定（见下方 document_type 决策）。
     if is_thesis:
-        detected, detected_evidence, detected_confidence = _extract_thesis_metadata(texts)
+        detected, detected_evidence, detected_confidence = extract_thesis_metadata(texts)
         conflicts = []
     elif is_journal_by_marker:
-        detected, detected_evidence, detected_confidence = _extract_journal_article(
+        detected, detected_evidence, detected_confidence = extract_journal_article(
             texts, Path(path).stem
         )
         conflicts = []
@@ -319,13 +319,13 @@ def detect_pdf_bibliographic_metadata(
         # （通常大小写更规范），只补充证据。
         same_value_modulo_case = (
             is_valid_bibliographic_value(result.get(field))
-            and _compact_value_key(str(result.get(field))) == _compact_value_key(str(value))
+            and compact_value_key(str(result.get(field))) == compact_value_key(str(value))
         )
         should_replace = (
             (force and current_source != "collection_rule")
             or not is_valid_bibliographic_value(result.get(field))
             or current_source == "pdf_metadata"
-            or (field in {"author", "translator"} and _has_suspicious_person_punctuation(result.get(field)))
+            or (field in {"author", "translator"} and has_suspicious_person_punctuation(result.get(field)))
             # 既有值没有经过人工确认（manual 已在入口提前返回）：来自导入配置
             # 或旧的自动识别。版权页/CIP 级别的高置信度检测应当覆盖它们，
             # 否则错误的初始配置永远无法被自动识别纠正。
@@ -365,7 +365,7 @@ def detect_pdf_bibliographic_metadata(
     # 引文里常出现被引专著的出版社，据此判书会把大量论文误判成专著。兜底只改
     # 类型标签，不改提取路径。
     is_journal_by_size = (
-        not has_book_markers and 0 < total_pages <= _JOURNAL_MAX_FALLBACK_PAGES
+        not has_book_markers and 0 < total_pages <= JOURNAL_MAX_FALLBACK_PAGES
     )
     if is_thesis:
         result["document_type"] = "thesis"
@@ -377,7 +377,7 @@ def detect_pdf_bibliographic_metadata(
             evidence.pop(field, None)
         # 学位论文文件名常写成「作者 - 篇名」（如「金芳冰 - 拉埃尔·耶吉…研究」）。
         # 当篇名以作者名加分隔符开头时，作者已单列，篇名不应再重复带上作者前缀。
-        _strip_thesis_author_prefix(result, evidence)
+        strip_thesis_author_prefix(result, evidence)
     elif is_journal_by_marker or is_journal_by_size:
         result["document_type"] = "journal_article"
     elif result.get("translator"):
@@ -391,7 +391,7 @@ def detect_pdf_bibliographic_metadata(
         and not is_thesis
         and not is_valid_bibliographic_value(result.get("journal_name"))
     ):
-        journal_name, journal_evidence, journal_rule = _extract_journal_name(texts)
+        journal_name, journal_evidence, journal_rule = extract_journal_name(texts)
         if journal_name:
             result["journal_name"] = journal_name
             evidence["journal_name"] = {
@@ -467,7 +467,7 @@ def responsibility_is_absent_or_unknown(metadata: Mapping[str, object]) -> bool:
 
 
 def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[str, object]] = None) -> Dict[str, object]:
-    previous_metadata = _canonical_metadata(previous or {})
+    previous_metadata = canonicalize_metadata(previous or {})
     result = dict(previous_metadata)
     invalid = invalid_metadata_fields(payload)
     if invalid:
@@ -493,7 +493,7 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
     else:
         result["document_type"] = "translated_book" if result.get("translator") else "book"
     # 人工语言覆盖：正文键存在且非空→校验并记录；键存在且为空→清除（回到自动识别）；
-    # 键缺席→保留 previous（已在 result 里，见下方 _canonical_metadata 承载）。
+    # 键缺席→保留 previous（已在 result 里，见下方 canonicalize_metadata 承载）。
     if "language" in payload:
         requested_language = str(payload.get("language") or "").strip()
         if requested_language:
@@ -562,7 +562,7 @@ def manual_metadata(payload: Mapping[str, object], previous: Optional[Mapping[st
 def update_metadata_in_database(database_path: Path, source_file_id: str, metadata: Mapping[str, object]) -> Dict[str, int]:
     """Update one document's catalog/search metadata without rebuilding text indexes."""
 
-    canonical = _canonical_metadata(metadata)
+    canonical = canonicalize_metadata(metadata)
     counts = {"sources": 0, "volumes": 0, "works": 0, "paragraphs": 0}
     with metadata_write_transaction(database_path) as connection:
         source_json = source_payload_json(connection, source_file_id)
@@ -575,7 +575,7 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
                 source[key] = value
             elif key in METADATA_FIELDS:
                 source.pop(key, None)
-        write_source_payload(connection, source_file_id, _json(source))
+        write_source_payload(connection, source_file_id, compact_json(source))
         counts["sources"] = 1
 
         title = str(canonical.get("title") or source.get("display_title") or "")
@@ -586,7 +586,7 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
             if title:
                 volume["display_title"] = title
             write_volume_payload(
-                connection, row_id, title or volume.get("display_title"), _json(volume)
+                connection, row_id, title or volume.get("display_title"), compact_json(volume)
             )
             counts["volumes"] += 1
         for row_id, payload_json in work_payload_rows(connection, source_file_id):
@@ -597,7 +597,7 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
             work["author_label"] = author
             work["date_label"] = year
             write_work_payload(
-                connection, row_id, title or work.get("title"), _json(work)
+                connection, row_id, title or work.get("title"), compact_json(work)
             )
             counts["works"] += 1
         for paragraph_id, payload_json in paragraph_payload_rows(connection, source_file_id):
@@ -608,7 +608,7 @@ def update_metadata_in_database(database_path: Path, source_file_id: str, metada
                 paragraph["volume_display"] = title
             paragraph["author_label"] = author
             write_paragraph_payload(
-                connection, paragraph_id, _json(paragraph_payload_for_storage(paragraph))
+                connection, paragraph_id, compact_json(paragraph_payload_for_storage(paragraph))
             )
             counts["paragraphs"] += 1
     return counts
@@ -627,9 +627,9 @@ def _extract_explicit_filename_metadata(
         r"\s*(?P<author>[^-]{1,40}?)\s*-\s*(?P<year>(?:19|20)\d{2})\s*-\s*(?P<title>.{4,})\s*",
         normalized,
     )
-    if zotero and _is_plausible_person_name(zotero.group("author")):
+    if zotero and is_plausible_person_name(zotero.group("author")):
         values = {
-            "author": _clean_people(zotero.group("author")),
+            "author": clean_people(zotero.group("author")),
             "publish_year": zotero.group("year"),
             "title": zotero.group("title").strip().replace(":", "："),
         }
@@ -649,8 +649,8 @@ def _extract_explicit_filename_metadata(
 
     match = re.search(
         rf"\(\s*(?:\((?P<country>[^()]{{1,8}})\)\s*)?"
-        rf"(?P<author>[{_CHINESE_NAME_CHARS}\s]{{2,30}}?)\s*著\s*"
-        rf"(?P<translator>[{_CHINESE_NAME_CHARS}\s,，、;；]{{2,60}}?)\s*译\s*\)",
+        rf"(?P<author>[{CHINESE_NAME_CHARS}\s]{{2,30}}?)\s*著\s*"
+        rf"(?P<translator>[{CHINESE_NAME_CHARS}\s,，、;；]{{2,60}}?)\s*译\s*\)",
         normalized,
     )
     if not match:
@@ -658,11 +658,11 @@ def _extract_explicit_filename_metadata(
         # 时才采用，避免把含下划线的普通文件名错拆。作者置信度略高，以压过期刊
         # 首页里偶尔抽出的报头/日期噪声，保证文件名里的作者不被丢。
         cnki = re.fullmatch(r"\s*(?P<title>.+?)\s*_\s*(?P<author>[^_]{2,20})\s*", normalized)
-        if cnki and _is_plausible_person_name(cnki.group("author")):
+        if cnki and is_plausible_person_name(cnki.group("author")):
             values = {
                 # 拆掉末段作者后，篇名里残留的下划线是知网导出遗留的分隔符，去掉。
                 "title": cnki.group("title").strip().replace("_", "").replace(":", "："),
-                "author": _clean_people(cnki.group("author")),
+                "author": clean_people(cnki.group("author")),
             }
             values = {field: value for field, value in values.items() if is_valid_bibliographic_value(value)}
             # 知网导出文件名带完整篇名与作者，置信度设得高于期刊首页抽取，确保
@@ -692,8 +692,8 @@ def _extract_explicit_filename_metadata(
     title = re.sub(r"\(([\u3400-\u9fff]{2,})\)", r"（\1）", title)
     values = {
         "title": title,
-        "author": _clean_people(match.group("author")),
-        "translator": _clean_people(match.group("translator")),
+        "author": clean_people(match.group("author")),
+        "translator": clean_people(match.group("translator")),
     }
     if match.group("country"):
         values["country"] = match.group("country").strip()
@@ -715,7 +715,7 @@ def _extract_explicit_filename_metadata(
 def _extract_chinese_cip_statement(
     text: str,
     page_idx: int,
-    candidates: Dict[str, List[_MetadataCandidate]],
+    candidates: Dict[str, List[MetadataCandidate]],
 ) -> None:
     """Extract one Chinese CIP responsibility and publication statement as a unit."""
 
@@ -735,7 +735,7 @@ def _extract_chinese_cip_statement(
         rf"(?P<responsibility>.{{2,110}}?)\s*"
         rf"(?:[.。．]\s*)?(?:[—–―一\-]{{1,2}}\s*)?"
         rf"(?P<place>[\u3400-\u9fff]{{2,8}})\s*[:：]\s*"
-        rf"(?P<publisher>[\u3400-\u9fff·\s]{{2,45}}?{_CHINESE_PUBLISHER_SUFFIX})"
+        rf"(?P<publisher>[\u3400-\u9fff·\s]{{2,45}}?{CHINESE_PUBLISHER_SUFFIX})"
         rf"\s*[,，]\s*(?P<year>(?:19|20)\d{{2}})",
         statement_text,
     )
@@ -743,7 +743,7 @@ def _extract_chinese_cip_statement(
         return
 
     evidence_text = statement.group(0).strip()
-    _add_candidate(
+    add_candidate(
         candidates,
         "title",
         _clean_cip_title(statement.group("title")),
@@ -755,7 +755,7 @@ def _extract_chinese_cip_statement(
     responsibility = statement.group("responsibility").strip()
     if not any(responsibility in line for line in text.splitlines()):
         _extract_chinese_people(responsibility, page_idx, candidates)
-    _add_candidate(
+    add_candidate(
         candidates,
         "publish_place",
         statement.group("place"),
@@ -764,16 +764,16 @@ def _extract_chinese_cip_statement(
         0.995,
         "chinese_cip_statement",
     )
-    _add_candidate(
+    add_candidate(
         candidates,
         "publisher",
-        re.sub(r"\s+", "", _clean_publisher(statement.group("publisher"))),
+        re.sub(r"\s+", "", clean_publisher(statement.group("publisher"))),
         page_idx,
         evidence_text,
         0.995,
         "chinese_cip_statement",
     )
-    _add_candidate(
+    add_candidate(
         candidates,
         "publish_year",
         statement.group("year"),
@@ -787,7 +787,7 @@ def _extract_chinese_cip_statement(
 def _extract_latest_chinese_edition(
     text: str,
     page_idx: int,
-    candidates: Dict[str, List[_MetadataCandidate]],
+    candidates: Dict[str, List[MetadataCandidate]],
 ) -> None:
     editions: List[Tuple[int, int, str]] = []
     for match in re.finditer(
@@ -801,7 +801,7 @@ def _extract_latest_chinese_edition(
     if not editions:
         return
     edition, year, evidence_text = max(editions, key=lambda item: (item[0], item[1]))
-    _add_candidate(
+    add_candidate(
         candidates,
         "publish_year",
         str(year),
@@ -838,7 +838,7 @@ def _clean_cip_title(value: str) -> str:
 def _extract_from_front_matter(
     texts: Sequence[Tuple[int, str]],
 ) -> Tuple[Dict[str, str], Dict[str, object], Dict[str, float], List[Dict[str, object]]]:
-    candidates: Dict[str, List[_MetadataCandidate]] = {field: [] for field in METADATA_FIELDS}
+    candidates: Dict[str, List[MetadataCandidate]] = {field: [] for field in METADATA_FIELDS}
     for page_idx, text in texts:
         normalized = unicodedata.normalize("NFKC", text)
         normalized = normalized.replace("•", "·").replace("・", "·").replace("‧", "·")
@@ -866,10 +866,10 @@ def _extract_from_front_matter(
 
             for publisher in KNOWN_PUBLISHERS:
                 if publisher in cjk_line:
-                    _add_candidate(candidates, "publisher", publisher, page_idx, cjk_line, 0.9, "known_publisher")
+                    add_candidate(candidates, "publisher", publisher, page_idx, cjk_line, 0.9, "known_publisher")
             for publisher_alias, publisher in PUBLISHER_ALIASES.items():
                 if publisher_alias.casefold() in cjk_line.casefold():
-                    _add_candidate(
+                    add_candidate(
                         candidates,
                         "publisher",
                         publisher,
@@ -911,7 +911,7 @@ def _extract_from_front_matter(
                         isbn_confidence, isbn_rule = 0.99, "isbn_print_edition"
                     else:
                         isbn_confidence, isbn_rule = 0.96, "isbn_label"
-                    _add_candidate(
+                    add_candidate(
                         candidates,
                         "isbn",
                         re.sub(r"\s+", "", raw_isbn).rstrip("-"),
@@ -932,7 +932,7 @@ def _extract_from_front_matter(
 
             explicit_place = re.search(r"(?:出版地|出版地点)\s*[:：]\s*([\u4e00-\u9fff]{2,8})", cjk_line)
             if explicit_place:
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publish_place",
                     explicit_place.group(1),
@@ -944,11 +944,11 @@ def _extract_from_front_matter(
 
             city_publisher = re.search(
                 rf"(?P<place>[\u3400-\u9fff]{{2,10}})\s*[:：]\s*"
-                rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})",
+                rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{CHINESE_PUBLISHER_SUFFIX})",
                 cjk_line,
             )
             if city_publisher and city_publisher.group("place") not in INVALID_PUBLICATION_PLACES:
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publish_place",
                     city_publisher.group("place"),
@@ -957,10 +957,10 @@ def _extract_from_front_matter(
                     0.99,
                     "chinese_catalog_statement",
                 )
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publisher",
-                    _clean_publisher(city_publisher.group("publisher")),
+                    clean_publisher(city_publisher.group("publisher")),
                     page_idx,
                     cjk_line,
                     0.99,
@@ -969,14 +969,14 @@ def _extract_from_front_matter(
 
             labelled_publisher = re.search(
                 rf"(?:出版发行|出版者|出版社)(?:\s*[:：]\s*|\s+)"
-                rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})",
+                rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{CHINESE_PUBLISHER_SUFFIX})",
                 cjk_line,
             )
             if labelled_publisher:
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publisher",
-                    _clean_publisher(labelled_publisher.group("publisher")),
+                    clean_publisher(labelled_publisher.group("publisher")),
                     page_idx,
                     cjk_line,
                     0.97,
@@ -984,15 +984,15 @@ def _extract_from_front_matter(
                 )
 
             standalone_publisher = re.fullmatch(
-                rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})"
+                rf"(?P<publisher>[\u3400-\u9fff·]{{2,40}}?{CHINESE_PUBLISHER_SUFFIX})"
                 rf"(?:出版|發行|发行)?",
                 cjk_line,
             )
             if standalone_publisher:
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publisher",
-                    _clean_publisher(standalone_publisher.group("publisher")),
+                    clean_publisher(standalone_publisher.group("publisher")),
                     page_idx,
                     cjk_line,
                     0.98,
@@ -1000,13 +1000,13 @@ def _extract_from_front_matter(
                 )
 
             for generic_publisher in re.finditer(
-                rf"([\u3400-\u9fff·]{{2,40}}?{_CHINESE_PUBLISHER_SUFFIX})",
+                rf"([\u3400-\u9fff·]{{2,40}}?{CHINESE_PUBLISHER_SUFFIX})",
                 cjk_line,
             ):
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publisher",
-                    _clean_publisher(generic_publisher.group(1)),
+                    clean_publisher(generic_publisher.group(1)),
                     page_idx,
                     cjk_line,
                     0.86,
@@ -1033,7 +1033,7 @@ def _extract_from_front_matter(
                     rule, year_confidence = "referenced_publication_year", 0.68
                 else:
                     rule, year_confidence = "chinese_publication_year", 0.91
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publish_year",
                     year.group(1),
@@ -1055,20 +1055,20 @@ def _extract_from_front_matter(
     for field, items in candidates.items():
         if not items:
             continue
-        by_value: Dict[str, List[_MetadataCandidate]] = {}
+        by_value: Dict[str, List[MetadataCandidate]] = {}
         for item in items:
             by_value.setdefault(item.value, []).append(item)
         ranked = sorted(
             by_value.items(),
             key=lambda pair: (
-                -_candidate_group_score(pair[1]),
+                -candidate_group_score(pair[1]),
                 -len(pair[1]),
                 min(item.page_idx for item in pair[1]),
             ),
         )
         value, support = ranked[0]
         best = max(support, key=lambda item: item.confidence)
-        if _candidate_group_score(support) < MIN_AUTO_CONFIDENCE.get(field, 0.88):
+        if candidate_group_score(support) < MIN_AUTO_CONFIDENCE.get(field, 0.88):
             continue
         detected[field] = value
         evidence[field] = {
@@ -1076,19 +1076,19 @@ def _extract_from_front_matter(
             "source_page": best.page_idx + 1,
             "evidence_text": best.evidence_text,
             "rule": best.rule,
-            "confidence": round(min(0.99, _candidate_group_score(support)), 4),
+            "confidence": round(min(0.99, candidate_group_score(support)), 4),
             "support_count": len(support),
         }
-        confidence[field] = min(0.99, _candidate_group_score(support))
+        confidence[field] = min(0.99, candidate_group_score(support))
         if len(ranked) > 1:
             second_value, second_support = ranked[1]
             if (
-                _candidate_group_score(support) - _candidate_group_score(second_support) < 0.015
-                and not _candidate_values_are_compatible(value, second_value)
+                candidate_group_score(support) - candidate_group_score(second_support) < 0.015
+                and not candidate_values_are_compatible(value, second_value)
             ):
                 conflicts.append({"field": field, "values": [value, second_value]})
     if detected.get("title") and isinstance(evidence.get("title"), dict) and evidence["title"].get("rule") == "english_catalog_title":
-        repaired = _repair_english_title_casing(str(detected["title"]), texts)
+        repaired = repair_english_title_casing(str(detected["title"]), texts)
         if repaired and repaired != detected["title"]:
             detected["title"] = repaired
             evidence["title"]["rule"] = "english_catalog_title_with_title_page_casing"
@@ -1181,7 +1181,7 @@ def _is_bibliographic_page(page_idx: int, text: str) -> bool:
 
 def _translator_parts_from_filename(file_stem: str) -> List[str]:
     match = re.search(
-        rf"著\s*(?P<names>[{_CHINESE_NAME_CHARS}\s,，、;；]{{3,60}}?)\s*译",
+        rf"著\s*(?P<names>[{CHINESE_NAME_CHARS}\s,，、;；]{{3,60}}?)\s*译",
         unicodedata.normalize("NFKC", file_stem),
     )
     if not match:
@@ -1223,12 +1223,12 @@ def _reconcile_fused_people(ocr_value: str, filename_parts: Sequence[str]) -> Op
 def _extract_chinese_people(
     line: str,
     page_idx: int,
-    candidates: Dict[str, List[_MetadataCandidate]],
+    candidates: Dict[str, List[MetadataCandidate]],
 ) -> None:
     country = r"(?:[\[［【(（〔](?P<country>[^\]］】)）〕]{1,8})[\]］】)）〕]\s*)?"
     required_country = r"[\[［【(（〔](?P<country>[^\]］】)）〕]{1,8})[\]］】)）〕]\s*"
-    name = rf"(?P<name>[{_CHINESE_NAME_CHARS}][{_CHINESE_NAME_CHARS}\s,，、]{{1,48}}?)"
-    short_name = rf"(?P<name>[{_CHINESE_NAME_CHARS}][{_CHINESE_NAME_CHARS}\s,，、]{{1,14}}?)"
+    name = rf"(?P<name>[{CHINESE_NAME_CHARS}][{CHINESE_NAME_CHARS}\s,，、]{{1,48}}?)"
+    short_name = rf"(?P<name>[{CHINESE_NAME_CHARS}][{CHINESE_NAME_CHARS}\s,，、]{{1,14}}?)"
 
     author_patterns = (
         (rf"(?:著者|作者)\s*[:：]\s*{country}{name}(?=$|[;；])", "labelled_chinese_author", 0.98),
@@ -1238,9 +1238,9 @@ def _extract_chinese_people(
     for pattern, rule, score in author_patterns:
         match = re.search(pattern, line, flags=re.IGNORECASE)
         if match:
-            _add_candidate(candidates, "author", _clean_people(match.group("name")), page_idx, line, score, rule)
+            add_candidate(candidates, "author", clean_people(match.group("name")), page_idx, line, score, rule)
             if match.groupdict().get("country"):
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "country",
                     match.group("country").strip(),
@@ -1253,21 +1253,21 @@ def _extract_chinese_people(
     classical_prose = re.search(
         rf"(?:^|[,，;；。：《》])"
         rf"(?P<country>先秦|秦|西漢|东汉|東漢|漢|汉|魏|晉|晋|隨|隋|唐|五代|宋|遼|辽|金|元|明|清|民國|民国)"
-        rf"(?P<name>[{_CHINESE_NAME_CHARS}]{{2,10}}?)"
+        rf"(?P<name>[{CHINESE_NAME_CHARS}]{{2,10}}?)"
         rf"(?:[（(][^)）]{{1,32}}[)）])?\s*撰(?=$|[\s,，;；.。])",
         line,
     )
     if classical_prose:
-        _add_candidate(
+        add_candidate(
             candidates,
             "author",
-            _clean_people(classical_prose.group("name")),
+            clean_people(classical_prose.group("name")),
             page_idx,
             line,
             0.95,
             "classical_chinese_authorship_prose",
         )
-        _add_candidate(
+        add_candidate(
             candidates,
             "country",
             classical_prose.group("country"),
@@ -1279,18 +1279,18 @@ def _extract_chinese_people(
 
     translator_patterns = (
         (
-            rf"(?:译者|翻译|译校)\s*[:：]\s*(?P<name>[{_CHINESE_NAME_CHARS}\s,，、]{{2,50}}?)(?=$|[;；])",
+            rf"(?:译者|翻译|译校)\s*[:：]\s*(?P<name>[{CHINESE_NAME_CHARS}\s,，、]{{2,50}}?)(?=$|[;；])",
             "labelled_chinese_translator",
             0.99,
         ),
         (
             rf"(?:著|author)\s*[,，;；、/／\s]*"
-            rf"(?P<name>[{_CHINESE_NAME_CHARS}\s,，、]{{2,50}}?)\s*(?:[/／]\s*)?(?:译校|译)(?=$|[\s,，;；.。])",
+            rf"(?P<name>[{CHINESE_NAME_CHARS}\s,，、]{{2,50}}?)\s*(?:[/／]\s*)?(?:译校|译)(?=$|[\s,，;；.。])",
             "chinese_translator_after_author",
             0.98,
         ),
         (
-            rf"^(?P<name>[{_CHINESE_NAME_CHARS}\s,，、]{{2,50}}?)\s*(?:[/／]\s*)?(?:译校|译)(?=$|[\s,，;；.。])",
+            rf"^(?P<name>[{CHINESE_NAME_CHARS}\s,，、]{{2,50}}?)\s*(?:[/／]\s*)?(?:译校|译)(?=$|[\s,，;；.。])",
             "chinese_translator_role",
             0.96,
         ),
@@ -1298,10 +1298,10 @@ def _extract_chinese_people(
     for pattern, rule, score in translator_patterns:
         match = re.search(pattern, line, flags=re.IGNORECASE)
         if match:
-            _add_candidate(
+            add_candidate(
                 candidates,
                 "translator",
-                _clean_people(match.group("name")),
+                clean_people(match.group("name")),
                 page_idx,
                 line,
                 score,
@@ -1312,20 +1312,20 @@ def _extract_chinese_people(
 def _extract_english_people(
     text: str,
     page_idx: int,
-    candidates: Dict[str, List[_MetadataCandidate]],
+    candidates: Dict[str, List[MetadataCandidate]],
     *,
     role_confidence: float,
 ) -> None:
     translator = re.search(
-        rf"\btranslated\s+by\s+(?P<name>[{_ENGLISH_NAME_CHARS}]{{2,80}}?)(?=$|[;|])",
+        rf"\btranslated\s+by\s+(?P<name>[{ENGLISH_NAME_CHARS}]{{2,80}}?)(?=$|[;|])",
         text,
         flags=re.IGNORECASE,
     )
     if translator:
-        _add_candidate(
+        add_candidate(
             candidates,
             "translator",
-            _clean_people(translator.group("name")),
+            clean_people(translator.group("name")),
             page_idx,
             text,
             role_confidence,
@@ -1341,20 +1341,20 @@ def _extract_english_people(
     )
     if catalog_author:
         author = f"{catalog_author.group('first').strip()} {catalog_author.group('last').strip()}"
-        _add_candidate(candidates, "author", author, page_idx, text, 0.99, "english_catalog_author")
+        add_candidate(candidates, "author", author, page_idx, text, 0.99, "english_catalog_author")
 
     # LoC CIP 的题名/责任者分隔符是两侧带空格的" / "；不带空格的斜杠
     # （24/7）属于题名本身。
     catalog_title = re.search(r"\bTitle\s*:\s*(?P<title>.+?)\s+/\s+", text, flags=re.IGNORECASE)
     if catalog_title:
         title = re.sub(r"\s+([:;,.])", r"\1", catalog_title.group("title")).strip(" .")
-        _add_candidate(candidates, "title", title, page_idx, text, 0.98, "english_catalog_title")
+        add_candidate(candidates, "title", title, page_idx, text, 0.98, "english_catalog_title")
 
 
 def _extract_english_publication_statement(
     text: str,
     page_idx: int,
-    candidates: Dict[str, List[_MetadataCandidate]],
+    candidates: Dict[str, List[MetadataCandidate]],
 ) -> None:
     published_by = re.search(
         r"\bPublished\s+by\s+(?P<publisher>[A-Z][A-Za-z0-9&'’.,\- ]{2,120}?)"
@@ -1363,8 +1363,8 @@ def _extract_english_publication_statement(
         flags=re.IGNORECASE,
     )
     if published_by:
-        publisher = _clean_publisher(re.sub(r"\s+", " ", published_by.group("publisher")).rstrip(" .,\n"))
-        _add_candidate(
+        publisher = clean_publisher(re.sub(r"\s+", " ", published_by.group("publisher")).rstrip(" .,\n"))
+        add_candidate(
             candidates,
             "publisher",
             publisher,
@@ -1380,7 +1380,7 @@ def _extract_english_publication_statement(
         flags=re.IGNORECASE,
     )
     if copyright_year:
-        _add_candidate(
+        add_candidate(
             candidates,
             "publish_year",
             copyright_year.group("year"),
@@ -1401,7 +1401,7 @@ def _extract_english_publication_statement(
         return
     # 多个出版地（London ; New York）只取第一个，与引文习惯一致。
     first_place = re.split(r"\s*[;]\s*", re.sub(r"\s+", " ", statement.group("place")))[0].strip()
-    _add_candidate(
+    add_candidate(
         candidates,
         "publish_place",
         first_place,
@@ -1410,17 +1410,17 @@ def _extract_english_publication_statement(
         0.92,
         "english_catalog_statement",
     )
-    _add_candidate(
+    add_candidate(
         candidates,
         "publisher",
-        _clean_publisher(re.sub(r"\s+", " ", statement.group("publisher"))),
+        clean_publisher(re.sub(r"\s+", " ", statement.group("publisher"))),
         page_idx,
         text,
         0.99,
         "english_catalog_statement",
     )
     # LoC CIP 的方括号年份（[2018]）是登记年而非出版年，置信度低于版权行 ©。
-    _add_candidate(
+    add_candidate(
         candidates,
         "publish_year",
         statement.group("year"),
@@ -1434,7 +1434,7 @@ def _extract_english_publication_statement(
 def _extract_english_title_page(
     lines: Sequence[str],
     page_idx: int,
-    candidates: Dict[str, List[_MetadataCandidate]],
+    candidates: Dict[str, List[MetadataCandidate]],
 ) -> None:
     publisher_pattern = re.compile(
         r"^(?P<publisher>(?:The\s+)?[A-Z][A-Za-z0-9&'’.\- ]{1,110}"
@@ -1452,8 +1452,8 @@ def _extract_english_title_page(
         if not publisher_match:
             continue
 
-        publisher = _clean_publisher(re.sub(r"\s+", " ", publisher_match.group("publisher")))
-        _add_candidate(
+        publisher = clean_publisher(re.sub(r"\s+", " ", publisher_match.group("publisher")))
+        add_candidate(
             candidates,
             "publisher",
             publisher,
@@ -1465,7 +1465,7 @@ def _extract_english_title_page(
         nearby = lines[index + 1 : index + 7]
         for nearby_line in nearby:
             if place_pattern.match(nearby_line):
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publish_place",
                     nearby_line,
@@ -1477,7 +1477,7 @@ def _extract_english_title_page(
                 break
         for nearby_line in nearby:
             if year_pattern.match(nearby_line):
-                _add_candidate(
+                add_candidate(
                     candidates,
                     "publish_year",
                     nearby_line,

@@ -12,13 +12,13 @@ from dataclasses import dataclass
 from typing import Dict, List, Sequence, Tuple
 
 
-_MAX_HEADING_NUMBER = 30
+MAX_HEADING_NUMBER = 30
 
 
 _MIN_COLLECTED_NOTE_RUN = 5
 
 
-_CHINESE_NUMBER_VALUES = {
+CHINESE_NUMBER_VALUES = {
     "零": 0,
     "〇": 0,
     "一": 1,
@@ -37,7 +37,7 @@ _CHINESE_NUMBER_VALUES = {
 _ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100}
 
 
-_CHINESE_HEADING = re.compile(
+CHINESE_HEADING = re.compile(
     r"^第([零〇一二两三四五六七八九十百\d]{1,5})(章|节|篇|部)\s*(.*)$"
 )
 
@@ -72,7 +72,7 @@ _ENGLISH_PART = re.compile(
 _ENGLISH_PART_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4}
 
 
-_TOC_LEADER = re.compile(
+TOC_LEADER = re.compile(
     r"(?:\.{3,}|…{2,}|·{3,})\s*[\[(（]?\d*[\])）]?\s*$"
 )
 
@@ -89,7 +89,7 @@ _TOC_ENGLISH_PART = re.compile(
 )
 
 
-_ENDNOTES_HEADING = re.compile(
+ENDNOTES_HEADING = re.compile(
     r"^(?:(?:editorial|translator(?:'s|’s)?)\s+notes?|endnotes?|notes?"
     r"|anmerkungen|尾注|尾註|注释|註釋|参考文献|參考文獻|bibliography|index|索引)$",
     re.IGNORECASE,
@@ -104,10 +104,10 @@ _NOTE_STREAM_TERMINATOR = re.compile(
 _LATIN_NOTE_MARKER = re.compile(r"(\d{1,3})\.")
 
 
-_INLINE_NOTE_MARKER = re.compile(r"(?m)^\s*\[(\d{1,3})\][ \t]+\S")
+INLINE_NOTE_MARKER = re.compile(r"(?m)^\s*\[(\d{1,3})\][ \t]+\S")
 
 
-_EXPLICIT_TRANSLATOR_NOTE = re.compile(
+EXPLICIT_TRANSLATOR_NOTE = re.compile(
     r"^\s*(?:\[\d{1,3}\]|\d{1,3}\.)?\s*"
     r"(?:译者(?:注|按)|譯者(?:註|按)|译注(?=[:：\s])|譯註(?=[:：\s])"
     r"|translator(?:'s|’s)?\s+note|trans\.\s*note)",
@@ -116,7 +116,7 @@ _EXPLICIT_TRANSLATOR_NOTE = re.compile(
 
 
 @dataclass(frozen=True)
-class _NumberedNoteBlock:
+class NumberedNoteBlock:
     chapter_number: int
     note_number: int
     start: int
@@ -124,14 +124,14 @@ class _NumberedNoteBlock:
     end: int
 
 
-def _chinese_number(value: str) -> int:
+def chinese_number(value: str) -> int:
     if value.isdigit():
         return int(value)
     total = 0
     current = 0
     for character in value:
-        if character in _CHINESE_NUMBER_VALUES:
-            current = _CHINESE_NUMBER_VALUES[character]
+        if character in CHINESE_NUMBER_VALUES:
+            current = CHINESE_NUMBER_VALUES[character]
         elif character == "十":
             total += (current or 1) * 10
             current = 0
@@ -154,21 +154,21 @@ def _roman_number(value: str) -> int:
     return total
 
 
-def _heading_lines(text: str, *, numbered_sections: bool = False) -> List[Tuple[str, int]]:
+def heading_lines(text: str, *, numbered_sections: bool = False) -> List[Tuple[str, int]]:
     matches: List[Tuple[str, int]] = []
     for line_index, raw_line in enumerate(text.splitlines()):
         line = re.sub(r"\s+", " ", raw_line).strip(" \t/｜|")
         if not line or len(line) > 100:
             continue
-        if _TOC_LEADER.search(line):
+        if TOC_LEADER.search(line):
             continue
-        chinese = _CHINESE_HEADING.fullmatch(line)
+        chinese = CHINESE_HEADING.fullmatch(line)
         if chinese is not None:
             if chinese.group(3).rstrip().endswith("。"):
                 continue
-            number = _chinese_number(chinese.group(1))
+            number = chinese_number(chinese.group(1))
             kind = "chapter" if chinese.group(2) in {"章", "篇", "部"} else "section"
-            if 0 < number <= _MAX_HEADING_NUMBER:
+            if 0 < number <= MAX_HEADING_NUMBER:
                 matches.append((kind, number))
             continue
         french_part = _FRENCH_PART.fullmatch(line)
@@ -196,7 +196,7 @@ def _heading_lines(text: str, *, numbered_sections: bool = False) -> List[Tuple[
             and not any(ord(character) < 32 and not character.isspace() for character in raw_line)
         ):
             number = int(chapter.group(1))
-            if 0 < number <= _MAX_HEADING_NUMBER:
+            if 0 < number <= MAX_HEADING_NUMBER:
                 # A bare number below explicit CJK chapters is a subsection,
                 # not a new chapter (including Japanese full-width digits).
                 kind = (
@@ -209,12 +209,12 @@ def _heading_lines(text: str, *, numbered_sections: bool = False) -> List[Tuple[
         section = _LATIN_SECTION.fullmatch(line)
         if section is not None and re.search(r"[A-Za-z]{3}", section.group(2)):
             number = _roman_number(section.group(1))
-            if 0 < number <= _MAX_HEADING_NUMBER:
+            if 0 < number <= MAX_HEADING_NUMBER:
                 matches.append(("section", number))
     return matches
 
 
-def _normalized_heading_title(value: str) -> str:
+def normalized_heading_title(value: str) -> str:
     return re.sub(r"[^\w]+", "", value.casefold(), flags=re.UNICODE)
 
 
@@ -233,11 +233,11 @@ def _repeated_chapter_toc_indices(
         if contents_start is None:
             continue
         chapters = [
-            _normalized_heading_title(line)
+            normalized_heading_title(line)
             for line in text.splitlines()
             if any(
                 kind == "chapter"
-                for kind, _number in _heading_lines(
+                for kind, _number in heading_lines(
                     line, numbered_sections=numbered_sections
                 )
             )
@@ -271,7 +271,7 @@ def _compact_split_toc_indices(
             probe = texts[index]
             chapters = [
                 number
-                for kind, number in _heading_lines(
+                for kind, number in heading_lines(
                     probe, numbered_sections=numbered_sections
                 )
                 if kind == "chapter"
@@ -304,7 +304,7 @@ def _compact_split_toc_indices(
     return indices
 
 
-def _latin_toc_titles(
+def latin_toc_titles(
     texts: Sequence[str], *, numbered_sections: bool = False
 ) -> Tuple[Dict[str, str], set[int]]:
     titles: Dict[str, str] = {}
@@ -331,7 +331,7 @@ def _latin_toc_titles(
         if has_contents_heading or index in split_toc_indices:
             in_toc = True
         elif in_toc and not any(
-            _TOC_SLASH_ENTRY.fullmatch(line) or _TOC_LEADER.search(line)
+            _TOC_SLASH_ENTRY.fullmatch(line) or TOC_LEADER.search(line)
             for line in lines
         ):
             in_toc = False
@@ -343,20 +343,20 @@ def _latin_toc_titles(
                 continue
             slash_entry = _TOC_SLASH_ENTRY.fullmatch(line)
             entry = slash_entry.group(1).strip() if slash_entry is not None else line
-            entry = _TOC_LEADER.sub("", entry).strip()
-            chinese = _CHINESE_HEADING.fullmatch(entry)
+            entry = TOC_LEADER.sub("", entry).strip()
+            chinese = CHINESE_HEADING.fullmatch(entry)
             if chinese is not None:
-                number = _chinese_number(chinese.group(1))
+                number = chinese_number(chinese.group(1))
                 kind = chinese.group(2)
                 if kind in {"章", "篇", "部"}:
                     current_chapter = number
                     pending_chapter_title = True
-                    titles[_normalized_heading_title(entry)] = (
+                    titles[normalized_heading_title(entry)] = (
                         f"chapter:{current_chapter}"
                     )
                 elif current_chapter:
                     section_number = number
-                    titles[_normalized_heading_title(entry)] = (
+                    titles[normalized_heading_title(entry)] = (
                         f"chapter:{current_chapter}:section:{section_number}"
                     )
                 continue
@@ -369,13 +369,13 @@ def _latin_toc_titles(
                     current_chapter = _ENGLISH_PART_NUMBERS[token]
                 else:
                     current_chapter = _roman_number(token)
-                titles[_normalized_heading_title(english_part.group(2))] = (
+                titles[normalized_heading_title(english_part.group(2))] = (
                     f"chapter:{current_chapter}"
                 )
                 pending_chapter_title = False
                 continue
             if pending_chapter_title and slash_entry is not None:
-                titles[_normalized_heading_title(entry)] = (
+                titles[normalized_heading_title(entry)] = (
                     f"chapter:{current_chapter}"
                 )
                 pending_chapter_title = False
@@ -386,12 +386,12 @@ def _latin_toc_titles(
             if chapter is not None:
                 if numbered_sections and not line.casefold().startswith("chapter "):
                     if current_chapter:
-                        titles[_normalized_heading_title(line)] = (
+                        titles[normalized_heading_title(line)] = (
                             f"chapter:{current_chapter}:section:{int(chapter.group(1))}"
                         )
                     continue
                 current_chapter = int(chapter.group(1))
-                titles[_normalized_heading_title(chapter.group(2))] = (
+                titles[normalized_heading_title(chapter.group(2))] = (
                     f"chapter:{current_chapter}"
                 )
                 continue
@@ -399,7 +399,7 @@ def _latin_toc_titles(
             if section is None or not current_chapter:
                 continue
             section_number = _roman_number(section.group(1))
-            titles[_normalized_heading_title(section.group(2))] = (
+            titles[normalized_heading_title(section.group(2))] = (
                 f"chapter:{current_chapter}:section:{section_number}"
             )
     return titles, toc_indices
@@ -413,7 +413,7 @@ def _trailing_latin_note_number(text: str) -> int:
     return int(match.group(1)) if match is not None else 0
 
 
-def _collected_note_blocks(texts: Sequence[str]) -> List[_NumberedNoteBlock]:
+def collected_note_blocks(texts: Sequence[str]) -> List[NumberedNoteBlock]:
     candidates: List[Tuple[int, int]] = []
     for index, text in enumerate(texts):
         number = _trailing_latin_note_number(text)
@@ -443,13 +443,13 @@ def _collected_note_blocks(texts: Sequence[str]) -> List[_NumberedNoteBlock]:
         return []
     first_run_start = candidates[runs[0][0]][0]
     if not any(
-        _ENDNOTES_HEADING.fullmatch(line.strip())
+        ENDNOTES_HEADING.fullmatch(line.strip())
         for text in texts[: first_run_start + 1]
         for line in text.splitlines()
     ):
         return []
 
-    blocks: List[_NumberedNoteBlock] = []
+    blocks: List[NumberedNoteBlock] = []
     for chapter_number, run in enumerate(runs, start=1):
         for position in run:
             start, note_number = candidates[position]
@@ -471,7 +471,7 @@ def _collected_note_blocks(texts: Sequence[str]) -> List[_NumberedNoteBlock]:
             )
             if content_start < end:
                 blocks.append(
-                    _NumberedNoteBlock(
+                    NumberedNoteBlock(
                         chapter_number,
                         note_number,
                         start,

@@ -14,10 +14,11 @@ import json
 from pathlib import Path
 from typing import Mapping, Optional
 
+from .auto_page_mapping import normalized_page_bbox
 from .document_export import DocumentExportError
 from .markdown_export_normalize import (
-    _block_role, _normalized_page_bbox, _page_scale, _physical_page,
-    _printed_page_raw, blocks_aligned_with_text, heading_level,
+    block_role, blocks_aligned_with_text, heading_level, page_scale,
+    physical_page_number, printed_page_raw,
 )
 
 
@@ -112,7 +113,7 @@ def reconstruction_invariant(source_block, logical_blocks) -> dict:
 
 
 def _fragment_plan(page, block, source_index, merged, native, layout_pages, document_pages):
-    if _block_role(block) != "text" or merged.get("type") != "text":
+    if block_role(block) != "text" or merged.get("type") != "text":
         return (), "UNSUPPORTED_BLOCK_TYPE"
     if heading_level(block) is not None:
         return (), "HEADING_BLOCK"
@@ -177,14 +178,14 @@ def _fragment_plan(page, block, source_index, merged, native, layout_pages, docu
             and not b.get("lines") for b in layout_pages[owner].get("para_blocks", [])
         ):
             return (), "TARGET_NOT_DELETED_BY_MERGE"
-        bbox = _normalized_page_bbox(native_block, *layout_pages[owner]["page_size"])
+        bbox = normalized_page_bbox(native_block, *layout_pages[owner]["page_size"])
         if bbox is None:
             return (), "MISSING_NATIVE_BLOCK_BBOX"
         fragments.append(SourceFragment(
             str(block.get("source_block_id") or f"{page.get('source_file_id', '')}:p{page['pdf_page_index']}:b{source_index}"),
-            page["pdf_page_index"], _physical_page(page), _printed_page_raw(page), source_index,
+            page["pdf_page_index"], physical_page_number(page), printed_page_raw(page), source_index,
             block.get("parser_item_index", block.get("mineru_item_index")), start, end,
-            target_index, _physical_page(target), _printed_page_raw(target), tuple(bbox), tuple(part),
+            target_index, physical_page_number(target), printed_page_raw(target), tuple(bbox), tuple(part),
         ))
     return tuple(fragments), "EXACT_NATIVE_SPAN_ORIGINS"
 
@@ -232,11 +233,11 @@ def attach_export_layout(pages, runtime_root: Path, layout_paths=None) -> None:
             if local not in layout_pages:
                 continue
             raw_page = layout_pages[local]
-            bbox = _normalized_page_bbox(block, *_page_scale(page))
+            bbox = normalized_page_bbox(block, *page_scale(page))
             if bbox is None:
                 continue
             matches = [b for b in raw_page.get("para_blocks", []) + raw_page.get("discarded_blocks", [])
-                       if (other := _normalized_page_bbox(b, *raw_page["page_size"])) is not None
+                       if (other := normalized_page_bbox(b, *raw_page["page_size"])) is not None
                        and all(abs(a - c) <= .003 for a, c in zip(bbox, other))]
             if len(matches) == 1 and isinstance(matches[0].get("index"), int):
                 block["_export_layout_order"] = matches[0]["index"]
@@ -274,8 +275,8 @@ def reconstruct_export_pages(pages) -> ReconstructedPages:
                 continue
             if not (block.get("_export_source_cross_page") or block.get("cross_page")):
                 continue
-            record = {"source_page_index": page.get("pdf_page_index"), "source_physical_page": _physical_page(page),
-                      "source_printed_page": _printed_page_raw(page), "source_block_index": source_index,
+            record = {"source_page_index": page.get("pdf_page_index"), "source_physical_page": physical_page_number(page),
+                      "source_printed_page": printed_page_raw(page), "source_block_index": source_index,
                       "status": "retained", "reason": block.get("_export_reconstruction_reason", "NO_SPAN_EVIDENCE")}
             records.append(record)
             fragments = block.get("_export_fragments")
@@ -290,7 +291,7 @@ def reconstruct_export_pages(pages) -> ReconstructedPages:
                 target = by_index[fragment.target_page_index]
                 # Preserve existing body/media/note order. Page decorations may be
                 # appended by the parser; trusted-heading ordering handles them later.
-                anchors = [b for b in target["blocks"] if _block_role(b) not in {
+                anchors = [b for b in target["blocks"] if block_role(b) not in {
                     "header", "page_header", "footer", "page_footer", "page_number",
                 }]
                 orders = [b.get("_export_layout_order") for b in anchors]

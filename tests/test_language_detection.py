@@ -8,7 +8,7 @@ English (or Chinese) body must not flip or void the result.
 
 import unittest
 
-from src.me_finder.calibration_library import _item_language_code
+from src.me_finder.calibration_library import item_language_code
 
 
 class BodyLanguageDetectionTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class BodyLanguageDetectionTests(unittest.TestCase):
             "out the philosophy of right and the state, and the way that "
             "freedom is realised in the modern world. "
         ) * 6
-        self.assertEqual(_item_language_code(english + " Достоевский", "Elements of the Philosophy of Right", "", "hegel.pdf"), "en")
+        self.assertEqual(item_language_code(english + " Достоевский", "Elements of the Philosophy of Right", "", "hegel.pdf"), "en")
 
     def test_dominant_cyrillic_still_detects_russian(self) -> None:
         russian = (
@@ -31,16 +31,16 @@ class BodyLanguageDetectionTests(unittest.TestCase):
             "даже напротив, но с некоторого времени он был в раздражительном "
             "и напряжённом состоянии, похожем на ипохондрию."
         )
-        self.assertEqual(_item_language_code(russian, "Преступление и наказание", "Достоевский", "d.pdf"), "ru")
+        self.assertEqual(item_language_code(russian, "Преступление и наказание", "Достоевский", "d.pdf"), "ru")
 
     def test_english_title_only_detects_english(self) -> None:
-        self.assertEqual(_item_language_code(None, "Elements of the Philosophy of Right", "", "x.pdf"), "en")
+        self.assertEqual(item_language_code(None, "Elements of the Philosophy of Right", "", "x.pdf"), "en")
 
     def test_chinese_body_detects_simplified(self) -> None:
-        self.assertEqual(_item_language_code("这是一本关于法哲学原理的中文著作，讨论自由与国家。", "法哲学原理", "黑格尔", "f.pdf"), "zh-Hans")
+        self.assertEqual(item_language_code("这是一本关于法哲学原理的中文著作，讨论自由与国家。", "法哲学原理", "黑格尔", "f.pdf"), "zh-Hans")
 
     def test_empty_input_is_unidentified(self) -> None:
-        self.assertEqual(_item_language_code(None, "", "", ""), "und")
+        self.assertEqual(item_language_code(None, "", "", ""), "und")
 
 
 if __name__ == "__main__":

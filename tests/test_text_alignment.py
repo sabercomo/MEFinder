@@ -37,8 +37,8 @@ from src.me_finder.text_alignment import (
     segment_pdf_text,
     PageText,
     ParagraphText,
-    _load_pages,
 )
+from src.me_finder.alignment_generation import load_pages
 from src.me_finder.semantic_alignment import (
     SemanticLink,
     embed_texts,
@@ -252,7 +252,7 @@ class TextAlignmentTests(unittest.TestCase):
             ),
         )
 
-        full_text, pages = _load_pages(connection, "source")
+        full_text, pages = load_pages(connection, "source")
         connection.close()
 
         self.assertEqual(full_text, "sentence continues\non this page.")
@@ -1127,7 +1127,7 @@ class TextAlignmentTests(unittest.TestCase):
         generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
         snapshot = read_alignment_recipe_snapshot(self.db)
         with mock.patch(
-            "src.me_finder.alignment_snapshots._generate_alignment_on_connection",
+            "src.me_finder.alignment_snapshots.generate_alignment_on_connection",
             side_effect=RuntimeError("generation failed"),
         ):
             with self.assertRaisesRegex(RuntimeError, "generation failed"):

@@ -10,7 +10,7 @@ from src.me_finder.archive_transfer_controller import (
 )
 from src.me_finder.document_export import DocumentExportError
 from src.me_finder.markdown_export_normalize import ExportOptions
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class FakeBackup:
@@ -288,7 +288,7 @@ class ArchiveTransferControllerTests(unittest.TestCase):
             self.controller.export_backup({}),
             (500, {"error": "导出备份失败：invalid root"}),
         )
-        self.backup.restore_error = MinerUError("备份文件不存在。")
+        self.backup.restore_error = UserFacingError("备份文件不存在。")
         self.assertEqual(
             self.controller.restore_backup({"path": "/tmp/missing.zip"}),
             (400, {"error": "备份文件不存在。"}),

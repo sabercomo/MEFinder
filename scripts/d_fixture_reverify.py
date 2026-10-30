@@ -26,9 +26,9 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.me_finder.alignment_generation import segment_set  # noqa: E402
 from src.me_finder.text_alignment import (  # noqa: E402
     SEGMENTER_VERSION,
-    _segment_set,
     generate_alignment,
     open_writable_index,
 )
@@ -103,8 +103,8 @@ def realign(args: argparse.Namespace) -> None:
         v12_target_texts = _segment_texts(con, v12_target_set)
         # Regenerate v13 segment sets from stored text (no re-parse).
         con.execute("BEGIN IMMEDIATE")
-        v13_pivot_set, v13_pivot_segs = _segment_set(con, args.pivot)
-        v13_target_set, v13_target_segs = _segment_set(con, args.target)
+        v13_pivot_set, v13_pivot_segs = segment_set(con, args.pivot)
+        v13_target_set, v13_target_segs = segment_set(con, args.target)
         con.commit()
         v13_pivot_texts = [t for _, t in v13_pivot_segs]
         v13_target_texts = [t for _, t in v13_target_segs]

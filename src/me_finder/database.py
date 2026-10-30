@@ -26,22 +26,18 @@ from .persistence.connection import (
     open_readonly_index,
 )
 from .persistence.fts_index import (
-    _install_fts5_search_index,
     ensure_database_search_index as _ensure_database_search_index,
     database_has_fts5_search_index as database_has_fts5_search_index,
+    install_fts5_search_index,
 )
 from .persistence.storage_optimization import optimize_database_storage as _optimize_database_storage
 from .persistence.index_build import (
-    _float_or_none as _float_or_none,
-    _insert_page_anchors as _insert_page_anchors,
-    _int_or_none as _int_or_none,
-    _json,
+    compact_json,
     insert_initial_index_rows,
     insert_remaining_index_rows,
     load_database_index as load_database_index,
 )
 from .persistence.source_replace import (
-    _delete_page_anchors_for_source as _delete_page_anchors_for_source,
     delete_source_rows,
     replace_source_rows,
 )
@@ -56,14 +52,14 @@ from .database_backup import (
     DATABASE_BACKUP_FREE_SPACE_MARGIN,
     DATABASE_BACKUP_RETENTION as DATABASE_BACKUP_RETENTION,
     DATABASE_REBUILD_ESTIMATE_FLOOR,
-    _backup_database,
-    _prune_database_backups,
     backup_database as backup_database,
+    create_database_backup,
+    prune_database_backups,
 )
 from .index_identity import (
     IndexIdentityConflictError as IndexIdentityConflictError,
-    _deduplicate_keyed_rows,
-    _deduplicate_source_files,
+    deduplicate_keyed_rows,
+    deduplicate_source_files,
 )
 from .persistence.index_schema import (
     ANCHOR_SPEC_VERSION as ANCHOR_SPEC_VERSION,
@@ -92,7 +88,7 @@ def optimize_database_storage(db_path: Path) -> bool:
     return _optimize_database_storage(
         db_path,
         replace_database_file=_replace_database_file,
-        prune_database_backups=_prune_database_backups,
+        prune_database_backups=prune_database_backups,
         backup_free_space_margin=DATABASE_BACKUP_FREE_SPACE_MARGIN,
     )
 
@@ -114,7 +110,7 @@ def _strip_surrogates(text: str) -> str:
     return _SURROGATE_RE.sub("�", text)
 
 
-def _sanitize_surrogates_in_place(value: object) -> None:
+def sanitize_surrogates_in_place(value: object) -> None:
     """Scrub surrogate code points from every string reachable in ``value``.
 
     Mutates dicts/lists in place so a large index is not deep-copied; clean
@@ -128,7 +124,7 @@ def _sanitize_surrogates_in_place(value: object) -> None:
                 if cleaned is not item:
                     value[key] = cleaned
             elif isinstance(item, (dict, list)):
-                _sanitize_surrogates_in_place(item)
+                sanitize_surrogates_in_place(item)
     elif isinstance(value, list):
         for index, item in enumerate(value):
             if isinstance(item, str):
@@ -136,7 +132,7 @@ def _sanitize_surrogates_in_place(value: object) -> None:
                 if cleaned is not item:
                     value[index] = cleaned
             elif isinstance(item, (dict, list)):
-                _sanitize_surrogates_in_place(item)
+                sanitize_surrogates_in_place(item)
 
 
 def _estimate_database_build_size(index: Dict[str, object]) -> int:
@@ -145,7 +141,7 @@ def _estimate_database_build_size(index: Dict[str, object]) -> int:
     estimated = 0
     metadata = index.get("metadata")
     if isinstance(metadata, dict):
-        estimated += len(_json(metadata).encode("utf-8"))
+        estimated += len(compact_json(metadata).encode("utf-8"))
     for table_name in (
         "source_files",
         "volumes",
@@ -169,7 +165,7 @@ def _estimate_database_build_size(index: Dict[str, object]) -> int:
                 if table_name == "paragraphs"
                 else row
             )
-            estimated += len(_json(stored_payload).encode("utf-8")) + 256
+            estimated += len(compact_json(stored_payload).encode("utf-8")) + 256
             if table_name == "paragraphs":
                 # Four typed search columns plus the compact trigram index.
                 typed_text_bytes = sum(
@@ -219,12 +215,12 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     preserved_bibliographic_updates = read_bibliographic_update_snapshot(db_path)
     # Do this before size estimation and any write: surrogates crash the
     # UTF-8 encode step too, not just the SQLite insert.
-    _sanitize_surrogates_in_place(index)
+    sanitize_surrogates_in_place(index)
     if backup_existing and db_path.exists():
         # A full rebuild needs both the snapshot and a new database-sized temp
         # file on the same volume.  Reserve that second copy up front so a
         # 1.4GB library fails safely before doing multi-GB work.
-        _backup_database(
+        create_database_backup(
             db_path,
             additional_required_bytes=max(
                 db_path.stat().st_size,
@@ -235,22 +231,22 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
     raw_source_files = [
         item for item in index.get("source_files", []) if isinstance(item, dict)
     ]
-    source_files, duplicate_source_count = _deduplicate_source_files(
+    source_files, duplicate_source_count = deduplicate_source_files(
         raw_source_files
     )
-    volumes, duplicate_volume_count = _deduplicate_keyed_rows(
+    volumes, duplicate_volume_count = deduplicate_keyed_rows(
         [item for item in index.get("volumes", []) if isinstance(item, dict)],
         table_name="volumes",
         key_fields=("volume_id",),
         content_identity_fields=("source_file_id", "source_type"),
     )
-    works, duplicate_work_count = _deduplicate_keyed_rows(
+    works, duplicate_work_count = deduplicate_keyed_rows(
         [item for item in index.get("works", []) if isinstance(item, dict)],
         table_name="works",
         key_fields=("work_id",),
         content_identity_fields=("volume_id", "source_file_id", "source_type"),
     )
-    paragraphs, duplicate_paragraph_count = _deduplicate_keyed_rows(
+    paragraphs, duplicate_paragraph_count = deduplicate_keyed_rows(
         [item for item in index.get("paragraphs", []) if isinstance(item, dict)],
         table_name="paragraphs",
         key_fields=("paragraph_id",),
@@ -262,19 +258,19 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             "pdf_page_end_index",
         ),
     )
-    page_anchors, duplicate_anchor_count = _deduplicate_keyed_rows(
+    page_anchors, duplicate_anchor_count = deduplicate_keyed_rows(
         [item for item in index.get("page_anchors", []) if isinstance(item, dict)],
         table_name="page_anchors",
         key_fields=("page_anchor_id",),
         content_identity_fields=("source_file_id", "start_paragraph_id"),
     )
-    pdf_pages, duplicate_pdf_page_count = _deduplicate_keyed_rows(
+    pdf_pages, duplicate_pdf_page_count = deduplicate_keyed_rows(
         [item for item in index.get("pdf_pages", []) if isinstance(item, dict)],
         table_name="pdf_pages",
         key_fields=("source_file_id", "pdf_page_index"),
         content_identity_fields=("page_text_hash", "text_raw"),
     )
-    pdf_page_mappings, duplicate_mapping_count = _deduplicate_keyed_rows(
+    pdf_page_mappings, duplicate_mapping_count = deduplicate_keyed_rows(
         [
             item
             for item in index.get("pdf_page_mappings", [])
@@ -324,7 +320,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         restore_zotero_sync_snapshot(connection, preserved_zotero_links)
         restore_bibliographic_update_snapshot(connection, preserved_bibliographic_updates)
 
-        fts_installed = _install_fts5_search_index(connection, rebuild=True)
+        fts_installed = install_fts5_search_index(connection, rebuild=True)
         connection.commit()
         # This database was created from an empty temp file, so VACUUM cannot
         # reclaim meaningful fragmentation.  It only creates another
@@ -406,14 +402,14 @@ def replace_source_in_database(
 ) -> Dict[str, object]:
     """Atomically replace one imported source without rebuilding the corpus."""
 
-    _sanitize_surrogates_in_place(extracted)
+    sanitize_surrogates_in_place(extracted)
     sources = [item for item in extracted.get("source_files", []) if isinstance(item, dict)]
     if len(sources) != 1 or not sources[0].get("source_file_id"):
         raise ValueError("A targeted database update requires exactly one source file.")
     source = sources[0]
     source_id = str(source["source_file_id"])
     db_path = Path(db_path)
-    backup_path = _backup_database(db_path) if backup_existing else None
+    backup_path = create_database_backup(db_path) if backup_existing else None
     return replace_source_rows(extracted, db_path, source, source_id, backup_path)
 
 
@@ -438,7 +434,7 @@ def delete_sources_from_database(
     if not ids:
         raise ValueError("source_file_id is required")
     db_path = Path(db_path)
-    backup_path = _backup_database(db_path) if backup_existing else None
+    backup_path = create_database_backup(db_path) if backup_existing else None
     return delete_source_rows(ids, db_path, backup_path)
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 from src.me_finder.page_mapping_controller import PageMappingController
 
 
@@ -138,12 +138,12 @@ class PageMappingControllerTests(unittest.TestCase):
         )
 
     def test_auto_mapping_errors_keep_route_specific_statuses(self) -> None:
-        self.coordinator.errors["detect"] = MinerUError("配置不存在")
+        self.coordinator.errors["detect"] = UserFacingError("配置不存在")
         self.assertEqual(
             self.controller.detect({"source_id": "pdf-one"}),
             (400, {"error": "配置不存在"}),
         )
-        self.coordinator.errors["apply"] = MinerUError("手动映射冲突")
+        self.coordinator.errors["apply"] = UserFacingError("手动映射冲突")
         self.assertEqual(
             self.controller.apply({"source_id": "pdf-one"}),
             (409, {"error": "手动映射冲突"}),

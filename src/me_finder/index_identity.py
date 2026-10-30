@@ -103,7 +103,7 @@ def _verify_source_identity(
             "无法确认它们是否为同一内容。"
         )
 
-def _deduplicate_source_files(
+def deduplicate_source_files(
     rows: Sequence[Dict[str, object]],
 ) -> Tuple[List[Dict[str, object]], int]:
     """Coalesce retry-created copies by stable source ID.
@@ -130,7 +130,7 @@ def _deduplicate_source_files(
         merged_count += 1
     return [canonical_by_id[source_id] for source_id in ordered_ids], merged_count
 
-def _deduplicate_keyed_rows(
+def deduplicate_keyed_rows(
     rows: Sequence[Dict[str, object]],
     *,
     table_name: str,

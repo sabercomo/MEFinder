@@ -56,6 +56,7 @@ create_fixture(
 import fastembed  # noqa: E402
 
 from scripts import mem_profile_common as common  # noqa: E402
+from src.me_finder import alignment_generation as alignment_generation_module  # noqa: E402
 from src.me_finder import semantic_alignment as semantic_alignment_module  # noqa: E402
 from src.me_finder import text_alignment as text_alignment_module  # noqa: E402
 from src.me_finder.app_context import AppPaths  # noqa: E402
@@ -172,8 +173,8 @@ class _Instrumentation:
             text_alignment_module, "align_semantic_sequences", "compute"
         )
         wrap_phase(
-            text_alignment_module,
-            "_generate_alignment_on_connection",
+            alignment_generation_module,
+            "generate_alignment_on_connection",
             "publish",
         )
 

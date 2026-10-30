@@ -24,6 +24,7 @@ from typing import (
 )
 from urllib.parse import urlparse
 
+from .errors import UserFacingError
 from .import_resume import (
     COMPLETED_UNIT_STATUSES,
     ResumeManifestError,
@@ -60,7 +61,7 @@ def resolve_mineru_config_path(root: Optional[Path] = None) -> Path:
     return DEFAULT_MINERU_CONFIG_PATH
 
 
-class MinerUError(RuntimeError):
+class MinerUError(UserFacingError):
     def __init__(
         self,
         message: str,

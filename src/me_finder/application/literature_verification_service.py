@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING, Callable, Iterator, Mapping, Sequence
 
 from ..runtime_location import runtime_root
 from .mcp_result_formatting import (
-    _bibliographic_page,
-    _first_text,
-    _passage_match,
-    _reader_item,
-    _search_match,
+    bibliographic_page,
+    first_text,
+    passage_match,
+    reader_item,
+    search_match,
 )
 from .search_service import SearchRequest, SearchService
 
@@ -85,7 +85,7 @@ class LiteratureVerificationService:
             bibliographic = source.get("bibliographic_metadata")
             if not isinstance(bibliographic, Mapping):
                 bibliographic = {}
-            title = _first_text(
+            title = first_text(
                 bibliographic.get("title"),
                 source.get("document_title"),
                 source.get("display_title"),
@@ -95,7 +95,7 @@ class LiteratureVerificationService:
                 work.get("title"),
                 source.get("file_name"),
             )
-            author = _first_text(
+            author = first_text(
                 bibliographic.get("author"),
                 bibliographic.get("authors"),
                 source.get("author"),
@@ -103,7 +103,7 @@ class LiteratureVerificationService:
                 volume.get("author_label"),
                 work.get("author_label"),
             )
-            original_file_name = _first_text(
+            original_file_name = first_text(
                 source.get("original_file_name"),
                 source.get("file_name"),
             )
@@ -154,7 +154,7 @@ class LiteratureVerificationService:
             }
             document["work"] = {
                 "document_group_id": str(group["document_group_id"]),
-                "title": _first_text(group["title"]),
+                "title": first_text(group["title"]),
                 "is_base": source_id == group["base_source_file_id"],
                 "other_versions": [
                     {**member, "aligned": member["source_file_id"] in aligned}
@@ -313,7 +313,7 @@ class LiteratureVerificationService:
             "total_is_exact": bool(raw_result["total_is_exact"]),
             "has_more": bool(raw_result["has_more"]),
             "passages": [
-                _passage_match(item)
+                passage_match(item)
                 for item in raw_result["results"]
                 if isinstance(item, Mapping)
             ],
@@ -354,7 +354,7 @@ class LiteratureVerificationService:
                 target_language_code=validated_language,
                 limit=validated_limit,
                 schema_version=SCHEMA_VERSION,
-                source_formatter=_search_match,
+                source_formatter=search_match,
             )
 
     def propose_alignment_correction(
@@ -448,7 +448,7 @@ class LiteratureVerificationService:
             "total_is_exact": bool(raw_result["total_is_exact"]),
             "has_more": bool(raw_result["has_more"]),
             "matches": [
-                _with_section(_search_match(item), item, section_locator)
+                _with_section(search_match(item), item, section_locator)
                 for item in raw_result["results"]
                 if isinstance(item, Mapping)
             ],
@@ -534,7 +534,7 @@ class LiteratureVerificationService:
                 **section,
                 "next_start": last_read + 1 if last_read < section_end else None,
             }
-        result["items"] = [_reader_item(item, source_type) for item in raw_items]
+        result["items"] = [reader_item(item, source_type) for item in raw_items]
         return result
 
     def _document_sections(
@@ -570,19 +570,19 @@ class LiteratureVerificationService:
         )
         source = raw_result["source"]
         payload = source["payload"]
-        file_name = _first_text(source.get("file_name"), payload.get("file_name"))
+        file_name = first_text(source.get("file_name"), payload.get("file_name"))
         return {
             "schema_version": SCHEMA_VERSION,
             "source": {
                 "source_file_id": str(source["source_file_id"]),
                 "source_type": str(source["source_type"]),
-                "title": _first_text(
+                "title": first_text(
                     payload.get("display_title"),
                     payload.get("document_title"),
                     payload.get("title"),
                     file_name,
                 ),
-                "original_file_name": _first_text(
+                "original_file_name": first_text(
                     payload.get("original_file_name"), file_name
                 ),
             },
@@ -638,7 +638,7 @@ class LiteratureVerificationService:
             for item in probe["items"]:
                 if not isinstance(item, Mapping):
                     continue
-                page = _bibliographic_page(item, source_type)
+                page = bibliographic_page(item, source_type)
                 front_pages.append(page)
                 front_positions.add(int(page["position"]))
 
@@ -654,7 +654,7 @@ class LiteratureVerificationService:
             for item in tail["items"]:
                 if not isinstance(item, Mapping):
                     continue
-                page = _bibliographic_page(item, source_type)
+                page = bibliographic_page(item, source_type)
                 # A short document can make the tail window overlap the front.
                 if int(page["position"]) in front_positions:
                     continue
@@ -696,7 +696,7 @@ class LiteratureVerificationService:
                 status = "missing"
                 missing_fields.append(name)
             fields.append(
-                {"field": name, "value": _first_text(value), "status": status}
+                {"field": name, "value": first_text(value), "status": status}
             )
 
         return {
@@ -704,20 +704,20 @@ class LiteratureVerificationService:
             "source": {
                 "source_file_id": validated_source_id,
                 "source_type": str(source.get("source_type") or ""),
-                "title": _first_text(
+                "title": first_text(
                     record.get("title"),
                     source.get("document_title"),
                     source.get("display_title"),
                     source.get("file_name"),
                 ),
-                "original_file_name": _first_text(
+                "original_file_name": first_text(
                     source.get("original_file_name"),
                     source.get("file_name"),
                 ),
             },
-            "document_type": _first_text(record.get("document_type")),
-            "metadata_source": _first_text(record.get("metadata_source")),
-            "metadata_status": _first_text(record.get("metadata_status")),
+            "document_type": first_text(record.get("document_type")),
+            "metadata_source": first_text(record.get("metadata_source")),
+            "metadata_status": first_text(record.get("metadata_status")),
             "fields": fields,
             "missing_fields": missing_fields,
             "invalid_fields": invalid_fields,
@@ -931,12 +931,12 @@ def _reader_source(source: Mapping[str, object]) -> dict[str, object]:
     return {
         "source_file_id": str(source["source_file_id"]),
         "source_type": str(source["source_type"]),
-        "title": _first_text(
+        "title": first_text(
             source.get("display_title"),
             source.get("document_title"),
             source.get("file_name"),
         ),
-        "original_file_name": _first_text(
+        "original_file_name": first_text(
             source.get("original_file_name"),
             source.get("file_name"),
         ),

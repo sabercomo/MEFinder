@@ -8,14 +8,14 @@ from pathlib import Path
 from . import __version__
 
 
-_PACKAGE_DIR = Path(__file__).resolve().parent
+PACKAGE_DIR = Path(__file__).resolve().parent
 
 # 随包分发的 Vue 3 全局构建（试点，见 static/vendor/README.md）；离线可用，不引入 Node 构建。
 VUE_ASSET = "static/vendor/vue.global.prod.js"
 
 
 def _load_asset(relative: str) -> str:
-    return (_PACKAGE_DIR / relative).read_text(encoding="utf-8")
+    return (PACKAGE_DIR / relative).read_text(encoding="utf-8")
 
 
 def _load_asset_dir(relative: str, suffix: str) -> str:
@@ -26,7 +26,7 @@ def _load_asset_dir(relative: str, suffix: str) -> str:
     所以顺序必须严格按文件名排序，改名或加新文件时要注意前缀。
     """
 
-    directory = _PACKAGE_DIR / relative
+    directory = PACKAGE_DIR / relative
     if not directory.is_dir():
         return ""
     parts = [

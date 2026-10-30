@@ -11,7 +11,7 @@ from typing import Callable, Dict, Iterable, List, Mapping, Protocol, Sequence
 
 from ..app_context import AppPaths
 from ..document_deletion import DocumentDeletionService
-from ..mineru_api import MinerUError
+from ..errors import UserFacingError
 
 
 class DeletionIndexPort(Protocol):
@@ -67,7 +67,7 @@ RemovedSourceIds = Callable[[Mapping[str, object]], Sequence[str]]
 Failure = Dict[str, str]
 
 
-class BatchDeletionConflict(MinerUError):
+class BatchDeletionConflict(UserFacingError):
     """No requested source could be reserved for deletion."""
 
     def __init__(self, message: str, failures: Sequence[Failure]) -> None:
@@ -155,7 +155,7 @@ class DocumentDeletionCoordinator:
             try:
                 self._jobs.begin_source_deletion(source_file_id)
                 accepted.append(source_file_id)
-            except MinerUError as exc:
+            except UserFacingError as exc:
                 failures.append(
                     {"source_id": source_file_id, "error": str(exc)}
                 )

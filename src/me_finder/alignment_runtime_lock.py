@@ -9,8 +9,8 @@ from contextlib import contextmanager
 
 from .runtime_location import component_runtime_root
 
-_COMPUTE_LOCK = ".compute.lock"
-_MAINTENANCE_MARKER = ".maintenance"
+COMPUTE_LOCK = ".compute.lock"
+MAINTENANCE_MARKER = ".maintenance"
 
 
 class RuntimeFileLock:
@@ -90,10 +90,10 @@ def compute_admission(runtime_root: Path):
     """Hold a shared runtime lease through computation or model publication."""
     root = _text_alignment_component_root(runtime_root)
     root.mkdir(parents=True, exist_ok=True)
-    marker = root / _MAINTENANCE_MARKER
+    marker = root / MAINTENANCE_MARKER
     if marker.exists():
         raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。")
-    lease = RuntimeFileLock(root / _COMPUTE_LOCK, shared=True)
+    lease = RuntimeFileLock(root / COMPUTE_LOCK, shared=True)
     if not lease.try_acquire():
         raise ComputeUnavailable("对齐计算组件正在维护，请稍后重试。")
     try:

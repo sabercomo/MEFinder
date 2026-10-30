@@ -40,7 +40,8 @@ from ..import_config_store import (
 )
 from ..import_resume import sha256_file
 from ..import_queue import ImportQueueClosedError, ImportQueueFullError
-from ..mineru_api import MinerUError, resolve_mineru_config_path
+from ..errors import UserFacingError
+from ..mineru_api import resolve_mineru_config_path
 from ..mineru_local_settings import mineru_local_config_summary
 from ..local_ocr_settings import local_ocr_available
 from ..pdf_import_service import detect_imported_pdf
@@ -171,7 +172,7 @@ class DocumentImportCoordinator:
         with self._admission():
             suffix = Path(filename).suffix.lower()
             if suffix not in {".pdf", ".docx", ".epub"}:
-                raise MinerUError("只支持 PDF、DOCX 或 EPUB 文件。")
+                raise UserFacingError("只支持 PDF、DOCX 或 EPUB 文件。")
             mode, provider_id = self._validated_parse_options(
                 pdf_parse_mode,
                 vision_provider_id,
@@ -217,11 +218,11 @@ class DocumentImportCoordinator:
                 "document_package": {".mefinder", ".zip"},
             }
             if kind not in allowed or suffix not in allowed[kind]:
-                raise MinerUError("导入文件类型与导入方式不匹配。")
+                raise UserFacingError("导入文件类型与导入方式不匹配。")
             if kind == "document_package" and not filename.lower().endswith(
                 (".mefinder", ".mefinder.zip")
             ):
-                raise MinerUError("文档包文件名必须以 .mefinder 或 .mefinder.zip 结尾。")
+                raise UserFacingError("文档包文件名必须以 .mefinder 或 .mefinder.zip 结尾。")
             if kind == "document":
                 mode, provider_id = self._validated_parse_options(
                     pdf_parse_mode,
@@ -358,10 +359,10 @@ class DocumentImportCoordinator:
         staged_path: Path,
     ) -> Path:
         if length <= 0 or staged_path.stat().st_size != length:
-            raise MinerUError("上传文件大小校验失败。")
+            raise UserFacingError("上传文件大小校验失败。")
         safe_name = Path(filename).name
         if not safe_name or safe_name in {".", ".."}:
-            raise MinerUError("无法识别文件名。")
+            raise UserFacingError("无法识别文件名。")
         directory = self._paths.corpus_root / "parsed" / "imports"
         directory.mkdir(parents=True, exist_ok=True)
         target = directory / f"import-{uuid.uuid4().hex[:12]}-{safe_name}"
@@ -405,7 +406,7 @@ class DocumentImportCoordinator:
                 message="文档包导入任务未能进入队列。",
             )
             artifact_path.unlink(missing_ok=True)
-            raise MinerUError("导入任务暂时无法启动，请稍后重试。") from exc
+            raise UserFacingError("导入任务暂时无法启动，请稍后重试。") from exc
         return {
             "ok": True,
             "job_id": job_id,
@@ -520,7 +521,7 @@ class DocumentImportCoordinator:
         except (
             DocumentPackageImportError,
             DocumentExportError,
-            MinerUError,
+            UserFacingError,
             OSError,
             ValueError,
             RuntimeError,
@@ -672,14 +673,14 @@ class DocumentImportCoordinator:
             # provider id; the id comes from here, not from the request header.
             return "vision", "general-local-model"
         if mode not in {"auto", "mineru", "mineru-local", "vision"}:
-            raise MinerUError("PDF 解析方式无效。")
+            raise UserFacingError("PDF 解析方式无效。")
         provider_id = (
             str(vision_provider_id or "").strip()
             if mode == "vision"
             else ""
         )
         if mode == "vision" and not provider_id:
-            raise MinerUError("请选择一个其他解析 API。")
+            raise UserFacingError("请选择一个其他解析 API。")
         return mode, provider_id
 
     def _validated_parse_options(
@@ -696,7 +697,7 @@ class DocumentImportCoordinator:
                 resolve_mineru_config_path(self._paths.runtime_root)
             )
             if not summary.get("enabled"):
-                raise MinerUError("请先在设置中启用 MinerU 本地部署。")
+                raise UserFacingError("请先在设置中启用 MinerU 本地部署。")
         return mode, provider_id
 
     def _upload_storage_details(
@@ -706,15 +707,15 @@ class DocumentImportCoordinator:
         is_pdf: bool,
     ) -> Tuple[str, Path]:
         if length <= 0:
-            raise MinerUError("文件为空。")
+            raise UserFacingError("文件为空。")
         safe_name = Path(filename).name
         if not safe_name or safe_name in {".", ".."}:
-            raise MinerUError("无法识别文件名。")
+            raise UserFacingError("无法识别文件名。")
         suffix = Path(safe_name).suffix.lower()
         expected = {".pdf"} if is_pdf else {".docx", ".epub"}
         if suffix not in expected:
             label = "PDF" if is_pdf else "DOCX 或 EPUB"
-            raise MinerUError(f"导入文件必须是 {label}。")
+            raise UserFacingError(f"导入文件必须是 {label}。")
         directory = self._paths.corpus_root / (
             "raw_pdf" if is_pdf else "raw_docx"
         )
@@ -748,7 +749,7 @@ class DocumentImportCoordinator:
                 while remaining > 0:
                     chunk = reader.read(min(1024 * 1024, remaining))
                     if not chunk:
-                        raise MinerUError("上传数据不完整。")
+                        raise UserFacingError("上传数据不完整。")
                     stream.write(chunk)
                     remaining -= len(chunk)
             temp_path.replace(target)
@@ -780,7 +781,7 @@ class DocumentImportCoordinator:
         target: Optional[Path] = None
         try:
             if staged_path.stat().st_size != length:
-                raise MinerUError("上传文件大小校验失败。")
+                raise UserFacingError("上传文件大小校验失败。")
             directory.mkdir(parents=True, exist_ok=True)
             cleanup_stale_document_storage_files(directory)
             target = document_storage_target(
@@ -939,9 +940,9 @@ class DocumentImportCoordinator:
                     base == source_path or base in source_path.parents
                     for base in resolved_bases
                 ):
-                    raise MinerUError("不在已配置的文献目录内。")
+                    raise UserFacingError("不在已配置的文献目录内。")
                 if not source_path.is_file():
-                    raise MinerUError("文件不存在。")
+                    raise UserFacingError("文件不存在。")
                 target = self._copy_local(
                     self._paths.runtime_root,
                     source_path,
@@ -954,7 +955,7 @@ class DocumentImportCoordinator:
                         f"pdf-import-{self._hash_file(target)[:16]}"
                     )
                     if predicted_source_id in prepared_source_ids:
-                        raise MinerUError("同一批次中已有内容相同的文献。")
+                        raise UserFacingError("同一批次中已有内容相同的文献。")
                     (
                         _document,
                         source_file_id,
@@ -971,12 +972,12 @@ class DocumentImportCoordinator:
                         f"{source_format}-import-{uuid.uuid4().hex[:16]}"
                     )
                 if source_file_id in prepared_source_ids:
-                    raise MinerUError("同一批次中已有内容相同的文献。")
+                    raise UserFacingError("同一批次中已有内容相同的文献。")
                 if self._jobs.job_for_source(
                     source_file_id,
                     statuses=("processing",),
                 ):
-                    raise MinerUError("同一文献已有解析任务正在运行。")
+                    raise UserFacingError("同一文献已有解析任务正在运行。")
                 use_local_mineru = is_pdf and mode == "mineru-local"
                 if use_local_mineru:
                     profile["mineru_local"] = True
@@ -1036,7 +1037,7 @@ class DocumentImportCoordinator:
                 )
                 prepared_source_ids.add(source_file_id)
                 item_reserved_source_id = ""
-            except (MinerUError, VisionAPIError, OSError, ValueError) as exc:
+            except (UserFacingError, VisionAPIError, OSError, ValueError) as exc:
                 if item_reserved_source_id:
                     self._jobs.release_import_reservation(
                         item_reserved_source_id

@@ -14,13 +14,13 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Sequence, Tuple
 
 from .alignment_structure import (
-    _CHINESE_HEADING,
-    _CHINESE_NUMBER_VALUES,
-    _ENDNOTES_HEADING,
-    _EXPLICIT_TRANSLATOR_NOTE,
-    _INLINE_NOTE_MARKER,
-    _collected_note_blocks,
-    _latin_toc_titles,
+    CHINESE_HEADING,
+    CHINESE_NUMBER_VALUES,
+    ENDNOTES_HEADING,
+    EXPLICIT_TRANSLATOR_NOTE,
+    INLINE_NOTE_MARKER,
+    collected_note_blocks,
+    latin_toc_titles,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ _ANCHOR_PRIORITY = {"term": 3, "number": 2, "name": 1}
 # are trusted only when their two paragraphs also agree semantically.  Structural
 # anchors (paragraph/chapter/section/note/folio ordinals) are edition-independent
 # and never gated this way.
-_CONTEXT_GATED_ANCHOR_PREFIXES = ("term:", "number:", "name:")
+CONTEXT_GATED_ANCHOR_PREFIXES = ("term:", "number:", "name:")
 
 
 # Bare integers below this value are treated as recurring counters (note numbers,
@@ -52,7 +52,7 @@ _MIN_NUMBER_ANCHOR_VALUE = 100
 # A soft anchor whose corridor against the previous kept anchor compresses one
 # side more than this ratio is a runaway jump (e.g. a note number reused across
 # chapters), not a structural landmark.
-_MAX_ANCHOR_CORRIDOR_RATIO = 50
+MAX_ANCHOR_CORRIDOR_RATIO = 50
 
 
 _LATIN_ANCHOR_LANGUAGES = frozenset({"de", "en", "fr"})
@@ -206,14 +206,14 @@ def _language_script(language: str) -> str:
 
 def _normalized_chinese_number(value: str) -> str:
     if not any(character in "十百千万" for character in value):
-        return "".join(str(_CHINESE_NUMBER_VALUES[character]) for character in value)
+        return "".join(str(CHINESE_NUMBER_VALUES[character]) for character in value)
     unit_values = {"十": 10, "百": 100, "千": 1000, "万": 10000}
     total = 0
     section = 0
     current = 0
     for character in value:
-        if character in _CHINESE_NUMBER_VALUES:
-            current = _CHINESE_NUMBER_VALUES[character]
+        if character in CHINESE_NUMBER_VALUES:
+            current = CHINESE_NUMBER_VALUES[character]
             continue
         unit = unit_values[character]
         if unit == 10000:
@@ -278,9 +278,9 @@ def _excluded_anchor_indices(texts: Sequence[str]) -> set[int]:
         match is not None and match.group(2) in {"章", "篇", "部"}
         for text in texts
         for line in text.splitlines()
-        for match in [_CHINESE_HEADING.fullmatch(line.strip())]
+        for match in [CHINESE_HEADING.fullmatch(line.strip())]
     )
-    _titles, excluded = _latin_toc_titles(
+    _titles, excluded = latin_toc_titles(
         texts, numbered_sections=numbered_sections
     )
     excluded = set(excluded)
@@ -289,13 +289,13 @@ def _excluded_anchor_indices(texts: Sequence[str]) -> set[int]:
         if _PAGE_NUMBER_BLOCK.fullmatch(text):
             excluded.add(index)
         if index not in excluded and any(
-            _ENDNOTES_HEADING.fullmatch(line) for line in lines
+            ENDNOTES_HEADING.fullmatch(line) for line in lines
         ):
             excluded.update(range(index, len(texts)))
             break
-        if _EXPLICIT_TRANSLATOR_NOTE.search(text) or _INLINE_NOTE_MARKER.search(text):
+        if EXPLICIT_TRANSLATOR_NOTE.search(text) or INLINE_NOTE_MARKER.search(text):
             excluded.add(index)
-    for block in _collected_note_blocks(texts):
+    for block in collected_note_blocks(texts):
         excluded.update(range(block.start, block.end))
     return excluded
 

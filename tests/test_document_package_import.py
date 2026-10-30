@@ -30,7 +30,7 @@ from src.me_finder.document_package_import import (
     read_document_package,
 )
 from src.me_finder.import_resume import sha256_file
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 from src.me_finder.web import make_handler
 
 
@@ -241,7 +241,7 @@ assert.equal(uploaded.length, 3);
         paths = AppPaths.create(self.root / "runtime")
         coordinator = DocumentImportCoordinator(paths, PackageJobs())
         try:
-            with self.assertRaises(MinerUError):
+            with self.assertRaises(UserFacingError):
                 coordinator.start_chunked(
                     "third-party.json",
                     10,

@@ -8,11 +8,11 @@ from pathlib import Path
 
 from src.me_finder.database import (
     SCHEMA,
-    _delete_page_anchors_for_source,
     build_database,
     delete_source_from_database,
     replace_source_in_database,
 )
+from src.me_finder.persistence.source_replace import delete_page_anchors_for_source
 
 
 def _paragraph(source_id: str, number: int) -> dict[str, object]:
@@ -112,7 +112,7 @@ class DatabasePageAnchorTests(unittest.TestCase):
             statements: list[str] = []
             connection.set_trace_callback(statements.append)
 
-            deleted = _delete_page_anchors_for_source(connection, source_id)
+            deleted = delete_page_anchors_for_source(connection, source_id)
             remaining = connection.execute(
                 "SELECT COUNT(*) FROM page_anchors"
             ).fetchone()[0]

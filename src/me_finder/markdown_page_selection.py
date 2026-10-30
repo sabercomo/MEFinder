@@ -7,7 +7,12 @@ from typing import Mapping, Sequence
 
 from .document_export import DocumentExportError
 from .export_footnotes import Footnote, FootnoteText, NormalizedDocument
-from .markdown_export_normalize import ExportOptions, _physical_page, _printed_page_raw, resolve_page_marker
+from .markdown_export_normalize import (
+    ExportOptions,
+    physical_page_number,
+    printed_page_raw,
+    resolve_page_marker,
+)
 
 
 @dataclass(frozen=True)
@@ -56,8 +61,8 @@ def resolve_pdf_pages(pages: Sequence[Mapping[str, object]], selection: PageSele
     """Resolve every requested label uniquely; never silently skip missing pages."""
     lookup: dict[str, list[int]] = {}
     for page in pages:
-        physical = _physical_page(page)
-        label = str(physical) if selection.mode == 'physical' and physical is not None else _printed_page_raw(page) if selection.mode == 'printed' else None
+        physical = physical_page_number(page)
+        label = str(physical) if selection.mode == 'physical' and physical is not None else printed_page_raw(page) if selection.mode == 'printed' else None
         if label is not None and physical is not None:
             lookup.setdefault(_label(label), []).append(physical)
     selected = set()
@@ -67,7 +72,7 @@ def resolve_pdf_pages(pages: Sequence[Mapping[str, object]], selection: PageSele
             raise DocumentExportError(f'未找到页码「{label}」的已入库页面；请检查页码映射或改用 PDF 物理页码。')
         if len(hits) != 1:
             raise DocumentExportError(f'页码「{label}」对应多个页面，请改用 PDF 物理页码。')
-        page = next(p for p in pages if _physical_page(p) == hits[0])
+        page = next(p for p in pages if physical_page_number(p) == hits[0])
         if selection.mode == 'printed' and (page.get('layout_mode') == 'spread' or page.get('page_scope') == 'spread'):
             raise DocumentExportError('该原书页位于合页 PDF 中，暂不支持按左右半页裁剪；请改用 PDF 物理页码导出整张页面。')
         selected.add(hits[0])
@@ -86,7 +91,7 @@ def select_normalized_pages(document: NormalizedDocument, pages: Sequence[Mappin
     definitions = {item.note_id for item in document.items if isinstance(item, Footnote)}
     if note_ids - definitions:
         raise DocumentExportError('选中正文存在缺失的脚注定义，未生成不完整的导出文件。')
-    page_by_number = {_physical_page(page): page for page in pages}
+    page_by_number = {physical_page_number(page): page for page in pages}
     result = []
     previous = None
     for item in document.items:

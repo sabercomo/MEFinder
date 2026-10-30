@@ -11,7 +11,7 @@ from src.me_finder import runtime_location
 from src.me_finder.local_ocr_settings import resolve_local_ocr_config_path
 from src.me_finder.local_ocr_installer import LocalOCRInstaller
 from src.me_finder.managed_embedding_models import ManagedEmbeddingModels
-from src.me_finder.text_alignment import _default_alignment_model_cache
+from src.me_finder.alignment_generation import default_alignment_model_cache
 
 
 class ComponentRuntimeLocationTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class ComponentRuntimeLocationTests(unittest.TestCase):
                 self.assertEqual(installer.component_root, local.resolve() / 'components/local-ocr')
                 expected = local / 'components/text-alignment/models'
                 self.assertEqual(Path(ManagedEmbeddingModels(root).summary()['cache_dir']), expected)
-                self.assertEqual(_default_alignment_model_cache(root / 'data/index.sqlite3'), expected)
+                self.assertEqual(default_alignment_model_cache(root / 'data/index.sqlite3'), expected)
 
     def test_explicit_development_runtime_stays_isolated(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -12,7 +12,7 @@ from .data_location import (
     inspect_existing_data_root, switch_data_root,
 )
 from .lifecycle import DurableOperationGate
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 
 
 ShellResponse = Tuple[int, Dict[str, object]]
@@ -278,11 +278,11 @@ class DesktopShellController:
                 self._runtime_mutation(),
             ):
                 if self._has_active_uploads():
-                    raise MinerUError(
+                    raise UserFacingError(
                         "文件正在上传，请完成或取消后再更改位置。"
                     )
                 if self._has_active_jobs():
-                    raise MinerUError(
+                    raise UserFacingError(
                         "文献正在导入或索引正在更新，请完成后再更改位置。"
                     )
                 operation = self._select_existing_data_root if existing else self._migrate_data_root
@@ -292,8 +292,8 @@ class DesktopShellController:
                     self._default_app_data_root,
                 )
                 if result is None:
-                    raise MinerUError("索引正在更新，请稍后再更改位置。")
-        except MinerUError as exc:
+                    raise UserFacingError("索引正在更新，请稍后再更改位置。")
+        except UserFacingError as exc:
             return 409, {"error": str(exc)}
         except DataLocationError as exc:
             return 400, {"error": str(exc)}
@@ -311,7 +311,7 @@ class DesktopShellController:
             return 400, {"error": "invalid request"}
         try:
             result = self._open_source(source_id, payload.get("page"))
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except Exception as exc:
             return 500, {"error": f"打开原文失败：{exc}"}

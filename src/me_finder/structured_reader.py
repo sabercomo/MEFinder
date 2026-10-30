@@ -150,7 +150,7 @@ def get_document_window(
     (``pdf_page_index`` or ``paragraph_index``), not a SQL row offset.
     """
 
-    validated_source_id = _validate_source_id(source_id)
+    validated_source_id = validate_source_id(source_id)
     validated_start = _parse_pagination_value("start", start, minimum=0)
     validated_count = _parse_pagination_value(
         "count",
@@ -216,7 +216,7 @@ def get_document_citation(
 ) -> Dict[str, object]:
     """Build a safe citation for a natural PDF-page or Word-paragraph range."""
 
-    validated_source_id = _validate_source_id(source_id)
+    validated_source_id = validate_source_id(source_id)
     validated_start_anchor = _validate_anchor_id(
         "start_anchor_id", start_anchor_id
     )
@@ -749,7 +749,7 @@ def _word_citation_records(
     ]
 
 
-def _validate_source_id(source_id: object) -> str:
+def validate_source_id(source_id: object) -> str:
     if not isinstance(source_id, str) or not _SOURCE_ID_PATTERN.fullmatch(source_id):
         raise InvalidSourceId(
             "source_id 只能包含 ASCII 字母、数字、点、下划线和连字符，且长度不超过 128"

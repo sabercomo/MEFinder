@@ -46,10 +46,10 @@ from urllib.request import Request, urlopen
 from .alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
 from .alignment_runtime_lock import (
     RuntimeFileLock,
-    _COMPUTE_LOCK,
-    _MAINTENANCE_MARKER,
     ComputeUnavailable as ComputeUnavailable,
     compute_admission as compute_admission,
+    COMPUTE_LOCK,
+    MAINTENANCE_MARKER,
 )
 from .local_ocr_installer import (
     LOCAL_OCR_MANIFEST_FILE,
@@ -459,7 +459,7 @@ class ManagedAlignmentRuntime:
         except ManagedAlignmentRuntimeError:
             return
         try:
-            (root / _MAINTENANCE_MARKER).unlink(missing_ok=True)
+            (root / MAINTENANCE_MARKER).unlink(missing_ok=True)
             for stale in list(root.glob(".staging-*")) + list(root.glob(".uv-*")):
                 self._remove_tree(stale)
             previous = sorted(root.glob(".previous-*"))
@@ -907,14 +907,14 @@ class ManagedAlignmentRuntime:
         """
 
         self.component_root.mkdir(parents=True, exist_ok=True)
-        marker = self.component_root / _MAINTENANCE_MARKER
+        marker = self.component_root / MAINTENANCE_MARKER
         marker.write_text(f"pid={os.getpid()}", encoding="utf-8")
         with self._lock:
             self._state.state = state_name
             self._state.message = message
             if deferred:
                 self._state.uninstall_deferred = True
-        lease = RuntimeFileLock(self.component_root / _COMPUTE_LOCK)
+        lease = RuntimeFileLock(self.component_root / COMPUTE_LOCK)
         deadline = time.monotonic() + _MAINTENANCE_WAIT_TIMEOUT
         try:
             while True:

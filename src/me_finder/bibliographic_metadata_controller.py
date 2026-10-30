@@ -19,7 +19,7 @@ from .application.document_query_service import (
 from .foreign_book_lookup import BookLookupError
 from .journal_metadata_lookup import CNKILookupError
 from .crossref_lookup import CrossrefLookupError
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 
 
 MetadataResponse = Tuple[int, Dict[str, object]]
@@ -61,7 +61,7 @@ class BibliographicMetadataController:
             metadata = self._document_queries.bibliographic_metadata(
                 str(source_file_id)
             )
-        except (MinerUError, DocumentQueryError) as exc:
+        except (UserFacingError, DocumentQueryError) as exc:
             return 404, {"error": str(exc)}
         return 200, {"ok": True, "metadata": metadata}
 
@@ -77,7 +77,7 @@ class BibliographicMetadataController:
         except BibliographicMetadataQueueError as exc:
             return 503, {"error": str(exc), "job_id": exc.job_id}
         except (
-            MinerUError,
+            UserFacingError,
             OSError,
             ValueError,
             sqlite3.Error,
@@ -239,7 +239,7 @@ class BibliographicMetadataController:
                 source_file_id,
                 force=bool(payload.get("force")),
             )
-        except (MinerUError, DocumentQueryError) as exc:
+        except (UserFacingError, DocumentQueryError) as exc:
             return 400, {"error": str(exc)}
         except DocumentQueryUnavailable as exc:
             return 503, {"error": str(exc)}
@@ -265,7 +265,7 @@ class BibliographicMetadataController:
                 source_file_id,
                 metadata_payload,
             )
-        except (MinerUError, ValueError) as exc:
+        except (UserFacingError, ValueError) as exc:
             return 400, {"error": str(exc)}
         except (
             OSError,

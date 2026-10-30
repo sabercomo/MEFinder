@@ -33,11 +33,11 @@ def load_database_index(db_path: Path) -> Dict[str, object]:
         connection.close()
 
 
-def _json(value: object) -> str:
+def compact_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def _insert_page_anchors(
+def insert_page_anchors(
     connection: sqlite3.Connection,
     anchors: Sequence[Dict[str, object]],
 ) -> None:
@@ -62,7 +62,7 @@ def _insert_page_anchors(
                 str(start_paragraph_id)
                 if start_paragraph_id not in (None, "")
                 else None,
-                _json(anchor),
+                compact_json(anchor),
             )
         )
     if values:
@@ -72,7 +72,7 @@ def _insert_page_anchors(
         )
 
 
-def _int_or_none(value: object) -> Optional[int]:
+def int_or_none(value: object) -> Optional[int]:
     if value is None or value == "":
         return None
     try:
@@ -81,7 +81,7 @@ def _int_or_none(value: object) -> Optional[int]:
         return None
 
 
-def _float_or_none(value: object) -> Optional[float]:
+def float_or_none(value: object) -> Optional[float]:
     if value is None or value == "":
         return None
     try:
@@ -117,7 +117,7 @@ def insert_initial_index_rows(
         }
     connection.executemany(
         "INSERT INTO metadata(key, value_json) VALUES (?, ?)",
-        [(str(key), _json(value)) for key, value in metadata.items()],
+        [(str(key), compact_json(value)) for key, value in metadata.items()],
     )
 
     connection.executemany(
@@ -132,8 +132,8 @@ def insert_initial_index_rows(
                 str(item.get("source_type") or "word"),
                 item.get("file_name"),
                 item.get("relative_path"),
-                _int_or_none(item.get("volume_number")),
-                _json(item),
+                int_or_none(item.get("volume_number")),
+                compact_json(item),
             )
             for item in source_files
             if item.get("source_file_id")
@@ -163,9 +163,9 @@ def insert_remaining_index_rows(
                 str(item.get("volume_id") or ""),
                 item.get("source_file_id"),
                 str(item.get("source_type") or "word"),
-                _int_or_none(item.get("volume_number")),
+                int_or_none(item.get("volume_number")),
                 item.get("display_title"),
-                _json(item),
+                compact_json(item),
             )
             for item in volumes
             if item.get("volume_id")
@@ -182,9 +182,9 @@ def insert_remaining_index_rows(
                 str(item.get("work_id") or ""),
                 item.get("volume_id"),
                 str(item.get("source_type") or "word"),
-                _int_or_none(item.get("work_order")),
+                int_or_none(item.get("work_order")),
                 item.get("title"),
-                _json(item),
+                compact_json(item),
             )
             for item in works
             if item.get("work_id")
@@ -194,7 +194,7 @@ def insert_remaining_index_rows(
     toc_entries = [item for item in index.get("toc_entries", []) if isinstance(item, dict)]
     connection.executemany(
         "INSERT INTO toc_entries(volume_id, work_id, title, payload_json) VALUES (?, ?, ?, ?)",
-        [(item.get("volume_id"), item.get("work_id"), item.get("title"), _json(item)) for item in toc_entries],
+        [(item.get("volume_id"), item.get("work_id"), item.get("title"), compact_json(item)) for item in toc_entries],
     )
 
     paragraph_rows = []
@@ -217,14 +217,14 @@ def insert_remaining_index_rows(
                 str(item.get("plain_text") or ""),
                 item.get("page_display"),
                 item.get("page_source_type"),
-                _float_or_none(item.get("page_confidence")),
+                float_or_none(item.get("page_confidence")),
                 item.get("citation_page_start"),
                 item.get("citation_page_end"),
-                _int_or_none(item.get("pdf_page_start_index")),
-                _int_or_none(item.get("pdf_page_end_index")),
+                int_or_none(item.get("pdf_page_start_index")),
+                int_or_none(item.get("pdf_page_end_index")),
                 item.get("pdf_page_start_label"),
                 item.get("pdf_page_end_label"),
-                _json(paragraph_payload_for_storage(item)),
+                compact_json(paragraph_payload_for_storage(item)),
             )
         )
     connection.executemany(
@@ -238,7 +238,7 @@ def insert_remaining_index_rows(
         """,
         paragraph_rows,
     )
-    _insert_page_anchors(connection, page_anchors)
+    insert_page_anchors(connection, page_anchors)
     for table_name, key_fields in (
         ("pdf_pages", ("source_file_id", "pdf_page_index")),
         ("pdf_page_mappings", ("source_file_id", "pdf_page_index")),
@@ -258,6 +258,6 @@ def insert_remaining_index_rows(
         columns = ", ".join(key_fields) + ", payload_json"
         placeholders = ", ".join("?" for _ in key_fields) + ", ?"
         sql = f"INSERT INTO {table_name}({columns}) VALUES ({placeholders})"
-        values = [tuple(item.get(field) for field in key_fields) + (_json(item),) for item in rows]
+        values = [tuple(item.get(field) for field in key_fields) + (compact_json(item),) for item in rows]
         if values:
             connection.executemany(sql, values)

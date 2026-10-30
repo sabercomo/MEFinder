@@ -15,7 +15,7 @@ from typing import Callable, Dict, List, Mapping, Optional, Protocol, Sequence
 from ..app_context import AppPaths
 from ..auto_page_mapping import has_manual_mapping
 from ..lifecycle import DurableOperationGate
-from ..mineru_api import MinerUError
+from ..errors import UserFacingError
 from ..import_config_store import (
     import_config_lock,
     load_import_config,
@@ -119,7 +119,7 @@ class PageMappingCoordinator:
             with self._index_runtime.mutation():
                 config_path = self._config_path
                 if not config_path.exists():
-                    raise MinerUError("PDF 导入配置不存在。")
+                    raise UserFacingError("PDF 导入配置不存在。")
                 with self._config_lock():
                     config = self._load_config(config_path)
                     document = self._configured_document(config, source_file_id)
@@ -153,7 +153,7 @@ class PageMappingCoordinator:
                         message="页码校准已生效",
                     )
                 except (
-                    MinerUError,
+                    UserFacingError,
                     OSError,
                     ValueError,
                     RuntimeError,
@@ -229,7 +229,7 @@ class PageMappingCoordinator:
                     message="自动页码映射已接受",
                 )
         except (
-            MinerUError,
+            UserFacingError,
             OSError,
             ValueError,
             RuntimeError,
@@ -264,7 +264,7 @@ class PageMappingCoordinator:
             None,
         )
         if not document:
-            raise MinerUError("PDF 配置中找不到该文献。")
+            raise UserFacingError("PDF 配置中找不到该文献。")
         return document
 
     def _detect_auto_page_mapping(
@@ -273,7 +273,7 @@ class PageMappingCoordinator:
     ) -> Dict[str, object]:
         config_path = self._config_path
         if not config_path.exists():
-            raise MinerUError("PDF 导入配置不存在。")
+            raise UserFacingError("PDF 导入配置不存在。")
         config = self._load_config(config_path)
         document = self._configured_document(config, source_file_id)
         try:
@@ -289,9 +289,9 @@ class PageMappingCoordinator:
                     "manual_mapping_present": has_manual_mapping(document),
                     "dry_run": True,
                 }
-            raise MinerUError(str(exc)) from exc
+            raise UserFacingError(str(exc)) from exc
         if path.suffix.lower() != ".pdf":
-            raise MinerUError("自动页码检测只支持 PDF。")
+            raise UserFacingError("自动页码检测只支持 PDF。")
 
         manual_present = has_manual_mapping(document)
         detection_config = copy.deepcopy(document)
@@ -306,7 +306,7 @@ class PageMappingCoordinator:
         )
         sources = extracted.get("source_files", [])
         if not sources:
-            raise MinerUError("无法读取文献页码证据。")
+            raise UserFacingError("无法读取文献页码证据。")
         profile = sources[0].get("pdf_profile") or {}
         result = dict(profile.get("auto_page_mapping") or {})
         result["manual_mapping_present"] = manual_present
@@ -328,13 +328,13 @@ class PageMappingCoordinator:
             config = self._load_config(config_path)
             document = self._configured_document(config, source_file_id)
             if has_manual_mapping(document) and not replace_manual:
-                raise MinerUError(
+                raise UserFacingError(
                     "当前文献已有人工页码映射，"
                     "必须明确确认后才能替换。"
                 )
             cleaned = normalize_auto_segments(segments)
             if not cleaned:
-                raise MinerUError("没有可应用的自动页码区间。")
+                raise UserFacingError("没有可应用的自动页码区间。")
             original_config = copy.deepcopy(config)
             document.setdefault("page_mapping", {})
             document["page_mapping"]["segments"] = cleaned
@@ -367,7 +367,7 @@ class PageMappingCoordinator:
                 self._index_runtime.reopen()
                 return updated
             except (
-                MinerUError,
+                UserFacingError,
                 OSError,
                 ValueError,
                 RuntimeError,
@@ -382,10 +382,10 @@ class PageMappingCoordinator:
     def _persist_accepted_mapping(self, source_file_id: str) -> int:
         config_path = self._config_path
         if not config_path.exists():
-            raise MinerUError("PDF 导入配置不存在。")
+            raise UserFacingError("PDF 导入配置不存在。")
         source = self._index_runtime.source(source_file_id)
         if not source:
-            raise MinerUError("文献未找到。")
+            raise UserFacingError("文献未找到。")
         auto_mapping = (
             (source.get("pdf_profile") or {}).get("auto_page_mapping") or {}
         )
@@ -395,7 +395,7 @@ class PageMappingCoordinator:
             if isinstance(segment, dict)
         ]
         if not applied:
-            raise MinerUError("没有可接受的高置信度自动映射段。")
+            raise UserFacingError("没有可接受的高置信度自动映射段。")
 
         with self._config_lock():
             config = self._load_config(config_path)

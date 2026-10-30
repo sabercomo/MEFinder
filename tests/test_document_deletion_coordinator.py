@@ -12,7 +12,7 @@ from src.me_finder.application.document_deletion_coordinator import (
     DocumentDeletionFailed,
     DocumentDeletionRejected,
 )
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class FakeIndex:
@@ -61,7 +61,7 @@ class FakeJobs:
     def begin_source_deletion(self, source_file_id):
         self.events.append(f"begin:{source_file_id}")
         if source_file_id in self.conflicts:
-            raise MinerUError(self.conflicts[source_file_id])
+            raise UserFacingError(self.conflicts[source_file_id])
 
     def end_source_deletion(self, source_file_id):
         self.events.append(f"end:{source_file_id}")

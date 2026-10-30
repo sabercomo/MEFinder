@@ -7,7 +7,7 @@ import sqlite3
 from typing import Dict, Mapping, Tuple
 
 from .application.page_mapping_coordinator import PageMappingCoordinator
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 
 
 PageMappingResponse = Tuple[int, Dict[str, object]]
@@ -31,7 +31,7 @@ class PageMappingController:
                 source_file_id,
                 segments,
             )
-        except (ValueError, MinerUError) as exc:
+        except (ValueError, UserFacingError) as exc:
             return 400, {"error": str(exc)}
         except (
             OSError,
@@ -52,7 +52,7 @@ class PageMappingController:
             return 400, {"error": "invalid request"}
         try:
             result = self._coordinator.detect_auto_page_mapping(source_file_id)
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (
             OSError,
@@ -83,7 +83,7 @@ class PageMappingController:
                 auto_mapping,
                 bool(payload.get("replace_manual")),
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 409, {"error": str(exc)}
         except (
             OSError,
@@ -105,7 +105,7 @@ class PageMappingController:
             segment_count = self._coordinator.accept_auto_page_mapping(
                 source_file_id
             )
-        except MinerUError as exc:
+        except UserFacingError as exc:
             return 400, {"error": str(exc)}
         except (
             OSError,

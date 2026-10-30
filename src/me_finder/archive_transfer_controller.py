@@ -16,7 +16,7 @@ from .document_export_service import (
 )
 from .markdown_export_normalize import ExportOptions
 from .markdown_page_selection import PageSelection
-from .mineru_api import MinerUError
+from .errors import UserFacingError
 
 
 ArchiveTransferResponse = Tuple[int, Dict[str, object]]
@@ -206,7 +206,7 @@ class ArchiveTransferController:
             return 400, {"error": "请填写备份文件路径。"}
         try:
             job_id = self._backup.start_restore(source_path)
-        except (MinerUError, ValueError) as exc:
+        except (UserFacingError, ValueError) as exc:
             return 400, {"error": str(exc)}
         except OSError as exc:
             return 500, {"error": f"读取备份失败：{exc}"}

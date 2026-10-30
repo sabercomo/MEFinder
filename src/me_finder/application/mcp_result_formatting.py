@@ -3,7 +3,7 @@
 Pure formatting: every function maps a plain ``fields`` mapping to the JSON
 shape the MCP contract advertises. No persistence, no transport — the
 verification service imports these to build each tool response, and
-``parallel_passage_service`` receives ``_search_match`` as its formatter.
+``parallel_passage_service`` receives ``search_match`` as its formatter.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import re
 from typing import Mapping, Sequence
 
 
-def _first_text(*values: object) -> str | None:
+def first_text(*values: object) -> str | None:
     for value in values:
         if value is None:
             continue
@@ -46,10 +46,10 @@ def _physical_page(
         }
     start_index = _first_present(fields, "pdf_page_start_index", "pdf_page_index")
     end_index = _first_present(fields, "pdf_page_end_index", "pdf_page_index")
-    start_label = _first_text(
+    start_label = first_text(
         _first_present(fields, "pdf_page_start_label", "pdf_page_label")
     )
-    end_label = _first_text(
+    end_label = first_text(
         _first_present(fields, "pdf_page_end_label", "pdf_page_label")
     )
     return {
@@ -71,8 +71,8 @@ def _citation_page(
         "page_verified",
     )
     verified = bool(verified_value)
-    start = _first_text(fields.get("citation_page_start")) if verified else None
-    end = _first_text(fields.get("citation_page_end")) if verified else None
+    start = first_text(fields.get("citation_page_start")) if verified else None
+    end = first_text(fields.get("citation_page_end")) if verified else None
     if verified:
         status = "calibrated" if source_type == "pdf" else "verified"
     elif source_type == "pdf" and physical_page.get("start_index") is not None:
@@ -94,7 +94,7 @@ def _page_mapping(fields: Mapping[str, object]) -> dict[str, object]:
         "page_confidence",
     )
     return {
-        "method": _first_text(
+        "method": first_text(
             _first_present(
                 fields,
                 "page_mapping_method",
@@ -103,12 +103,12 @@ def _page_mapping(fields: Mapping[str, object]) -> dict[str, object]:
             )
         ),
         "confidence": float(confidence) if confidence is not None else None,
-        "confidence_level": _first_text(fields.get("mapping_confidence_level")),
-        "note": _first_text(fields.get("page_note")),
+        "confidence_level": first_text(fields.get("mapping_confidence_level")),
+        "note": first_text(fields.get("page_note")),
     }
 
 
-def _search_match(fields: Mapping[str, object]) -> dict[str, object]:
+def search_match(fields: Mapping[str, object]) -> dict[str, object]:
     source_type = str(fields["source_type"])
     internal_match_type = str(fields["match_type"])
     physical_page = _physical_page(fields, source_type)
@@ -120,9 +120,9 @@ def _search_match(fields: Mapping[str, object]) -> dict[str, object]:
         "paragraph_id": str(fields["paragraph_id"]),
         "source_file_id": str(fields["source_file_id"]),
         "source_type": source_type,
-        "document_title": _first_text(fields.get("document_title")),
-        "work_title": _first_text(fields.get("work_title")),
-        "author": _first_text(fields.get("author_label")),
+        "document_title": first_text(fields.get("document_title")),
+        "work_title": first_text(fields.get("work_title")),
+        "author": first_text(fields.get("author_label")),
         "matched_text": str(fields["matched_text"]),
         "paragraph_text": str(fields["paragraph_text"]),
         "context_before": fields["context_before"],
@@ -141,7 +141,7 @@ def _search_match(fields: Mapping[str, object]) -> dict[str, object]:
     }
 
 
-def _passage_match(fields: Mapping[str, object]) -> dict[str, object]:
+def passage_match(fields: Mapping[str, object]) -> dict[str, object]:
     source_type = str(fields["source_type"])
     physical_page = _physical_page(fields, source_type)
     reader_start = _first_present(
@@ -158,9 +158,9 @@ def _passage_match(fields: Mapping[str, object]) -> dict[str, object]:
         "paragraph_id": str(fields["paragraph_id"]),
         "source_file_id": str(fields["source_file_id"]),
         "source_type": source_type,
-        "document_title": _first_text(fields.get("document_title")),
-        "work_title": _first_text(fields.get("work_title")),
-        "author": _first_text(fields.get("author_label")),
+        "document_title": first_text(fields.get("document_title")),
+        "work_title": first_text(fields.get("work_title")),
+        "author": first_text(fields.get("author_label")),
         "paragraph_text": str(fields["paragraph_text"]),
         "preview": str(fields["matched_text"]),
         "context_before": fields["context_before"],
@@ -216,7 +216,7 @@ def _is_likely_copyright_page(hints: Sequence[str]) -> bool:
     return len(hints) >= 3
 
 
-def _bibliographic_page(
+def bibliographic_page(
     fields: Mapping[str, object],
     source_type: str,
 ) -> dict[str, object]:
@@ -239,7 +239,7 @@ def _bibliographic_page(
     }
 
 
-def _reader_item(
+def reader_item(
     fields: Mapping[str, object],
     source_type: str,
 ) -> dict[str, object]:
@@ -254,7 +254,7 @@ def _reader_item(
         raise ValueError("结构化阅读器返回了无效的 citation_formats")
     return {
         "item_type": str(fields["item_type"]),
-        "anchor_id": _first_text(fields.get("anchor_id")),
+        "anchor_id": first_text(fields.get("anchor_id")),
         "position": int(position),
         "text": text,
         "is_empty": bool(fields.get("is_empty", not text.strip())),

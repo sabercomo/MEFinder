@@ -19,10 +19,10 @@ from src.me_finder.parser_provider import (
     NormalizedParseResult,
 )
 from src.me_finder.pdf_import_service import (
-    _publish_mineru_engine_results,
     load_import_config,
     parse_pdf_with_mineru,
 )
+from src.me_finder.pdf_parser_adapters import publish_mineru_engine_results
 from src.me_finder.local_ocr_settings import LocalOCRError
 from src.me_finder.pdf_extractors import extract_pdf_source
 
@@ -115,7 +115,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             ledger.refresh_progress(job.id)
             ledger.update_document(job.id, status="validated")
 
-            result = _publish_mineru_engine_results(
+            result = publish_mineru_engine_results(
                 root,
                 source_id,
                 ledger=ledger,
@@ -173,7 +173,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             self.assertEqual(attachment["resume"]["completed_page_count"], 4)
             self.assertFalse(Path(str(attachment["manifest"])).is_absolute())
 
-            local_result = _publish_mineru_engine_results(
+            local_result = publish_mineru_engine_results(
                 root,
                 source_id,
                 ledger=ledger,
@@ -187,7 +187,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             self.assertEqual(local_manifest["provider_id"], "mineru-local")
             self.assertEqual(local_manifest["provider_name"], "本地 MinerU")
 
-            ocr_result = _publish_mineru_engine_results(
+            ocr_result = publish_mineru_engine_results(
                 root,
                 source_id,
                 ledger=ledger,
@@ -319,7 +319,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             ledger.update_document(job.id, status="validated")
 
             with self.assertRaisesRegex(LocalOCRError, "整本文档"):
-                _publish_mineru_engine_results(
+                publish_mineru_engine_results(
                     root,
                     source_id,
                     ledger=ledger,

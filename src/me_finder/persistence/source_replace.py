@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import Dict, List
 
 from .connection import connect_index
-from .index_build import _float_or_none, _insert_page_anchors, _int_or_none, _json
+from .index_build import compact_json, float_or_none, insert_page_anchors, int_or_none
 from .index_schema import ANCHOR_SPEC_VERSION
 from .paragraph_payload import paragraph_payload_for_storage
 
 
-def _delete_page_anchors_for_source(
+def delete_page_anchors_for_source(
     connection: sqlite3.Connection,
     source_file_id: str,
 ) -> int:
@@ -118,7 +118,7 @@ def replace_source_rows(
                     f"SELECT work_id FROM works WHERE volume_id IN ({placeholders})", old_volume_ids
                 ).fetchall()
             ]
-        _delete_page_anchors_for_source(connection, source_id)
+        delete_page_anchors_for_source(connection, source_id)
         if old_volume_ids:
             placeholders = ",".join("?" for _ in old_volume_ids)
             connection.execute(f"DELETE FROM toc_entries WHERE volume_id IN ({placeholders})", old_volume_ids)
@@ -143,8 +143,8 @@ def replace_source_rows(
                 str(source.get("source_type") or "word"),
                 source.get("file_name"),
                 source.get("relative_path"),
-                _int_or_none(source.get("volume_number")),
-                _json(source),
+                int_or_none(source.get("volume_number")),
+                compact_json(source),
             ),
         )
         volumes = [item for item in extracted.get("volumes", []) if isinstance(item, dict)]
@@ -158,9 +158,9 @@ def replace_source_rows(
                     str(item.get("volume_id") or ""),
                     item.get("source_file_id"),
                     str(item.get("source_type") or "word"),
-                    _int_or_none(item.get("volume_number")),
+                    int_or_none(item.get("volume_number")),
                     item.get("display_title"),
-                    _json(item),
+                    compact_json(item),
                 )
                 for item in volumes
                 if item.get("volume_id")
@@ -177,9 +177,9 @@ def replace_source_rows(
                     str(item.get("work_id") or ""),
                     item.get("volume_id"),
                     str(item.get("source_type") or "word"),
-                    _int_or_none(item.get("work_order")),
+                    int_or_none(item.get("work_order")),
                     item.get("title"),
-                    _json(item),
+                    compact_json(item),
                 )
                 for item in works
                 if item.get("work_id")
@@ -188,7 +188,7 @@ def replace_source_rows(
         toc_entries = [item for item in extracted.get("toc_entries", []) if isinstance(item, dict)]
         connection.executemany(
             "INSERT INTO toc_entries(volume_id, work_id, title, payload_json) VALUES (?, ?, ?, ?)",
-            [(item.get("volume_id"), item.get("work_id"), item.get("title"), _json(item)) for item in toc_entries],
+            [(item.get("volume_id"), item.get("work_id"), item.get("title"), compact_json(item)) for item in toc_entries],
         )
         paragraphs = [item for item in extracted.get("paragraphs", []) if isinstance(item, dict)]
         connection.executemany(
@@ -215,20 +215,20 @@ def replace_source_rows(
                     str(item.get("plain_text") or ""),
                     item.get("page_display"),
                     item.get("page_source_type"),
-                    _float_or_none(item.get("page_confidence")),
+                    float_or_none(item.get("page_confidence")),
                     item.get("citation_page_start"),
                     item.get("citation_page_end"),
-                    _int_or_none(item.get("pdf_page_start_index")),
-                    _int_or_none(item.get("pdf_page_end_index")),
+                    int_or_none(item.get("pdf_page_start_index")),
+                    int_or_none(item.get("pdf_page_end_index")),
                     item.get("pdf_page_start_label"),
                     item.get("pdf_page_end_label"),
-                    _json(paragraph_payload_for_storage(item)),
+                    compact_json(paragraph_payload_for_storage(item)),
                 )
                 for item in paragraphs
                 if item.get("paragraph_id")
             ],
         )
-        _insert_page_anchors(
+        insert_page_anchors(
             connection,
             [
                 item
@@ -249,7 +249,7 @@ def replace_source_rows(
             placeholders = ", ".join("?" for _ in key_fields) + ", ?"
             connection.executemany(
                 f"INSERT INTO {table_name}({columns}) VALUES ({placeholders})",
-                [tuple(item.get(field) for field in key_fields) + (_json(item),) for item in rows],
+                [tuple(item.get(field) for field in key_fields) + (compact_json(item),) for item in rows],
             )
 
         totals = {
@@ -262,7 +262,7 @@ def replace_source_rows(
         }
         connection.executemany(
             "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            [(key, _json(value)) for key, value in totals.items()],
+            [(key, compact_json(value)) for key, value in totals.items()],
         )
         connection.commit()
     except Exception:
@@ -311,7 +311,7 @@ def _delete_one_source(connection: sqlite3.Connection, source_file_id: str) -> D
     counts["pdf_pages"] = connection.execute(
         "SELECT COUNT(*) FROM pdf_pages WHERE source_file_id = ?", (source_file_id,)
     ).fetchone()[0]
-    counts["page_anchors"] = _delete_page_anchors_for_source(
+    counts["page_anchors"] = delete_page_anchors_for_source(
         connection, source_file_id
     )
     if volume_ids:
@@ -359,7 +359,7 @@ def delete_source_rows(
         }
         connection.executemany(
             "INSERT OR REPLACE INTO metadata(key, value_json) VALUES (?, ?)",
-            [(key, _json(value)) for key, value in totals.items()],
+            [(key, compact_json(value)) for key, value in totals.items()],
         )
         connection.commit()
     except Exception:

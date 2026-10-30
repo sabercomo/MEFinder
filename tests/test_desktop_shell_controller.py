@@ -13,7 +13,7 @@ from src.me_finder.application.data_root_admission import (
 )
 from src.me_finder.data_location import DataLocationError
 from src.me_finder.desktop_shell_controller import DesktopShellController
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class DesktopShellControllerTests(unittest.TestCase):
@@ -495,7 +495,7 @@ class DesktopShellControllerTests(unittest.TestCase):
         )
         self.assertEqual(
             self._controller(
-                open_source=mock.Mock(side_effect=MinerUError("文献不存在"))
+                open_source=mock.Mock(side_effect=UserFacingError("文献不存在"))
             ).open_source({"source_id": "missing"}),
             (400, {"error": "文献不存在"}),
         )

@@ -16,7 +16,7 @@ from src.me_finder.bibliographic_metadata_controller import (
 from src.me_finder.crossref_lookup import CrossrefLookupError
 from src.me_finder.foreign_book_lookup import BookLookupError
 from src.me_finder.journal_metadata_lookup import CNKILookupError
-from src.me_finder.mineru_api import MinerUError
+from src.me_finder.errors import UserFacingError
 
 
 class FakeQueries:
@@ -323,7 +323,7 @@ class BibliographicMetadataControllerTests(unittest.TestCase):
             (400, {"error": "invalid request"}),
         )
 
-        self.metadata.save_error = MinerUError("配置不存在")
+        self.metadata.save_error = UserFacingError("配置不存在")
         self.assertEqual(
             self.controller.save(payload),
             (400, {"error": "配置不存在"}),

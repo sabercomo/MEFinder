@@ -25,8 +25,17 @@ from itertools import combinations
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence, Tuple
 
+from .alignment_generation import (
+    json_object,
+    now,
+    source_kind_of,
+    source_row,
+    validate_nonnegative_integer,
+    validate_source_id,
+)
 from .alignment_overrides import confirm_override, create_override_proposal
 from .alignment_regions import alignment_body_bounds
+from .persistence.alignment_store import latest_pair_run, ordered_segments_in_set
 from .persistence.connection import connect_index, table_exists
 from .tasks.background_tasks import BackgroundTasks
 from .persistence import translation_work_reads as reads
@@ -44,20 +53,12 @@ from .text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
     WriteWindow,
-    _alignment_candidate_segments,
-    _json_object,
-    _latest_pair_run,
-    _now,
-    _ordered_segments_in_set,
-    _resolve_alignment_route,
-    _segment_key,
-    _segment_set_id_for_source,
-    _source_kind,
-    _source_row,
-    _validate_nonnegative_integer,
-    _validate_source_id,
+    alignment_candidate_segments,
     confirmed_overrides_for_pair,
     override_for_selection,
+    resolve_alignment_route,
+    segment_key,
+    segment_set_id_for_source,
 )
 
 UNMATCHED_STATUSES = frozenset({"rejected", "unmatched"})
@@ -123,17 +124,17 @@ def save_reading_position(
     group_id = str(document_group_id or "").strip()
     if not group_id:
         raise InvalidAlignmentRequest("document_group_id 必填。")
-    left_id = _validate_source_id(left_source_file_id)
+    left_id = validate_source_id(left_source_file_id)
     right_id = (
-        _validate_source_id(right_source_file_id)
+        validate_source_id(right_source_file_id)
         if right_source_file_id not in (None, "")
         else None
     )
     if right_id == left_id:
         raise InvalidAlignmentRequest("左右两栏不能是同一个版本。")
-    index = _validate_nonnegative_integer("item_index", item_index)
-    offset = _validate_nonnegative_integer("char_offset", char_offset)
-    timestamp = _now()
+    index = validate_nonnegative_integer("item_index", item_index)
+    offset = validate_nonnegative_integer("char_offset", char_offset)
+    timestamp = now()
 
     def operation(connection: sqlite3.Connection) -> Dict[str, object]:
         members = set(reads.read_member_ids(connection, group_id))
@@ -189,7 +190,7 @@ def dismiss_suggestion(
     key = suggestion_key(ids)
 
     def operation(connection: sqlite3.Connection) -> Dict[str, object]:
-        dismiss_suggestion_row(connection, key, json.dumps(ids, ensure_ascii=False), _now())
+        dismiss_suggestion_row(connection, key, json.dumps(ids, ensure_ascii=False), now())
         return {"source_file_ids": ids}
 
     return _write(db_path, write_window, operation)
@@ -291,7 +292,7 @@ def warm_detected_body_bounds(
             return 0
         set_ids: set[str] = set()
         for pivot_set, target_set, parameters_json in reads.read_completed_run_segment_sets(connection):
-            if _json_object(parameters_json).get("body_range_source") == "detected":
+            if json_object(parameters_json).get("body_range_source") == "detected":
                 set_ids.update(str(value) for value in (pivot_set, target_set) if value)
         wanted = sorted(set_ids)[:_DETECTED_BOUNDS_CACHE_LIMIT]
         fingerprint = _detector_fingerprint()
@@ -359,7 +360,7 @@ def _run_staleness(
         or run["algorithm_version"] not in READABLE_ALIGNMENT_VERSIONS
     ):
         return "algorithm_unreadable"
-    parameters = _json_object(run["parameters_json"])
+    parameters = json_object(run["parameters_json"])
     if active_model_id and parameters.get("embedding_model_id") != active_model_id:
         return "model_changed"
     if connection is not None and _body_range_changed(connection, run, parameters):
@@ -477,9 +478,9 @@ def alignment_overview(
     """
 
     if source_id:
-        source_id = _validate_source_id(source_id)
+        source_id = validate_source_id(source_id)
     if target_id:
-        target_id = _validate_source_id(target_id)
+        target_id = validate_source_id(target_id)
         if not source_id or source_id == target_id:
             raise InvalidAlignmentRequest("target_id 需要一个不同的 source_id。")
     connection = _read_connection(db_path)
@@ -514,7 +515,7 @@ def alignment_overview(
                     "completed_at": None,
                 }
                 if has_runs:
-                    direct = _latest_pair_run(connection, group_id, left_id, right_id)
+                    direct = latest_pair_run(connection, group_id, left_id, right_id)
                     if direct is not None:
                         pair.update(
                             status="direct",
@@ -524,13 +525,13 @@ def alignment_overview(
                         if include_statistics:
                             pair.update(_direct_run_statistics(connection, direct))
                     elif base_id and base_id not in (left_id, right_id):
-                        first = _latest_pair_run(connection, group_id, left_id, base_id)
-                        second = _latest_pair_run(connection, group_id, base_id, right_id)
+                        first = latest_pair_run(connection, group_id, left_id, base_id)
+                        second = latest_pair_run(connection, group_id, base_id, right_id)
                         if (
                             first is not None
                             and second is not None
-                            and _segment_set_id_for_source(first, base_id)
-                            == _segment_set_id_for_source(second, base_id)
+                            and segment_set_id_for_source(first, base_id)
+                            == segment_set_id_for_source(second, base_id)
                         ):
                             reasons = [
                                 reason
@@ -655,10 +656,10 @@ def alignment_link_window(
     status is the worse of the two legs and its confidence the lower one.
     """
 
-    source_id = _validate_source_id(source_file_id)
-    target_id = _validate_source_id(target_source_file_id)
-    first = _validate_nonnegative_integer("start_index", start_index)
-    last = _validate_nonnegative_integer("end_index", end_index)
+    source_id = validate_source_id(source_file_id)
+    target_id = validate_source_id(target_source_file_id)
+    first = validate_nonnegative_integer("start_index", start_index)
+    last = validate_nonnegative_integer("end_index", end_index)
     if last < first:
         raise InvalidAlignmentRequest("end_index 不能小于 start_index。")
     if last - first + 1 > MAX_LINK_WINDOW_ITEMS:
@@ -667,11 +668,11 @@ def alignment_link_window(
         )
     connection = _read_connection(db_path)
     try:
-        source_kind = _source_kind(_source_row(connection, source_id))
-        target_kind = _source_kind(_source_row(connection, target_id))
-        route_runs, via_id = _resolve_alignment_route(connection, source_id, target_id)
-        source_set_id = _segment_set_id_for_source(route_runs[0], source_id)
-        target_set_id = _segment_set_id_for_source(route_runs[-1], target_id)
+        source_kind = source_kind_of(source_row(connection, source_id))
+        target_kind = source_kind_of(source_row(connection, target_id))
+        route_runs, via_id = resolve_alignment_route(connection, source_id, target_id)
+        source_set_id = segment_set_id_for_source(route_runs[0], source_id)
+        target_set_id = segment_set_id_for_source(route_runs[-1], target_id)
         window_segments = _segments_in_items(
             connection, source_set_id, source_id, source_kind, first, last
         )
@@ -713,7 +714,7 @@ def alignment_link_window(
 
         result_links: List[Dict[str, object]] = []
         for link in links:
-            key = _segment_key(link["from_segment_ids"])
+            key = segment_key(link["from_segment_ids"])
             manual = None
             target_ids = list(link["to_segment_ids"])
             # Same correction rule as locate: the exact selection first, then a
@@ -783,23 +784,23 @@ def review_candidates(
 ) -> Dict[str, object]:
     """Target segments around ``near_target_segment_ids`` for a manual choice."""
 
-    source_id = _validate_source_id(source_file_id)
-    target_id = _validate_source_id(target_source_file_id)
+    source_id = validate_source_id(source_file_id)
+    target_id = validate_source_id(target_source_file_id)
     source_ids = _clean_ids(source_segment_ids, name="source_segment_ids")
     near_ids = _clean_ids(
         near_target_segment_ids or [], name="near_target_segment_ids", allow_empty=True
     )
-    width = _validate_nonnegative_integer("radius", radius)
+    width = validate_nonnegative_integer("radius", radius)
     if not 1 <= width <= MAX_CANDIDATE_RADIUS:
         raise InvalidAlignmentRequest(f"radius 必须在 1 到 {MAX_CANDIDATE_RADIUS} 之间。")
     connection = _read_connection(db_path)
     try:
-        _source_row(connection, source_id)
-        target_kind = _source_kind(_source_row(connection, target_id))
-        route_runs, _via = _resolve_alignment_route(connection, source_id, target_id)
-        source_set_id = _segment_set_id_for_source(route_runs[0], source_id)
-        target_set_id = _segment_set_id_for_source(route_runs[-1], target_id)
-        source_rows = _ordered_segments_in_set(connection, source_set_id, source_ids)
+        source_row(connection, source_id)
+        target_kind = source_kind_of(source_row(connection, target_id))
+        route_runs, _via = resolve_alignment_route(connection, source_id, target_id)
+        source_set_id = segment_set_id_for_source(route_runs[0], source_id)
+        target_set_id = segment_set_id_for_source(route_runs[-1], target_id)
+        source_rows = ordered_segments_in_set(connection, source_set_id, source_ids)
         if len(source_rows) != len(source_ids):
             raise InvalidAlignmentRequest("源段落不属于当前对齐，请刷新后重试。")
         if not near_ids:
@@ -816,10 +817,10 @@ def review_candidates(
                     ],
                     "candidates": [],
                 }
-        near_rows = _ordered_segments_in_set(connection, target_set_id, near_ids)
+        near_rows = ordered_segments_in_set(connection, target_set_id, near_ids)
         if len(near_rows) != len(near_ids):
             raise InvalidAlignmentRequest("参考译文段落不属于当前对齐，请刷新后重试。")
-        candidates = _alignment_candidate_segments(
+        candidates = alignment_candidate_segments(
             connection,
             target_set_id,
             target_id,
@@ -920,12 +921,12 @@ def save_correction(
 def _deferral_context(
     connection: sqlite3.Connection, source_id: str, target_id: str, source_ids: List[str]
 ) -> Tuple[str, str]:
-    route_runs, _via = _resolve_alignment_route(connection, source_id, target_id)
-    source_set_id = _segment_set_id_for_source(route_runs[0], source_id)
-    rows = _ordered_segments_in_set(connection, source_set_id, source_ids)
+    route_runs, _via = resolve_alignment_route(connection, source_id, target_id)
+    source_set_id = segment_set_id_for_source(route_runs[0], source_id)
+    rows = ordered_segments_in_set(connection, source_set_id, source_ids)
     if len(rows) != len(source_ids):
         raise InvalidAlignmentRequest("源段落不属于当前对齐，请刷新后重试。")
-    return source_set_id, _segment_key(source_ids)
+    return source_set_id, segment_key(source_ids)
 
 
 def defer_review(
@@ -936,8 +937,8 @@ def defer_review(
     *,
     write_window: WriteWindow | None = None,
 ) -> Dict[str, object]:
-    source_id = _validate_source_id(source_file_id)
-    target_id = _validate_source_id(target_source_file_id)
+    source_id = validate_source_id(source_file_id)
+    target_id = validate_source_id(target_source_file_id)
     source_ids = _clean_ids(source_segment_ids, name="source_segment_ids")
 
     def operation(connection: sqlite3.Connection) -> Dict[str, object]:
@@ -945,7 +946,7 @@ def defer_review(
         source_set_id, key = _deferral_context(
             connection, source_id, target_id, source_ids
         )
-        defer_review_row(connection, source_id, target_id, source_set_id, key, _now())
+        defer_review_row(connection, source_id, target_id, source_set_id, key, now())
         return {"deferred": True}
 
     try:

@@ -34,9 +34,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import src.me_finder.semantic_alignment as SA  # noqa: E402
+from src.me_finder.alignment_anchors import CONTEXT_GATED_ANCHOR_PREFIXES  # noqa: E402
 from src.me_finder.semantic_alignment import (  # noqa: E402
     _validate_soft_anchors as _orig_validate, _group_rows, _align_partition,
-    _CONTEXT_GATED_ANCHOR_PREFIXES,
 )
 from src.me_finder.text_alignment import generate_alignment  # noqa: E402
 
@@ -104,7 +104,7 @@ def enhanced_validate(anchors, source_prefix, target_prefix, low_threshold):
     while True:
         worst_i, worst_d = None, DISPLACEMENT_LIMIT
         for i, a in enumerate(kept):
-            if not a.key.startswith(_CONTEXT_GATED_ANCHOR_PREFIXES):
+            if not a.key.startswith(CONTEXT_GATED_ANCHOR_PREFIXES):
                 continue
             d = _leave_one_out_displacement(kept, i, source_prefix, target_prefix, sg, tg, sl, tl, low_threshold)
             if d > worst_d and _source_has_better_alternative(a, source_prefix, target_prefix, tvec_unit):

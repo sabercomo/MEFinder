@@ -26,16 +26,15 @@ from .import_config_store import (
 from .index_publisher import indexed_word_source_count, rebuild_local_index
 from .pdf_extractors import detect_pdf_type, file_sha256
 from .pdf_parser_adapters import (
-    _publish_mineru_engine_results,
     parse_pdf_with_local_ocr,
     parse_pdf_with_mineru,
     parse_pdf_with_provider,
+    publish_mineru_engine_results,
 )
 
 
 __all__ = [
     "INTERNAL_DOCUMENT_NAME_MAX_BYTES",
-    "_publish_mineru_engine_results",
     "attach_mineru_manifest",
     "cleanup_stale_document_storage_files",
     "copy_local_document",
@@ -48,6 +47,7 @@ __all__ = [
     "parse_pdf_with_local_ocr",
     "parse_pdf_with_mineru",
     "parse_pdf_with_provider",
+    "publish_mineru_engine_results",
     "rebuild_local_index",
     "register_pdf",
     "release_document_storage_target",

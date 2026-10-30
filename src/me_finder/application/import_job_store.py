@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
-from ..mineru_api import MinerUError
+from ..errors import UserFacingError
 
 
 Job = Dict[str, object]
@@ -19,7 +19,7 @@ class ImportJobCancelled(RuntimeError):
     """Raised cooperatively after the user stops a background import."""
 
 
-class ImportJobAlreadyRunning(MinerUError):
+class ImportJobAlreadyRunning(UserFacingError):
     """Carry the active job when duplicate document ingress is rejected."""
 
     def __init__(self, job: Job) -> None:
@@ -94,17 +94,17 @@ class ImportJobStore:
         source_file_id = str(job.get("source_file_id") or "")
         with self._lock:
             if source_file_id in self._deleting_source_ids:
-                raise MinerUError("该文献正在删除，不能开始解析。")
+                raise UserFacingError("该文献正在删除，不能开始解析。")
             if (
                 source_file_id in self._pending_source_ids
                 and not consume_reservation
             ):
-                raise MinerUError("同一文献正在准备导入。")
+                raise UserFacingError("同一文献正在准备导入。")
             if self._job_for_source_locked(
                 source_file_id,
                 statuses=("processing", "cancelling"),
             ):
-                raise MinerUError("同一文献已有解析任务正在运行。")
+                raise UserFacingError("同一文献已有解析任务正在运行。")
             self._jobs[job_id] = deepcopy(dict(job))
             self._contexts[job_id] = deepcopy(dict(context))
 
@@ -142,7 +142,7 @@ class ImportJobStore:
             context = self._contexts.get(job_id)
             job = self._jobs.get(job_id)
             if context is None or job is None:
-                raise MinerUError("导入任务的恢复信息不存在。")
+                raise UserFacingError("导入任务的恢复信息不存在。")
             context["force_mineru"] = bool(force_mineru)
             context["vision_provider_id"] = vision_provider_id
             job["parse_route"] = parse_route
@@ -257,7 +257,7 @@ class ImportJobStore:
                 or context is None
                 or str(job.get("status") or "") not in set(statuses)
             ):
-                raise MinerUError(
+                raise UserFacingError(
                     "原导入任务不存在或状态已变化，请刷新后重试。"
                 )
             return deepcopy(job), deepcopy(context)
@@ -337,14 +337,14 @@ class ImportJobStore:
     def begin_source_deletion(self, source_file_id: str) -> None:
         with self._lock:
             if source_file_id in self._deleting_source_ids:
-                raise MinerUError("该文献正在删除，请勿重复操作。")
+                raise UserFacingError("该文献正在删除，请勿重复操作。")
             if source_file_id in self._pending_source_ids:
-                raise MinerUError("该文献正在准备导入，请稍后再删除。")
+                raise UserFacingError("该文献正在准备导入，请稍后再删除。")
             if self._job_for_source_locked(
                 source_file_id,
                 statuses=("processing",),
             ):
-                raise MinerUError(
+                raise UserFacingError(
                     "该文献仍在解析中，请等待任务结束后再删除。"
                 )
             self._deleting_source_ids.add(source_file_id)
@@ -384,9 +384,9 @@ class ImportJobStore:
 
     def _reserve_source_locked(self, source_file_id: str) -> None:
         if source_file_id in self._deleting_source_ids:
-            raise MinerUError("该文献正在删除，不能开始解析。")
+            raise UserFacingError("该文献正在删除，不能开始解析。")
         if source_file_id in self._pending_source_ids:
-            raise MinerUError("同一文献正在准备导入。")
+            raise UserFacingError("同一文献正在准备导入。")
         running = self._job_for_source_locked(
             source_file_id,
             statuses=("processing", "cancelling"),
@@ -402,23 +402,23 @@ class ImportJobStore:
         job = self._jobs.get(job_id)
         context = self._contexts.get(job_id)
         if not job or not context:
-            raise MinerUError("待继续的导入任务不存在。")
+            raise UserFacingError("待继续的导入任务不存在。")
         if (
             str(job.get("status") or "") not in {"paused", "failed"}
             or not job.get("can_resume")
         ):
-            raise MinerUError("该导入任务当前不能继续。")
+            raise UserFacingError("该导入任务当前不能继续。")
         source_file_id = str(context.get("source_file_id") or "")
         if source_file_id in self._deleting_source_ids:
-            raise MinerUError("该文献正在删除，不能继续解析。")
+            raise UserFacingError("该文献正在删除，不能继续解析。")
         if source_file_id in self._pending_source_ids:
-            raise MinerUError("同一文献正在准备导入。")
+            raise UserFacingError("同一文献正在准备导入。")
         if self._job_for_source_locked(
             source_file_id,
             statuses=("processing", "cancelling"),
             excluded_job_id=job_id,
         ):
-            raise MinerUError("同一文献已有解析任务正在运行。")
+            raise UserFacingError("同一文献已有解析任务正在运行。")
         return job, context
 
     def _job_for_source_locked(

@@ -16,7 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.me_finder import __version__
-from src.me_finder.web import HTML, _PACKAGE_DIR, render_html
+from src.me_finder.web import HTML, render_html
+from src.me_finder.web_assets import PACKAGE_DIR
 
 # 装配后必须一个都不剩的占位标记。
 PLACEHOLDERS = (
@@ -36,7 +37,7 @@ TOP_LEVEL_JS_DECLARATION = re.compile(
 def _split_dir_assets(subdir, suffix):
     """某个资源目录下的拆分文件，按文件名排序 —— 顺序即加载顺序。"""
 
-    directory = _PACKAGE_DIR / subdir
+    directory = PACKAGE_DIR / subdir
     if not directory.is_dir():
         return ()
     return tuple(
@@ -67,11 +68,11 @@ VENDOR_JS_ASSETS = ("static/vendor/vue.global.prod.js",)
 
 
 def _read(relative):
-    return (_PACKAGE_DIR / relative).read_text(encoding="utf-8")
+    return (PACKAGE_DIR / relative).read_text(encoding="utf-8")
 
 
 def _existing(relatives):
-    return [rel for rel in relatives if (_PACKAGE_DIR / rel).is_file()]
+    return [rel for rel in relatives if (PACKAGE_DIR / rel).is_file()]
 
 
 class FrontendAssetAssemblyTests(unittest.TestCase):
@@ -194,7 +195,7 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
     def test_mineru_brand_asset_is_packaged(self):
         """MinerU 账号与统计页共用官方矢量标识，打包时不能漏掉。"""
 
-        logo = _PACKAGE_DIR / "static" / "brands" / "mineru.svg"
+        logo = PACKAGE_DIR / "static" / "brands" / "mineru.svg"
         self.assertTrue(logo.is_file())
         content = logo.read_text(encoding="utf-8")
         self.assertIn('viewBox="0 0 24 24"', content)
@@ -724,14 +725,14 @@ class VendorAssetTests(unittest.TestCase):
     VUE_SHA256 = "b72394052eef1eeda1752db3758ce1be6f88016903f22e5241cc732ea307478e"
 
     def test_vue_bytes_match_pinned_release(self):
-        payload = (_PACKAGE_DIR / VENDOR_JS_ASSETS[0]).read_bytes()
+        payload = (PACKAGE_DIR / VENDOR_JS_ASSETS[0]).read_bytes()
         self.assertTrue(payload.startswith(b"/**\n* vue v3.5.43\n"))
         self.assertEqual(
             hashlib.sha256(payload).hexdigest(),
             self.VUE_SHA256,
             "vue.global.prod.js 与钉住的 3.5.43 不一致；升级请同步 static/vendor/README.md",
         )
-        self.assertTrue((_PACKAGE_DIR / "static/vendor/vue.LICENSE.txt").is_file())
+        self.assertTrue((PACKAGE_DIR / "static/vendor/vue.LICENSE.txt").is_file())
 
     def test_vue_loads_in_own_block_before_app_js(self):
         vue_at = HTML.index("* vue v3.5.43")

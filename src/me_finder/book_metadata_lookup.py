@@ -31,11 +31,11 @@ from typing import Callable, Dict, List, Mapping, Optional
 
 from .foreign_book_lookup import (
     BookLookupError,
-    _clean,
-    _match,
-    _normalize_isbn,
-    _open_url,
+    book_open_url,
+    clean_text,
     lookup_google_books,
+    match_book_candidate,
+    normalize_isbn,
 )
 
 K10PLUS_ENDPOINT = "https://sru.k10plus.de/gvk"
@@ -48,7 +48,7 @@ _USER_AGENT = "MEFinder/0.3 (bibliographic lookup)"
 _MARC = "{http://www.loc.gov/MARC21/slim}"
 
 # 只有匹配分达到此阈值的候选才算"命中"，否则视同该源没找到、继续尝试下一个源。
-# `_match` 的正向信号最低是作者交集 +0.2、书名相似 ≥ +0.36、ISBN 命中 0.98；
+# `match_book_candidate` 的正向信号最低是作者交集 +0.2、书名相似 ≥ +0.36、ISBN 命中 0.98；
 # 唯一低于 0.1 的贡献是"候选自带 ISBN"的 +0.03 兜底。中文书名/作者经 `_compact`
 # 归一后会被压成空串，无法参与打分，因而在西文目录里只会撞出这种 0.03 的噪声候选。
 # 阈值取 0.1 恰好滤掉这类噪声，同时不误伤任何真实匹配。
@@ -84,8 +84,8 @@ def lookup_book(metadata: Mapping[str, object]) -> Dict[str, object]:
     list is returned so the caller can distinguish "no match" from "offline".
     """
 
-    isbn = _normalize_isbn(metadata.get("isbn"))
-    open_url = _openlibrary_open_url(metadata, isbn) or _open_url(metadata, isbn)
+    isbn = normalize_isbn(metadata.get("isbn"))
+    open_url = _openlibrary_open_url(metadata, isbn) or book_open_url(metadata, isbn)
 
     sources: tuple[Callable[[Mapping[str, object]], List[Dict[str, object]]], ...] = (
         lookup_open_library,
@@ -124,7 +124,7 @@ def lookup_book(metadata: Mapping[str, object]) -> Dict[str, object]:
 def _openlibrary_open_url(metadata: Mapping[str, object], isbn: str) -> str:
     if isbn:
         return f"https://openlibrary.org/isbn/{isbn}"
-    title = _clean(metadata.get("title"))
+    title = clean_text(metadata.get("title"))
     if title:
         return "https://openlibrary.org/search?q=" + urllib.parse.quote(title)
     return ""
@@ -144,7 +144,7 @@ def _fetch(url: str, *, accept: str, source_label: str) -> str:
 
 
 def lookup_open_library(metadata: Mapping[str, object]) -> List[Dict[str, object]]:
-    isbn = _normalize_isbn(metadata.get("isbn"))
+    isbn = normalize_isbn(metadata.get("isbn"))
     if isbn:
         params = urllib.parse.urlencode(
             {"bibkeys": f"ISBN:{isbn}", "format": "json", "jscmd": "data"}
@@ -153,11 +153,11 @@ def lookup_open_library(metadata: Mapping[str, object]) -> List[Dict[str, object
             f"{OPENLIBRARY_ISBN_ENDPOINT}?{params}", accept="application/json", source_label="Open Library"
         )
         return parse_openlibrary_isbn(raw, metadata, isbn)
-    title = _clean(metadata.get("title"))
+    title = clean_text(metadata.get("title"))
     if not title:
         raise BookLookupError("invalid_query", "请先填写 ISBN 或书名。")
     query = {"title": title, "limit": _MAX_RECORDS, "fields": "title,subtitle,author_name,first_publish_year,publisher,isbn,key"}
-    author = _clean(metadata.get("author"))
+    author = clean_text(metadata.get("author"))
     if author:
         query["author"] = author
     raw = _fetch(
@@ -212,17 +212,17 @@ def parse_openlibrary_search(
 def _candidate_from_openlibrary(
     entry: Mapping[str, object], requested: Mapping[str, object], isbn: str
 ) -> Optional[Dict[str, object]]:
-    title = _clean(entry.get("title"))
+    title = clean_text(entry.get("title"))
     if not title:
         return None
-    subtitle = _clean(entry.get("subtitle"))
+    subtitle = clean_text(entry.get("subtitle"))
     full_title = f"{title}: {subtitle}" if subtitle else title
     author = _join_names(entry.get("authors"), key="name")
     publisher = _join_names(entry.get("publishers"), key="name", first_only=True)
     place = _join_names(entry.get("publish_places"), key="name", first_only=True)
-    year = _year4(_clean(entry.get("publish_date")))
+    year = _year4(clean_text(entry.get("publish_date")))
     isbns = _openlibrary_isbns(entry.get("identifiers"))
-    record_url = _clean(entry.get("url"))
+    record_url = clean_text(entry.get("url"))
     return _assemble_candidate(
         full_title, author, publisher, place, year, isbns, record_url,
         requested, isbn, source_key="open_library", source_label="Open Library",
@@ -232,16 +232,16 @@ def _candidate_from_openlibrary(
 def _candidate_from_openlibrary_doc(
     doc: Mapping[str, object], requested: Mapping[str, object], isbn: str
 ) -> Optional[Dict[str, object]]:
-    title = _clean(doc.get("title"))
+    title = clean_text(doc.get("title"))
     if not title:
         return None
-    subtitle = _clean(doc.get("subtitle"))
+    subtitle = clean_text(doc.get("subtitle"))
     full_title = f"{title}: {subtitle}" if subtitle else title
     author = _join_list(doc.get("author_name"))
     publisher = _first_of(doc.get("publisher"))
     year = _year4(str(doc.get("first_publish_year") or ""))
-    isbns = [v for v in (_normalize_isbn(x) for x in _as_list(doc.get("isbn"))) if v]
-    key = _clean(doc.get("key"))
+    isbns = [v for v in (normalize_isbn(x) for x in _as_list(doc.get("isbn"))) if v]
+    key = clean_text(doc.get("key"))
     record_url = f"https://openlibrary.org{key}" if key.startswith("/") else ""
     return _assemble_candidate(
         full_title, author, publisher, "", year, isbns, record_url,
@@ -255,7 +255,7 @@ def _openlibrary_isbns(identifiers: object) -> List[str]:
     result: List[str] = []
     for code in ("isbn_13", "isbn_10"):
         for value in _as_list(identifiers.get(code)):
-            normalized = _normalize_isbn(value)
+            normalized = normalize_isbn(value)
             if normalized and normalized not in result:
                 result.append(normalized)
     return result
@@ -265,11 +265,11 @@ def _openlibrary_isbns(identifiers: object) -> List[str]:
 
 
 def lookup_loc(metadata: Mapping[str, object]) -> List[Dict[str, object]]:
-    isbn = _normalize_isbn(metadata.get("isbn"))
+    isbn = normalize_isbn(metadata.get("isbn"))
     if isbn:
         query = f"bath.isbn={isbn}"
     else:
-        title = _clean(metadata.get("title"))
+        title = clean_text(metadata.get("title"))
         if not title:
             raise BookLookupError("invalid_query", "请先填写 ISBN 或书名。")
         query = f'bath.title="{title}"'
@@ -311,10 +311,10 @@ def lookup_k10plus(metadata: Mapping[str, object]) -> List[Dict[str, object]]:
 
 
 def _build_cql(metadata: Mapping[str, object]) -> tuple[str, str]:
-    isbn = _normalize_isbn(metadata.get("isbn"))
+    isbn = normalize_isbn(metadata.get("isbn"))
     if isbn:
         return f"pica.isb={isbn}", isbn
-    title = _clean(metadata.get("title"))
+    title = clean_text(metadata.get("title"))
     if not title:
         return "", ""
     return f'pica.tit="{title}"', ""
@@ -365,7 +365,7 @@ def _first_sub(field: List[tuple], code: str) -> str:
 
 
 def _person(name: str) -> str:
-    name = _clean(name).rstrip(",").strip()
+    name = clean_text(name).rstrip(",").strip()
     if "," in name:
         family, given = name.split(",", 1)
         rebuilt = f"{given.strip()} {family.strip()}".strip()
@@ -383,10 +383,10 @@ def _candidate_from_marc(
     title_fields = _datafields(record, "245")
     if not title_fields:
         return None
-    title_main = _clean(_first_sub(title_fields[0], "a")).rstrip(" /:").strip()
+    title_main = clean_text(_first_sub(title_fields[0], "a")).rstrip(" /:").strip()
     if not title_main:
         return None
-    subtitle = _clean(_first_sub(title_fields[0], "b")).rstrip(" /:").strip()
+    subtitle = clean_text(_first_sub(title_fields[0], "b")).rstrip(" /:").strip()
     full_title = f"{title_main}: {subtitle}" if subtitle else title_main
 
     authors: List[str] = []
@@ -399,8 +399,8 @@ def _candidate_from_marc(
     place = publisher = year = ""
     for tag in ("264", "260"):
         for field in _datafields(record, tag):
-            place = place or _clean(_first_sub(field, "a")).rstrip(" :,").strip()
-            publisher = publisher or _clean(_first_sub(field, "b")).rstrip(" ,").strip()
+            place = place or clean_text(_first_sub(field, "a")).rstrip(" :,").strip()
+            publisher = publisher or clean_text(_first_sub(field, "b")).rstrip(" ,").strip()
             if not year:
                 match = re.search(r"(1[5-9]\d{2}|20\d{2})", _first_sub(field, "c"))
                 year = match.group(1) if match else ""
@@ -410,7 +410,7 @@ def _candidate_from_marc(
     isbns: List[str] = []
     for field in _datafields(record, "020"):
         for code in ("a", "9"):
-            value = _normalize_isbn(_first_sub(field, code))
+            value = normalize_isbn(_first_sub(field, code))
             if value and value not in isbns:
                 isbns.append(value)
 
@@ -452,7 +452,7 @@ def _assemble_candidate(
     if resolved_isbn:
         metadata["isbn"] = resolved_isbn
 
-    match = _match(requested, full_title, author, isbns, isbn)
+    match = match_book_candidate(requested, full_title, author, isbns, isbn)
     evidence = {
         field: {
             "source": source_key,
@@ -491,17 +491,17 @@ def _as_list(value: object) -> List[object]:
 
 def _first_of(value: object) -> str:
     items = _as_list(value)
-    return _clean(items[0]) if items else ""
+    return clean_text(items[0]) if items else ""
 
 
 def _join_list(value: object) -> str:
-    return ", ".join(v for v in (_clean(x) for x in _as_list(value)) if v)
+    return ", ".join(v for v in (clean_text(x) for x in _as_list(value)) if v)
 
 
 def _join_names(value: object, *, key: str, first_only: bool = False) -> str:
     names: List[str] = []
     for entry in _as_list(value):
-        name = _clean(entry.get(key)) if isinstance(entry, Mapping) else _clean(entry)
+        name = clean_text(entry.get(key)) if isinstance(entry, Mapping) else clean_text(entry)
         if name and name not in names:
             names.append(name)
             if first_only:
