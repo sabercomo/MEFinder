@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 from ..app_context import AppPaths
-from ..bibliographic_metadata import (
+from ..bibliographic.metadata import (
     METADATA_FIELDS,
     canonical_metadata,
     manual_metadata,

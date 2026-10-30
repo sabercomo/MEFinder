@@ -13,9 +13,9 @@ from src.me_finder.application.document_query_service import (
 from src.me_finder.bibliographic_metadata_controller import (
     BibliographicMetadataController,
 )
-from src.me_finder.crossref_lookup import CrossrefLookupError
-from src.me_finder.foreign_book_lookup import BookLookupError
-from src.me_finder.journal_metadata_lookup import CNKILookupError
+from src.me_finder.bibliographic.crossref_lookup import CrossrefLookupError
+from src.me_finder.bibliographic.foreign_book_lookup import BookLookupError
+from src.me_finder.bibliographic.journal_lookup import CNKILookupError
 from src.me_finder.errors import UserFacingError
 
 

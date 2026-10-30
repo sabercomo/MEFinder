@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
 
-from src.me_finder.cnki_citation import parse_cnki_journal_citation
+from src.me_finder.bibliographic.cnki_citation import parse_cnki_journal_citation
 from src.me_finder.database import build_database
 from src.me_finder.web import make_handler
 

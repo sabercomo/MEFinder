@@ -18,14 +18,14 @@ from .application.index_runtime import IndexRuntime
 from .application.page_mapping_coordinator import PageMappingCoordinator
 from .archive_transfer_controller import ArchiveTransferController, build_archive_transfer_controller
 from .backup_service import restore_backup, write_backup
-from .bibliographic_metadata import (
+from .bibliographic.metadata import (
     METADATA_FIELDS, canonical_metadata, detect_pdf_bibliographic_metadata,
     manual_metadata, metadata_missing_fields, update_metadata_in_database,
 )
 from .bibliographic_metadata_controller import BibliographicMetadataController
-from .book_metadata_lookup import lookup_book
-from .cnki_citation import parse_cnki_journal_citation
-from .crossref_lookup import lookup_crossref
+from .bibliographic.book_lookup import lookup_book
+from .bibliographic.cnki_citation import parse_cnki_journal_citation
+from .bibliographic.crossref_lookup import lookup_crossref
 from .database import replace_source_in_database
 from .document_deletion import DocumentDeletionService
 from .document_lifecycle_controller import DocumentLifecycleController
@@ -36,7 +36,7 @@ from .import_job_journal import DEFAULT_IMPORT_JOB_DIR, ImportJobJournal
 from .import_queue import ImportTaskQueue
 from .import_resume import sha256_file
 from .index_publisher import rebuild_local_index
-from .journal_metadata_lookup import fetch_cnki_candidate, lookup_cnki_journal
+from .bibliographic.journal_lookup import fetch_cnki_candidate, lookup_cnki_journal
 from .large_document.job_ledger import JobLedger
 from .large_document.mineru_accounts import MinerUAccountService, resolve_mineru_accounts_path
 from .lifecycle import DurableOperationGate

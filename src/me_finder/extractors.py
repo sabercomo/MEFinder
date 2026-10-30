@@ -21,7 +21,7 @@ from typing import (
 )
 from urllib.parse import unquote, urlsplit
 
-from .collection_metadata import infer_collection_metadata
+from .bibliographic.collection_metadata import infer_collection_metadata
 from .normalization import (
     cn_volume_number,
     compact_text,

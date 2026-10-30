@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
-from .bibliographic_metadata import metadata_missing_fields
+from .bibliographic.metadata import metadata_missing_fields
 from .persistence.zotero_sync_store import StoredZoteroState, ZoteroSyncStore
 from .tasks.background_tasks import BackgroundTasks
 from .zotero_local_api import (

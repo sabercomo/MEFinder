@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.me_finder.citations import build_citation_formats, format_citation
-from src.me_finder.bibliographic_metadata import (
+from src.me_finder.bibliographic.metadata import (
     canonical_metadata,
     detect_pdf_bibliographic_metadata,
     invalid_metadata_fields,
@@ -334,7 +334,7 @@ class CitationFormatTests(unittest.TestCase):
             path = Path(temp_dir) / "马恩全集第50卷.pdf"
             path.write_bytes(b"pdf")
             with patch(
-                "src.me_finder.bibliographic_metadata._embedded_pdf_metadata",
+                "src.me_finder.bibliographic.metadata._embedded_pdf_metadata",
                 return_value={"title": "K93.pdf", "author": "kdc"},
             ):
                 detected = detect_pdf_bibliographic_metadata(
@@ -714,7 +714,7 @@ class CitationFormatTests(unittest.TestCase):
         self.assertEqual(formats["gb_missing_fields"], [])
 
     def test_manual_metadata_accepts_journal_article_type(self) -> None:
-        from src.me_finder.bibliographic_metadata import manual_metadata
+        from src.me_finder.bibliographic.metadata import manual_metadata
 
         saved = manual_metadata({
             "document_type": "journal_article",
@@ -1519,7 +1519,7 @@ class CitationFormatTests(unittest.TestCase):
             database_path = Path(temp_dir) / "index.sqlite3"
             build_database(index, database_path)
             with patch(
-                "src.me_finder.bibliographic_metadata.write_volume_payload",
+                "src.me_finder.bibliographic.metadata.write_volume_payload",
                 side_effect=RuntimeError("volume update failed"),
             ):
                 with self.assertRaisesRegex(RuntimeError, "volume update failed"):

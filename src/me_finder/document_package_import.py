@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
-from .bibliographic_metadata import METADATA_FIELDS
+from .bibliographic.metadata import METADATA_FIELDS
 from .document_export import (
     DocumentExportError,
     ExportedDocument,

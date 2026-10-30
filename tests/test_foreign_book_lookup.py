@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from src.me_finder.foreign_book_lookup import (
+from src.me_finder.bibliographic.foreign_book_lookup import (
     BookLookupError,
     parse_google_books_response,
     _build_query,

@@ -10,7 +10,7 @@ import re
 import unicodedata
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from .bibliographic_values import (
+from .values import (
     clean_person,
     is_plausible_person_name,
     is_valid_bibliographic_value,

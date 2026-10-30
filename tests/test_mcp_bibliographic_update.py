@@ -22,12 +22,12 @@ from src.me_finder.application.bibliographic_metadata_coordinator import (
 from src.me_finder.application.bibliographic_update_applier import (
     apply_confirmed_updates,
 )
-from src.me_finder.bibliographic_fill import (
+from src.me_finder.bibliographic.fill import (
     manual_save_payload,
     normalize_proposals,
     plan_fill,
 )
-from src.me_finder.bibliographic_updates import list_requests
+from src.me_finder.bibliographic.updates import list_requests
 from src.me_finder.database import build_database
 from src.me_finder.mcp_server import TOOLS, _call_tool
 from src.me_finder.persistence.bibliographic_update_store import (

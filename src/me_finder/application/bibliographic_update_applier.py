@@ -15,13 +15,13 @@ import threading
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 
-from ..bibliographic_fill import manual_save_payload, merge_current, plan_fill
-from ..bibliographic_updates import (
+from ..bibliographic.fill import manual_save_payload, merge_current, plan_fill
+from ..bibliographic.updates import (
     list_requests,
     read_source_payload,
     record_request_result,
 )
-from ..bibliographic_values import canonical_metadata
+from ..bibliographic.values import canonical_metadata
 
 POLL_SECONDS = 5.0
 BATCH_LIMIT = 20

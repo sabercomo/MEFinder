@@ -17,7 +17,7 @@ from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 from .application.bibliographic_metadata_coordinator import BibliographicMetadataError
 from .app_context import AppPaths
-from .bibliographic_metadata import update_metadata_in_database
+from .bibliographic.metadata import update_metadata_in_database
 from .import_resume import sha256_file
 from .persistence.zotero_sync_store import ZoteroSyncStore
 from .preferences import read_preferences, resolve_preferences_path

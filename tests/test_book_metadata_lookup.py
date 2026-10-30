@@ -4,8 +4,8 @@ import json
 import unittest
 from unittest.mock import patch
 
-from src.me_finder import book_metadata_lookup as bml
-from src.me_finder.book_metadata_lookup import (
+from src.me_finder.bibliographic import book_lookup as bml
+from src.me_finder.bibliographic.book_lookup import (
     lookup_book,
     parse_k10plus_marcxml,
     parse_marcxml,
@@ -13,7 +13,7 @@ from src.me_finder.book_metadata_lookup import (
     parse_openlibrary_search,
     _build_cql,
 )
-from src.me_finder.foreign_book_lookup import BookLookupError
+from src.me_finder.bibliographic.foreign_book_lookup import BookLookupError
 
 
 _SRU = """<?xml version="1.0" encoding="UTF-8"?>

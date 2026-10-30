@@ -20,7 +20,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
-from .bibliographic_metadata import normalize_doi, normalize_issn
+from .metadata import normalize_doi, normalize_issn
 
 
 CNKI_SEARCH_ENDPOINT = "https://oversea.cnki.net/kns8s/brief/grid?language=CHS"

@@ -1,6 +1,6 @@
 import unittest
 
-from src.me_finder.collection_metadata import infer_collection_metadata
+from src.me_finder.bibliographic.collection_metadata import infer_collection_metadata
 
 
 class CollectionMetadataTests(unittest.TestCase):

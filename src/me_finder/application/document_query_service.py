@@ -17,7 +17,7 @@ from typing import (
 )
 
 from ..app_context import AppPaths
-from ..bibliographic_metadata import (
+from ..bibliographic.metadata import (
     canonical_metadata,
     detect_pdf_bibliographic_metadata,
 )

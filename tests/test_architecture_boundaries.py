@@ -262,11 +262,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 共有词假锚点移除（leave-one-out + 源端更优替代门）拆为独立叶模块。
             "alignment_anchor_validation.py": 150,
             # 共用取值底座与三类文献抽取器已拆出，上限随之下调。
-            "bibliographic_metadata.py": 1550,
-            "bibliographic_values.py": 325,
-            "bibliographic_thesis.py": 300,
-            "bibliographic_journal.py": 350,
-            "bibliographic_marx_engels.py": 175,
+            "bibliographic/metadata.py": 1550,
+            "bibliographic/values.py": 325,
+            "bibliographic/thesis.py": 300,
+            "bibliographic/journal.py": 350,
+            "bibliographic/marx_engels.py": 175,
             # 任务 2 已把 search 上帝类拆为 recall/scoring/anchors/citation/
             # assembly/contract 六个单向依赖模块；门面 317 行，上限随之下调，
             # 新模块按当前行数封顶。

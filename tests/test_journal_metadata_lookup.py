@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
 from src.me_finder.database import build_database
-from src.me_finder.journal_metadata_lookup import (
+from src.me_finder.bibliographic.journal_lookup import (
     CNKIClient,
     CNKILookupError,
     parse_cnki_detail_page,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from src.me_finder.crossref_lookup import (
+from src.me_finder.bibliographic.crossref_lookup import (
     CrossrefLookupError,
     parse_crossref_query,
     parse_crossref_work,

@@ -15,8 +15,8 @@ import uuid
 from pathlib import Path
 from typing import Mapping
 
-from ..bibliographic_fill import normalize_proposals, plan_fill
-from ..bibliographic_updates import (
+from ..bibliographic.fill import normalize_proposals, plan_fill
+from ..bibliographic.updates import (
     BibliographicUpdateNotFound,
     confirm_pending_request,
     insert_pending_request,

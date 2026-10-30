@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .collection_metadata import infer_collection_metadata
-from .bibliographic_journal import (
+from .journal import (
     JOURNAL_MAX_FALLBACK_PAGES,
     extract_journal_article,
     extract_journal_name,
@@ -18,17 +18,17 @@ from .bibliographic_journal import (
     normalize_doi as normalize_doi,
     normalize_issn as normalize_issn,
 )
-from .bibliographic_marx_engels import (
+from .marx_engels import (
     marx_engels_collection_metadata as marx_engels_collection_metadata,
     marx_engels_first_edition_metadata as marx_engels_first_edition_metadata,
     marx_engels_second_edition_metadata as marx_engels_second_edition_metadata,
 )
-from .bibliographic_thesis import (
+from .thesis import (
     extract_thesis_metadata,
     looks_like_thesis,
     strip_thesis_author_prefix,
 )
-from .bibliographic_values import (
+from .values import (
     CHINESE_NAME_CHARS,
     CHINESE_PUBLISHER_SUFFIX,
     DOCUMENT_TYPES as DOCUMENT_TYPES,
@@ -57,7 +57,7 @@ from .bibliographic_values import (
     is_valid_bibliographic_value as is_valid_bibliographic_value,
     repair_english_title_casing,
 )
-from .persistence.bibliographic_metadata_store import (
+from ..persistence.bibliographic_metadata_store import (
     metadata_write_transaction,
     paragraph_payload_rows,
     source_payload_json,
@@ -68,7 +68,7 @@ from .persistence.bibliographic_metadata_store import (
     write_volume_payload,
     write_work_payload,
 )
-from .persistence.paragraph_payload import paragraph_payload_for_storage
+from ..persistence.paragraph_payload import paragraph_payload_for_storage
 
 
 

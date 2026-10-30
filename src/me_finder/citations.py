@@ -14,7 +14,7 @@ from typing import (
     Mapping,
 )
 
-from .collection_metadata import infer_collection_metadata
+from .bibliographic.collection_metadata import infer_collection_metadata
 
 
 CitationMetadata = Mapping[str, object]

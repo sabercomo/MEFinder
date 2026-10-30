@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Dict
 
-from .bibliographic_metadata import normalize_doi, normalize_issn
+from .metadata import normalize_doi, normalize_issn
 
 
 MAX_CNKI_CITATION_CHARS = 8_000

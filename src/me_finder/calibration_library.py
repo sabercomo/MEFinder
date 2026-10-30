@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
 from .auto_page_mapping import has_manual_mapping
-from .bibliographic_metadata import METADATA_FIELDS, is_valid_bibliographic_value, metadata_missing_fields
-from .collection_metadata import infer_collection_metadata
+from .bibliographic.metadata import METADATA_FIELDS, is_valid_bibliographic_value, metadata_missing_fields
+from .bibliographic.collection_metadata import infer_collection_metadata
 
 
 _CJK_RE = re.compile(r"[㐀-鿿]")

@@ -15,7 +15,7 @@ from urllib.request import ProxyHandler, build_opener
 
 from src.me_finder.app_context import AppContext
 from src.me_finder.database import build_database
-from src.me_finder.bibliographic_metadata import update_metadata_in_database
+from src.me_finder.bibliographic.metadata import update_metadata_in_database
 from src.me_finder.web import (
     MAX_JSON_REQUEST_BYTES,
     ManagedThreadingHTTPServer,

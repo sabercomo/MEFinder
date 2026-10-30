@@ -16,9 +16,9 @@ from .application.document_query_service import (
     DocumentQueryService,
     DocumentQueryUnavailable,
 )
-from .foreign_book_lookup import BookLookupError
-from .journal_metadata_lookup import CNKILookupError
-from .crossref_lookup import CrossrefLookupError
+from .bibliographic.foreign_book_lookup import BookLookupError
+from .bibliographic.journal_lookup import CNKILookupError
+from .bibliographic.crossref_lookup import CrossrefLookupError
 from .errors import UserFacingError
 
 

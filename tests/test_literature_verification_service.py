@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from src.me_finder.application import LiteratureVerificationService
-from src.me_finder.bibliographic_metadata import METADATA_FIELDS
+from src.me_finder.bibliographic.metadata import METADATA_FIELDS
 from src.me_finder.structured_reader import SourceNotFound
 from tests.mcp_v1_fixture import (
     CALIBRATED_QUOTE,

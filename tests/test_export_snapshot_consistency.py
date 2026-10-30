@@ -30,7 +30,7 @@ from src.me_finder.application.document_heading_enrichment import (
     DocumentHeadingEnrichment,
     ensure_document_headings,
 )
-from src.me_finder.bibliographic_metadata import update_metadata_in_database
+from src.me_finder.bibliographic.metadata import update_metadata_in_database
 from src.me_finder.document_export_service import (
     export_indexed_pdf,
     export_indexed_pdf_markdown,

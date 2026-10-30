@@ -20,7 +20,7 @@ from .auto_page_mapping import (
     apply_auto_mapping_to_pages,
     has_manual_mapping,
 )
-from .bibliographic_metadata import METADATA_FIELDS
+from .bibliographic.metadata import METADATA_FIELDS
 from .document_heading import enrich_pdf_headings
 from .import_resume import resume_summary
 from .normalization import (

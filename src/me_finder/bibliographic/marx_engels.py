@@ -11,7 +11,7 @@ import unicodedata
 from pathlib import Path
 from typing import Dict, Tuple
 
-from .bibliographic_values import CHINESE_DIGITS
+from .values import CHINESE_DIGITS
 
 
 MARX_ENGELS_FIRST_EDITION_YEARS = {

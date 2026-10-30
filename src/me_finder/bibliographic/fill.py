@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Sequence
 
-from .bibliographic_metadata import invalid_metadata_fields
-from .bibliographic_values import METADATA_FIELDS, is_valid_bibliographic_value
-from .bibliographic_journal import normalize_doi, normalize_issn
+from .metadata import invalid_metadata_fields
+from .values import METADATA_FIELDS, is_valid_bibliographic_value
+from .journal import normalize_doi, normalize_issn
 
 EVIDENCE_SOURCE = "mcp_agent"
 MAX_VALUE_CHARACTERS = 500

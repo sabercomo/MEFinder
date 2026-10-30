@@ -672,7 +672,7 @@ class LiteratureVerificationService:
         self,
         source_file_id: str,
     ) -> dict[str, object]:
-        from ..bibliographic_metadata import (
+        from ..bibliographic.metadata import (
             METADATA_FIELDS,
             invalid_metadata_fields,
             is_valid_bibliographic_value,
@@ -756,7 +756,7 @@ class LiteratureVerificationService:
     def _bibliographic_record(
         self, source_file_id: str
     ) -> tuple[Mapping[str, object], dict[str, object]]:
-        from ..bibliographic_metadata import canonical_metadata
+        from ..bibliographic.metadata import canonical_metadata
         from ..database import load_database_index
         from ..structured_reader import SourceNotFound
 

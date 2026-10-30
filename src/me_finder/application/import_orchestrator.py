@@ -19,7 +19,7 @@ from typing import (
 )
 
 from ..app_context import AppPaths
-from ..bibliographic_metadata import metadata_missing_fields
+from ..bibliographic.metadata import metadata_missing_fields
 from ..extractors import extract_source
 from ..import_job_journal import ImportJobJournal
 from ..import_queue import (
