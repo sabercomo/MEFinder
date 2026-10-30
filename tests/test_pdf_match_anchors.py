@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.me_finder.pdf_extractors import (
+from src.me_finder.pdf.extractors import (
     PDFTextPage,
     extract_pdf_source,
     load_mineru_pdf_pages,
@@ -185,13 +185,13 @@ class PDFPageTextHashTests(unittest.TestCase):
                 parser_version="test",
             )
             with (
-                patch("src.me_finder.pdf_extractors.detect_pdf_type", return_value=profile),
+                patch("src.me_finder.pdf.extractors.detect_pdf_type", return_value=profile),
                 patch(
-                    "src.me_finder.pdf_extractors.extract_native_pdf_pages",
+                    "src.me_finder.pdf.extractors.extract_native_pdf_pages",
                     return_value=[native_page],
                 ),
                 patch(
-                    "src.me_finder.pdf_extractors.PageMappingService.infer",
+                    "src.me_finder.pdf.extractors.PageMappingService.infer",
                     return_value=auto_mapping,
                 ),
             ):
@@ -213,7 +213,7 @@ class PDFPageTextHashTests(unittest.TestCase):
                 encoding="utf-8",
             )
             with patch(
-                "src.me_finder.pdf_extractors.get_pdf_page_labels",
+                "src.me_finder.pdf.extractors.get_pdf_page_labels",
                 return_value=[None],
             ):
                 reparsed_pages = load_mineru_pdf_pages(
@@ -266,7 +266,7 @@ class PDFPageTextHashTests(unittest.TestCase):
             )
             for parser in ("mineru", "vision_api"):
                 with self.subTest(parser=parser), patch(
-                    "src.me_finder.pdf_extractors.get_pdf_page_labels",
+                    "src.me_finder.pdf.extractors.get_pdf_page_labels",
                     return_value=[None, None],
                 ):
                     pages = load_mineru_pdf_pages(

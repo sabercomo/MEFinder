@@ -13,14 +13,14 @@ import unittest
 from unittest.mock import patch
 
 from src.me_finder.export.page_reconstruction import attach_export_layout, reconstruct_export_pages
-from src.me_finder.pdf_extractors import (
+from src.me_finder.pdf.extractors import (
     load_mineru_pdf_pages,
     load_mineru_segments,
     make_pdf_paragraphs,
     pdf_page_text_hash,
     runtime_corpus_path,
 )
-from src.me_finder.pdf_page_split import mineru_layout_paths
+from src.me_finder.pdf.page_split import mineru_layout_paths
 from tests.test_export_page_reconstruction import reconstruction_fixture
 
 PREFIX = "前页正文"
@@ -59,8 +59,8 @@ class ImportPageSplitTests(unittest.TestCase):
     def load(self, segment=None):
         segment = segment or {"result_dir": str(self.result_dir), "page_ranges": "1-2",
                               "page_index_offset": 0, "parser": "mineru"}
-        with patch("src.me_finder.pdf_extractors.get_pdf_page_labels", return_value=[None, None]), \
-                patch("src.me_finder.pdf_extractors.get_pdf_page_dimensions",
+        with patch("src.me_finder.pdf.extractors.get_pdf_page_labels", return_value=[None, None]), \
+                patch("src.me_finder.pdf.extractors.get_pdf_page_dimensions",
                       return_value=[(1000.0, 1000.0)] * 2):
             return load_mineru_pdf_pages(
                 self.root / "unused.pdf", "book", "book", {}, [segment], root=self.root
@@ -123,8 +123,8 @@ class ImportPageSplitTests(unittest.TestCase):
         self.write_layout(self.result_dir)
         segment = {"result_dir": str(self.result_dir), "page_ranges": "1-3",
                    "page_index_offset": 0, "parser": "mineru"}
-        with patch("src.me_finder.pdf_extractors.get_pdf_page_labels", return_value=[None] * 3), \
-                patch("src.me_finder.pdf_extractors.get_pdf_page_dimensions",
+        with patch("src.me_finder.pdf.extractors.get_pdf_page_labels", return_value=[None] * 3), \
+                patch("src.me_finder.pdf.extractors.get_pdf_page_dimensions",
                       return_value=[(1000.0, 1000.0)] * 3):
             pages = load_mineru_pdf_pages(
                 self.root / "unused.pdf", "book", "book", {}, [segment], root=self.root

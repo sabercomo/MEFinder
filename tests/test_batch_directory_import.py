@@ -21,7 +21,7 @@ from src.me_finder.database import build_database
 from src.me_finder.database import replace_source_in_database as real_replace_source
 from src.me_finder.import_queue import ImportQueueFullError
 from src.me_finder.errors import UserFacingError
-from src.me_finder.pdf_import_service import rebuild_local_index
+from src.me_finder.pdf.import_service import rebuild_local_index
 from src.me_finder.preferences import save_preferences
 from src.me_finder.search import SearchEngine as RealSearchEngine
 from src.me_finder.web import make_handler

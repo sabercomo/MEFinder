@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Tuple
 
 from .application.index_runtime import IndexRuntime
-from .pdf_import_service import scan_directories_for_documents
+from .pdf.import_service import scan_directories_for_documents
 from .preferences import read_preferences, save_preferences
 from .script_conversion import is_available
 

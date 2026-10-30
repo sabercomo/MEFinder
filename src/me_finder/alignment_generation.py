@@ -33,7 +33,7 @@ from .embedding_models import (
     DEFAULT_EMBEDDING_MODEL_ID,
     embedding_model_config,
 )
-from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
+from .pdf.extractors import attach_page_block_offsets, pdf_page_text_hash
 from .persistence.alignment_store import (
     completed_run_candidates,
     completed_run_status_counts,

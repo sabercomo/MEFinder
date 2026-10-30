@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Optional, Protocol, Sequence
 
 from ..app_context import AppPaths
-from ..auto_page_mapping import has_manual_mapping
+from ..pdf.auto_page_mapping import has_manual_mapping
 from ..lifecycle import DurableOperationGate
 from ..errors import UserFacingError
 from ..import_config_store import (
@@ -21,8 +21,8 @@ from ..import_config_store import (
     load_import_config,
     save_import_config,
 )
-from ..pdf_page_mapping import normalize_manual_mapping_segments
-from ..runtime_page_mapping import (
+from ..pdf.page_mapping import normalize_manual_mapping_segments
+from ..pdf.runtime_page_mapping import (
     apply_mapping_to_database,
     normalize_auto_segments,
 )

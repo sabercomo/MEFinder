@@ -21,10 +21,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Collection, Dict, List, Mapping, Optional, Sequence
 
-from .database import replace_source_in_database
-from .pdf_extractors import extract_pdf_source, load_pdf_import_config
-from .persistence.source_rows_reads import read_reading_positions, read_source_rows
-from .persistence.translation_work_store import (
+from ..database import replace_source_in_database
+from .extractors import extract_pdf_source, load_pdf_import_config
+from ..persistence.source_rows_reads import read_reading_positions, read_source_rows
+from ..persistence.translation_work_store import (
     save_reading_position_row,
     workspace_write_transaction,
 )

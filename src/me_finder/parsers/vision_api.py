@@ -25,7 +25,7 @@ from ..import_resume import (
     sha256_file,
     utc_now_iso,
 )
-from ..pdf_extractors import load_pymupdf
+from ..pdf.extractors import load_pymupdf
 
 from .general_model import (
     GENERAL_MODEL_PROVIDER_ID,

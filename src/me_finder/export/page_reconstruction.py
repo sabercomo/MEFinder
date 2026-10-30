@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Mapping, Optional
 
-from ..auto_page_mapping import normalized_page_bbox
+from ..pdf.auto_page_mapping import normalized_page_bbox
 from .document import DocumentExportError
 from .normalize import (
     block_role, blocks_aligned_with_text, heading_level, page_scale,

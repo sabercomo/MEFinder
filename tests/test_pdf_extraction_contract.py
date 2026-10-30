@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from src.me_finder import pdf_extractors as pdf
+from src.me_finder.pdf import extractors as pdf
 from tests.test_export_page_reconstruction import reconstruction_fixture
 from tests.test_pdf_match_anchors import make_page, make_paragraphs
 from tests.test_pdf_page_split import content_list
@@ -53,7 +53,7 @@ def capture() -> dict:
                         "applied_segments": [], "failure_reasons": []}
         with patch.object(pdf.PageMappingService, "infer", side_effect=lambda *a, **kw: deepcopy(uncalibrated)):
             captured = {"pymupdf_pages": [asdict(page) for page in pdf.extract_native_pdf_pages(path)]}
-            with patch("src.me_finder.pdf_native.load_pymupdf", return_value=None):
+            with patch("src.me_finder.pdf.native.load_pymupdf", return_value=None):
                 captured["simple_native"] = pdf.extract_pdf_source(path, root, config)
                 mapped = {**config, "page_mapping": {"segments": [
                     {"pdf_page_start": 0, "pdf_page_end": 1, "citation_page_start": "27"}

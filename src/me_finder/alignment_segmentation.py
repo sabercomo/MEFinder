@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Tuple
 
-from .auto_page_mapping import layout_bbox_scale, normalized_page_bbox
+from .pdf.auto_page_mapping import layout_bbox_scale, normalized_page_bbox
 
 
 MAX_SEGMENT_LENGTH = 1200

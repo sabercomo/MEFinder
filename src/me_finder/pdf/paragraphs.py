@@ -9,9 +9,9 @@ import hashlib
 import re
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
-from .normalization import compact_text, normalize_pdf_text, punctuationless_text, split_sentences
-from .pdf_extraction_types import PDFExtractionError
-from .pdf_page_mapping import mapped_page_display
+from ..normalization import compact_text, normalize_pdf_text, punctuationless_text, split_sentences
+from .extraction_types import PDFExtractionError
+from .page_mapping import mapped_page_display
 
 
 CROSS_PAGE_TAIL_CHARS = 900

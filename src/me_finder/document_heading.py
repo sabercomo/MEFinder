@@ -29,7 +29,7 @@ import unicodedata
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
-from .auto_page_mapping import normalize_numeric_bookmark_title
+from .pdf.auto_page_mapping import normalize_numeric_bookmark_title
 
 logger = logging.getLogger(__name__)
 

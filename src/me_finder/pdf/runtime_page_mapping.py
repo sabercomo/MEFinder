@@ -8,11 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from .persistence.paragraph_payload import (
+from ..persistence.paragraph_payload import (
     paragraph_from_database_row,
     paragraph_payload_for_storage,
 )
-from .persistence.page_mapping_store import (
+from ..persistence.page_mapping_store import (
     page_mapping_transaction,
     paragraph_rows,
     pdf_page_rows,
@@ -22,7 +22,7 @@ from .persistence.page_mapping_store import (
     write_pdf_page,
     write_source_payload,
 )
-from .pdf_page_mapping import (
+from .page_mapping import (
     PageMapper,
     mapping_gutter_x,
     mapping_layout_mode,

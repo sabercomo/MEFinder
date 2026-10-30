@@ -217,7 +217,7 @@ class IndexPublicationGuardTests(unittest.TestCase):
         original_bytes = self.seed_existing_database()
 
         with patch(
-            "src.me_finder.pdf_extractors.extract_pdf_source",
+            "src.me_finder.pdf.extractors.extract_pdf_source",
             side_effect=RuntimeError("parser exploded"),
         ):
             with self.assertRaises(IncompleteIndexBuildError) as raised:

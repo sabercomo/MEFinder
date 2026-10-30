@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
-from src.me_finder.pdf_extractors import pdf_page_text_hash
+from src.me_finder.pdf.extractors import pdf_page_text_hash
 from src.me_finder.text_alignment import ALIGNMENT_ALGORITHM_VERSION
 
 

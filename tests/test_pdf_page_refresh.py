@@ -9,8 +9,8 @@ import unittest
 from unittest.mock import patch
 
 from src.me_finder.database import build_database, replace_source_in_database
-from src.me_finder.pdf_extractors import extract_pdf_source
-from src.me_finder.pdf_page_refresh import refresh_page_text
+from src.me_finder.pdf.extractors import extract_pdf_source
+from src.me_finder.pdf.page_refresh import refresh_page_text
 from src.me_finder.persistence.translation_work_store import (
     save_reading_position_row,
     workspace_write_transaction,
@@ -64,8 +64,8 @@ class PageTextRefreshTests(unittest.TestCase):
         )
 
     def patched(self):
-        stack = patch("src.me_finder.pdf_native.load_pymupdf", return_value=None)
-        mapping = patch("src.me_finder.pdf_extractors.PageMappingService.infer", return_value=UNCALIBRATED)
+        stack = patch("src.me_finder.pdf.native.load_pymupdf", return_value=None)
+        mapping = patch("src.me_finder.pdf.extractors.PageMappingService.infer", return_value=UNCALIBRATED)
 
         class Both:
             def __enter__(self_inner):

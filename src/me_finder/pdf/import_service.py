@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence
 
-from .document_file_store import (
+from ..document_file_store import (
     INTERNAL_DOCUMENT_NAME_MAX_BYTES,
     cleanup_stale_document_storage_files,
     copy_local_document,
@@ -15,7 +15,7 @@ from .document_file_store import (
     release_document_storage_target,
     reuse_registered_pdf_copy as _reuse_registered_pdf_copy,
 )
-from .import_config_store import (
+from ..import_config_store import (
     attach_mineru_manifest,
     configured_pdf_path as _configured_pdf_path,
     import_config_lock,
@@ -23,9 +23,9 @@ from .import_config_store import (
     locked_import_config,
     save_import_config,
 )
-from .index_publisher import indexed_word_source_count, rebuild_local_index
-from .pdf_extractors import detect_pdf_type, file_sha256
-from .pdf_parser_adapters import (
+from ..index_publisher import indexed_word_source_count, rebuild_local_index
+from .extractors import detect_pdf_type, file_sha256
+from .parser_adapters import (
     parse_pdf_with_local_ocr,
     parse_pdf_with_mineru,
     parse_pdf_with_provider,

@@ -12,7 +12,7 @@ from unittest.mock import patch
 from urllib.request import ProxyHandler, Request, build_opener
 
 from src.me_finder.database import build_database
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.import_service import (
     attach_mineru_manifest,
     load_import_config,
     register_pdf,

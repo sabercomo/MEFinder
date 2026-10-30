@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src.me_finder import pdf_import_service
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf import import_service as pdf_import_service
+from src.me_finder.pdf.import_service import (
     copy_local_document,
     scan_directories_for_documents,
 )

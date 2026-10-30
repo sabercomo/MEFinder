@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from .auto_page_mapping import (
+from .pdf.auto_page_mapping import (
     PageNumberCandidate,
     detect_pdf_page_layout,
     extract_mineru_page_number_candidates,

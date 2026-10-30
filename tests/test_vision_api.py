@@ -12,12 +12,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.import_service import (
     parse_pdf_with_provider,
     register_pdf,
 )
 from src.me_finder.database import build_database
-from src.me_finder.pdf_extractors import (
+from src.me_finder.pdf.extractors import (
     import_run_record,
     load_mineru_segments,
     mineru_profile,
@@ -907,7 +907,7 @@ class VisionAPIParserTests(unittest.TestCase):
                 {"parser_results": {"manifest": str(manifest_path)}}
             )
             with patch(
-                "src.me_finder.pdf_native.load_pymupdf",
+                "src.me_finder.pdf.native.load_pymupdf",
                 return_value=None,
             ):
                 profile = mineru_profile(pdf, segments)

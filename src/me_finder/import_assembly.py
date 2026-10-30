@@ -43,12 +43,12 @@ from .lifecycle import DurableOperationGate
 from .parsers.mineru_api import resolve_mineru_config_path
 from .parsers.mineru_local_settings import mineru_local_config_summary
 from .page_mapping_controller import PageMappingController
-from .pdf_extractors import extract_pdf_source
-from .pdf_import_service import detect_imported_pdf
-from .pdf_parser_adapters import parse_pdf_with_local_ocr, parse_pdf_with_mineru, parse_pdf_with_provider
+from .pdf.extractors import extract_pdf_source
+from .pdf.import_service import detect_imported_pdf
+from .pdf.parser_adapters import parse_pdf_with_local_ocr, parse_pdf_with_mineru, parse_pdf_with_provider
 from .persistence import SQLiteDocumentHeadingStore, SQLiteDocumentReadRepository
 from .preferences import read_preferences, resolve_preferences_path, record_backup_export
-from .runtime_page_mapping import apply_mapping_to_database
+from .pdf.runtime_page_mapping import apply_mapping_to_database
 from .search import SearchEngine
 from .parsers.vision_api import resolve_vision_config_path, vision_config_summary
 

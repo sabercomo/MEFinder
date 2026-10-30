@@ -31,7 +31,7 @@ from src.me_finder.parsers.provider import (
     ParserTaskStatus,
     ProviderCapabilities,
 )
-from src.me_finder.pdf_extractors import PDFExtractionError, SIMPLE_PDF_MAX_BYTES, SimplePDF
+from src.me_finder.pdf.extractors import PDFExtractionError, SIMPLE_PDF_MAX_BYTES, SimplePDF
 
 
 class SyntheticProvider(ParserProvider):

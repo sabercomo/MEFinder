@@ -19,7 +19,7 @@ from src.me_finder.app_context import AppContext, AppPaths
 from src.me_finder.database import build_database
 from src.me_finder.components.catalog import ComponentCatalog
 from src.me_finder.components.mineru import ManagedMinerU
-from src.me_finder.pdf_import_service import rebuild_local_index
+from src.me_finder.pdf.import_service import rebuild_local_index
 from src.me_finder.web import make_handler
 
 

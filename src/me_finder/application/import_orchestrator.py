@@ -38,7 +38,7 @@ from ..import_config_store import (
     load_import_config,
     locked_import_config,
 )
-from ..pdf_import_service import (
+from ..pdf.import_service import (
     register_pdf,
     reuse_registered_pdf_copy,
 )

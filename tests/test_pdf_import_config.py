@@ -7,9 +7,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from src.me_finder.pdf_extractors import file_sha256
+from src.me_finder.pdf.extractors import file_sha256
 from src.me_finder.errors import UserFacingError
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.import_service import (
     attach_mineru_manifest,
     load_import_config,
     rebuild_local_index,

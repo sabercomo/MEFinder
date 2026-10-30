@@ -12,8 +12,8 @@ import zlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from .pdf_extraction_types import PDFExtractionError, PDFTextPage
-from .pdf_paragraphs import attach_page_block_offsets
+from .extraction_types import PDFExtractionError, PDFTextPage
+from .paragraphs import attach_page_block_offsets
 
 
 SIMPLE_PDF_MAX_BYTES = 128 * 1024 * 1024
@@ -308,11 +308,11 @@ class SimplePDF:
                 if style == "D":
                     labels[page_index] = f"{prefix}{number}"
                 elif style == "r":
-                    from .pdf_page_mapping import int_to_roman
+                    from .page_mapping import int_to_roman
 
                     labels[page_index] = f"{prefix}{int_to_roman(number, upper=False)}"
                 elif style == "R":
-                    from .pdf_page_mapping import int_to_roman
+                    from .page_mapping import int_to_roman
 
                     labels[page_index] = f"{prefix}{int_to_roman(number, upper=True)}"
                 else:

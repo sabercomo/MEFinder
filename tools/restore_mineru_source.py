@@ -13,8 +13,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.me_finder.database import replace_source_in_database
-from src.me_finder.pdf_extractors import extract_pdf_source
-from src.me_finder.pdf_import_service import load_import_config, parse_pdf_with_mineru
+from src.me_finder.pdf.extractors import extract_pdf_source
+from src.me_finder.pdf.import_service import load_import_config, parse_pdf_with_mineru
 
 
 def restore(runtime_root: Path, source_id: str) -> dict[str, object]:

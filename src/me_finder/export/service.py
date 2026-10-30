@@ -32,7 +32,7 @@ from .page_selection import (
 )
 from .normalize import ExportOptions
 from .page_reconstruction import attach_export_layout
-from ..pdf_extractors import file_sha256
+from ..pdf.extractors import file_sha256
 
 
 class IndexedDocumentNotFound(DocumentExportError):

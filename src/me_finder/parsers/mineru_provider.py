@@ -15,7 +15,7 @@ from .mineru_api import (
     extract_zip,
     load_mineru_config,
 )
-from ..pdf_extractors import find_mineru_content_list
+from ..pdf.extractors import find_mineru_content_list
 from .provider import (
     NormalizedBlock,
     NormalizedPage,

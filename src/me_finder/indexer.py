@@ -17,7 +17,7 @@ from .extractors import (
     is_marx_engels_volume_name,
     volume_number_from_name,
 )
-from .pdf_extractors import extract_configured_pdfs
+from .pdf.extractors import extract_configured_pdfs
 
 
 DEFAULT_CORPUS_DIR = Path("corpus/raw_docx")

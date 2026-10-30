@@ -9,7 +9,7 @@ from unittest import mock
 
 from src.me_finder.database import SCHEMA
 from src.me_finder.bibliographic.metadata import manual_metadata, update_metadata_in_database
-from src.me_finder.runtime_page_mapping import apply_mapping_to_database, normalize_auto_segments
+from src.me_finder.pdf.runtime_page_mapping import apply_mapping_to_database, normalize_auto_segments
 from src.me_finder.search import SearchEngine
 from src.me_finder.web import HTML
 
@@ -125,7 +125,7 @@ class RuntimePageMappingTests(unittest.TestCase):
             )
 
             with mock.patch(
-                "src.me_finder.runtime_page_mapping._apply_paragraph_mapping",
+                "src.me_finder.pdf.runtime_page_mapping._apply_paragraph_mapping",
                 side_effect=RuntimeError("paragraph update failed"),
             ):
                 with self.assertRaisesRegex(RuntimeError, "paragraph update failed"):

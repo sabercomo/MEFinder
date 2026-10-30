@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import numpy as np
 
-from .auto_page_mapping import layout_bbox_scale, normalized_page_bbox
+from .pdf.auto_page_mapping import layout_bbox_scale, normalized_page_bbox
 
 
 MIN_FOLIO_CHAIN = 4

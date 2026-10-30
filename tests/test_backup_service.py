@@ -11,7 +11,7 @@ from pathlib import Path
 from src.me_finder.backup_service import create_backup, restore_backup
 from src.me_finder.database import build_database
 from src.me_finder.document_groups import add_group_member, create_document_group
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.import_service import (
     load_import_config,
     locked_import_config,
     save_import_config,

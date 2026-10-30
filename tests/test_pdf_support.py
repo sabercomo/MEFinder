@@ -7,13 +7,13 @@ from pathlib import Path
 
 from src.me_finder.database import DEFAULT_DATABASE_PATH
 from src.me_finder.indexer import DEFAULT_INDEX_PATH, build_index
-from src.me_finder.pdf_extractors import (
+from src.me_finder.pdf.extractors import (
     _attach_bibliographic_metadata,
     attach_page_block_offsets,
     detect_pdf_type,
     make_pdf_paragraphs,
 )
-from src.me_finder.pdf_page_mapping import (
+from src.me_finder.pdf.page_mapping import (
     PageMapper,
     normalize_manual_mapping_segments,
 )

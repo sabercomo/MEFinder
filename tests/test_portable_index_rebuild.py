@@ -11,8 +11,8 @@ from src.me_finder.database import build_database
 from src.me_finder.extractors import extract_source
 from src.me_finder.indexer import build_index
 from src.me_finder.errors import UserFacingError
-from src.me_finder.pdf_extractors import relative_to_root
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.extractors import relative_to_root
+from src.me_finder.pdf.import_service import (
     copy_local_document,
     indexed_word_source_count,
     rebuild_local_index,

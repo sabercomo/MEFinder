@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Mapping, Optional
 
 from .page_display import page_source_note, resolve_citation_page
-from .pdf_page_mapping import int_to_roman, page_range_display
+from .pdf.page_mapping import int_to_roman, page_range_display
 from .persistence.page_mapping_reads import read_page_mapping_evidence
 from .structured_reader import SourceNotFound, StructuredReaderError, validate_source_id
 

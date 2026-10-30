@@ -35,7 +35,7 @@ from .parsers.mineru_api import (
     submit_local_pdf,
     submit_local_pdf_segments,
 )
-from .pdf_page_refresh import refresh_page_text
+from .pdf.page_refresh import refresh_page_text
 from .search import SearchEngine
 from .web import serve
 

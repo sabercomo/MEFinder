@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src.me_finder.auto_page_mapping import (
+from src.me_finder.pdf.auto_page_mapping import (
     PageNumberCandidate,
     apply_auto_mapping_to_pages,
     detect_pdf_page_layout,
@@ -15,7 +15,7 @@ from src.me_finder.auto_page_mapping import (
     normalize_numeric_bookmark_title,
 )
 from src.me_finder.page_mapping_service import PageMappingService
-from src.me_finder.pdf_page_mapping import int_to_roman
+from src.me_finder.pdf.page_mapping import int_to_roman
 
 
 def cand(page_idx: int, number: int, style: str = "arabic", x: float = 0.5, y: float = 0.94) -> PageNumberCandidate:

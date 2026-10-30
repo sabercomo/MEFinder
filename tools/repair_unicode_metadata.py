@@ -22,7 +22,7 @@ from src.me_finder.bibliographic.metadata import (
     metadata_missing_fields,
     update_metadata_in_database,
 )
-from src.me_finder.pdf_import_service import load_import_config, save_import_config
+from src.me_finder.pdf.import_service import load_import_config, save_import_config
 
 
 def _document(config: dict[str, object], source_id: str) -> dict[str, object]:

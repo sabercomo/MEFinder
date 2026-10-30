@@ -18,7 +18,7 @@ from pathlib import Path
 from statistics import median
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from .pdf_page_mapping import int_to_roman
+from .page_mapping import int_to_roman
 
 
 AUTO_PAGE_MAPPING_THRESHOLDS: Dict[str, float] = {

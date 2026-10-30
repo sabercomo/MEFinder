@@ -27,7 +27,7 @@ from src.me_finder.bibliographic.metadata import (  # noqa: E402
     metadata_missing_fields,
     update_metadata_in_database,
 )
-from src.me_finder.pdf_import_service import load_import_config, save_import_config  # noqa: E402
+from src.me_finder.pdf.import_service import load_import_config, save_import_config  # noqa: E402
 
 
 TRUSTED_AUTHOR = "马克思、恩格斯"

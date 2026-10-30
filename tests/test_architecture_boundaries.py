@@ -59,7 +59,7 @@ MINERU_ERROR_IMPORTERS = {
     "large_document/mineru_accounts.py",
     "parsers/mineru_local_settings.py",
     "parsers/mineru_provider.py",
-    "pdf_parser_adapters.py",
+    "pdf/parser_adapters.py",
 }
 
 
@@ -287,9 +287,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "search_assembly.py": 365,
             "persistence/passage_reads.py": 245,
             # 0.6.1：导入编排、原生解析、段落/页码锚点构造分别归属。
-            "pdf_extractors.py": 900,
-            "pdf_native.py": 580,
-            "pdf_paragraphs.py": 440,
+            "pdf/extractors.py": 900,
+            "pdf/native.py": 580,
+            "pdf/paragraphs.py": 440,
             # 2026-10-01：普通版式跨页段落按命中页收窄引用页码，独立成模块。
             "search_cross_page.py": 70,
             "search_contract.py": 60,

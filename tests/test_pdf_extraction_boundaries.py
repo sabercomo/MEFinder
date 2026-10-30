@@ -4,7 +4,10 @@ import ast
 from pathlib import Path
 import unittest
 
-from src.me_finder import pdf_extraction_types, pdf_extractors, pdf_native, pdf_paragraphs
+from src.me_finder.pdf import extraction_types as pdf_extraction_types
+from src.me_finder.pdf import extractors as pdf_extractors
+from src.me_finder.pdf import native as pdf_native
+from src.me_finder.pdf import paragraphs as pdf_paragraphs
 
 ROOT = Path(__file__).resolve().parents[1] / "src/me_finder"
 
@@ -12,9 +15,9 @@ ROOT = Path(__file__).resolve().parents[1] / "src/me_finder"
 class PDFExtractionBoundaryTests(unittest.TestCase):
     def test_extraction_stages_have_one_way_dependencies(self) -> None:
         allowed = {
-            "pdf_extraction_types": set(),
-            "pdf_paragraphs": {"normalization", "pdf_extraction_types", "pdf_page_mapping"},
-            "pdf_native": {"pdf_extraction_types", "pdf_paragraphs", "pdf_page_mapping"},
+            "pdf/extraction_types": set(),
+            "pdf/paragraphs": {"normalization", "extraction_types", "page_mapping"},
+            "pdf/native": {"extraction_types", "paragraphs", "page_mapping"},
         }
         for module, dependencies in allowed.items():
             with self.subTest(module=module):
@@ -36,7 +39,7 @@ class PDFExtractionBoundaryTests(unittest.TestCase):
                     self.assertIs(getattr(pdf_extractors, name), getattr(owner, name))
 
     def test_paragraph_construction_does_not_read_source_files(self) -> None:
-        tree = ast.parse((ROOT / "pdf_paragraphs.py").read_text(encoding="utf-8"))
+        tree = ast.parse((ROOT / "pdf/paragraphs.py").read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):

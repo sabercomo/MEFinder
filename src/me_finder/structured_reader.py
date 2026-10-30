@@ -15,7 +15,7 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
-from .auto_page_mapping import normalize_page_candidate
+from .pdf.auto_page_mapping import normalize_page_candidate
 from .citations import build_citation_formats
 from .database import open_database
 from .export.normalize import (
@@ -30,7 +30,7 @@ from .page_display import (
     build_page_display,
     resolve_citation_page,
 )
-from .pdf_extractors import pdf_page_text_hash
+from .pdf.extractors import pdf_page_text_hash
 from .persistence import structured_reader_reads as reads
 
 

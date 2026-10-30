@@ -47,7 +47,7 @@ from .alignment_segmentation import (
 from .alignment_regions import alignment_body_bounds
 from .document_group_metadata import member_display_name
 from .embedding_models import DEFAULT_EMBEDDING_MODEL_ID, embedding_model_config
-from .pdf_extractors import attach_page_block_offsets, pdf_page_text_hash
+from .pdf.extractors import attach_page_block_offsets, pdf_page_text_hash
 from .persistence.alignment_store import (
     body_segment_texts,
     body_selected_orders,

@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from src.me_finder.pdf_import_service import scan_directories_for_documents
+from src.me_finder.pdf.import_service import scan_directories_for_documents
 
 
 def touch_pdf(path: Path) -> None:
@@ -56,7 +56,7 @@ class ScanSkipsMediaLibrariesTests(unittest.TestCase):
             # an ordinary folder and must still be scanned.
             touch_pdf(home / "文献" / "Library" / "正常子目录.pdf")
 
-            with patch("src.me_finder.pdf_import_service.Path.home", return_value=home):
+            with patch("src.me_finder.pdf.import_service.Path.home", return_value=home):
                 names = self._scan(home)
 
         self.assertEqual(sorted(names), ["正常子目录.pdf", "论文.pdf"])

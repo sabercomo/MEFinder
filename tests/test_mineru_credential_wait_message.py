@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.me_finder.large_document.job_ledger import JobLedger
 from src.me_finder.large_document.slicing import SliceDescriptor
-from src.me_finder.pdf_parser_adapters import slices_are_waiting_for_credential
+from src.me_finder.pdf.parser_adapters import slices_are_waiting_for_credential
 
 
 class MinerUCredentialWaitMessageTests(unittest.TestCase):

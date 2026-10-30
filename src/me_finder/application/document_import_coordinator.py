@@ -44,7 +44,7 @@ from ..errors import UserFacingError
 from ..parsers.mineru_api import resolve_mineru_config_path
 from ..parsers.mineru_local_settings import mineru_local_config_summary
 from ..parsers.local_ocr_settings import local_ocr_available
-from ..pdf_import_service import detect_imported_pdf
+from ..pdf.import_service import detect_imported_pdf
 from ..parsers.vision_api import VisionAPIError
 from .import_job_store import ImportJobAlreadyRunning
 

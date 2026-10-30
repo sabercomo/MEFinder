@@ -20,8 +20,8 @@ from src.me_finder.database import build_database
 from src.me_finder.document_deletion import DocumentDeletionService
 from src.me_finder import document_file_store
 from src.me_finder.extractors import extract_source
-from src.me_finder.pdf_extractors import extract_pdf_source
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.extractors import extract_pdf_source
+from src.me_finder.pdf.import_service import (
     INTERNAL_DOCUMENT_NAME_MAX_BYTES,
     cleanup_stale_document_storage_files,
     copy_local_document,
@@ -342,7 +342,7 @@ class LongFilenameImportTests(unittest.TestCase):
             self.assertEqual(document["title"], Path(ISSUE_FILE_NAME).stem)
 
             with patch(
-                "src.me_finder.pdf_extractors.detect_pdf_type",
+                "src.me_finder.pdf.extractors.detect_pdf_type",
                 return_value={
                     "detected_pdf_type": "native_text",
                     "pdf_page_count": 2,

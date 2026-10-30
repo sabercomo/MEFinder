@@ -18,7 +18,7 @@ from .export.document import (
     read_document_export,
 )
 from .normalization import normalize_pdf_text
-from .pdf_extractors import (
+from .pdf.extractors import (
     import_run_record,
     make_pdf_paragraphs,
     pdf_page_text_hash,

@@ -20,23 +20,23 @@ from .auto_page_mapping import (
     apply_auto_mapping_to_pages,
     has_manual_mapping,
 )
-from .bibliographic.metadata import METADATA_FIELDS
-from .document_heading import enrich_pdf_headings
-from .import_resume import resume_summary
-from .normalization import (
+from ..bibliographic.metadata import METADATA_FIELDS
+from ..document_heading import enrich_pdf_headings
+from ..import_resume import resume_summary
+from ..normalization import (
     normalize_pdf_text,
 )
-from .page_mapping_service import PageMappingService
-from .pdf_page_mapping import PageMapper
-from .pdf_page_split import mineru_layout_paths, split_parser_merged_pages
+from ..page_mapping_service import PageMappingService
+from .page_mapping import PageMapper
+from .page_split import mineru_layout_paths, split_parser_merged_pages
 
 # Preserve existing import entry points; implementations have a single owner.
-from . import pdf_native
-from .pdf_extraction_types import (
+from . import native as pdf_native
+from .extraction_types import (
     PDFExtractionError as PDFExtractionError,
     PDFTextPage as PDFTextPage,
 )
-from .pdf_paragraphs import (
+from .paragraphs import (
     CROSS_PAGE_TAIL_CHARS as CROSS_PAGE_TAIL_CHARS,
     CROSS_PAGE_HEAD_CHARS as CROSS_PAGE_HEAD_CHARS,
     PAGE_DECORATION_BLOCK_TYPES as PAGE_DECORATION_BLOCK_TYPES,
@@ -50,7 +50,7 @@ from .pdf_paragraphs import (
     page_body_bounds as page_body_bounds,
     strip_pdf_page_header_for_cross as strip_pdf_page_header_for_cross,
 )
-from .pdf_native import (
+from .native import (
     SIMPLE_PDF_MAX_BYTES as SIMPLE_PDF_MAX_BYTES,
     get_pdf_page_labels as get_pdf_page_labels,
     get_pdf_page_dimensions as get_pdf_page_dimensions,

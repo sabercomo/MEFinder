@@ -22,7 +22,7 @@ from .parsers.mineru_api import (
 )
 from .parser_settings_controller import ParserSettingsController
 from .parsers.statistics import build_parser_statistics
-from .pdf_import_service import scan_directories_for_documents
+from .pdf.import_service import scan_directories_for_documents
 from .preferences import read_preferences, resolve_preferences_path, save_preferences
 from .preferences_controller import PreferencesController
 from .parsers.vision_api import (

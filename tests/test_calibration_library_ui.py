@@ -12,7 +12,7 @@ from src.me_finder.calibration_library import build_calibration_library, build_l
 from src.me_finder.database import build_database
 from src.me_finder.document_deletion import DocumentDeletionService
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
-from src.me_finder.pdf_extractors import load_pdf_import_config
+from src.me_finder.pdf.extractors import load_pdf_import_config
 from src.me_finder.search import SearchEngine
 from src.me_finder.web import HTML
 

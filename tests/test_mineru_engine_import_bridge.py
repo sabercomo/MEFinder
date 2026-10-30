@@ -18,13 +18,13 @@ from src.me_finder.parsers.provider import (
     NormalizedPage,
     NormalizedParseResult,
 )
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.import_service import (
     load_import_config,
     parse_pdf_with_mineru,
 )
-from src.me_finder.pdf_parser_adapters import publish_mineru_engine_results
+from src.me_finder.pdf.parser_adapters import publish_mineru_engine_results
 from src.me_finder.parsers.local_ocr_settings import LocalOCRError
-from src.me_finder.pdf_extractors import extract_pdf_source
+from src.me_finder.pdf.extractors import extract_pdf_source
 
 
 class MinerUEngineImportBridgeTests(unittest.TestCase):
@@ -211,11 +211,11 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             document = load_import_config(config_path)["documents"][0]
             with (
                 patch(
-                    "src.me_finder.pdf_native.load_pymupdf",
+                    "src.me_finder.pdf.native.load_pymupdf",
                     return_value=None,
                 ),
                 patch(
-                    "src.me_finder.pdf_extractors.PageMappingService.infer",
+                    "src.me_finder.pdf.extractors.PageMappingService.infer",
                     return_value={
                         "method": "uncalibrated",
                         "selected_segments": [],
@@ -350,7 +350,7 @@ class MinerUEngineImportBridgeTests(unittest.TestCase):
             expected = {"status": "completed", "document_job_id": "job-1"}
 
             with patch(
-                "src.me_finder.pdf_parser_adapters._parse_pdf_with_mineru_accounts",
+                "src.me_finder.pdf.parser_adapters._parse_pdf_with_mineru_accounts",
                 return_value=expected,
             ) as engine_import:
                 result = parse_pdf_with_mineru(

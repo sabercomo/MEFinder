@@ -25,7 +25,7 @@ from src.me_finder.database import (
     delete_sources_from_database,
 )
 from src.me_finder.document_deletion import DocumentDeletionService
-from src.me_finder.pdf_import_service import (
+from src.me_finder.pdf.import_service import (
     copy_local_document,
     register_pdf,
     reuse_registered_pdf_copy,
