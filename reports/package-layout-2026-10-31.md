@@ -51,3 +51,16 @@
 - 全包逐模块导入 0 失败；`ruff check src tests scripts tools` 通过。
 
 未实际重打 macOS / Windows 安装包；PyInstaller 静态导入跟踪与 `worker_source_datas` 递归收集按代码核对，冻结程序需在下次打包时验收。
+
+## 2026-10-31 补记：macOS arm64 测试包实测
+
+用 `PYTHONUTF8=1 MEFINDER_PYTHON="$PWD/.venv-macos312-arm64/bin/python" ./build_macos.sh` 从 `adde09b` 打测试包，产物 `release/MEFinder-v0.6.1-macos-arm64.{zip,dmg}`（本地，未上传、未安装）。构建内门禁 2,856 项通过（39 跳过）；脚本自带的 MCP 侧车 STDIO 冒烟五次、签名校验、ZIP/DMG 校验均通过。SHA-256：ZIP `a895dd238171001bc25c99968271745504cab114e6c1f1b15f7e655641086967`，DMG `a121106aeaa1d10a27c52e11683dbfb462f1cfbb678560cc40e8b09caf739f76`。
+
+在临时目录解出 ZIP 后的实测：
+
+1. **应用自身分派对齐计算进程**：`MEFinder alignment-compute-worker --probe` 返回协议 1 的 hello；计算依赖显示为无，符合主包精简、计算栈在独立运行时的设计。证明 `660288c` 的修复在冻结包内生效。
+2. **已安装的独立运行时调用包内源码**：本机 `text-alignment` 运行时的 Python 从包内 `Contents/Frameworks/me_finder/alignment/compute_worker.py` 导入新模块；`--probe`、`--verify` 均报告 numpy / fastembed / onnxruntime 可用。经应用自身的 `SubprocessAlignmentComputeRunner` 跑一次 4 句英译中的真实对齐（MiniLM 模型，已在本机缓存），结果与分包前 `83ad26c` 源码逐项相同（区间、cost、confidence 精确到 6 位小数）。
+3. **MCP 侧车对真实库只读调用**：包内 `MEFinderMCP` 与分包前 `83ad26c` 源码模式的 MCP 服务，对同一真实库（461 个来源、70 次对齐运行）执行 8 个只读工具（list_documents、search_passages、locate_quote、find_parallel_passages、describe_page_mapping、list_sections、read_document_window、list_alignment_corrections），输出 JSON 逐字节相同；其中 find_parallel_passages 读到对齐数据返回 1 条。
+4. **桌面应用启动**：以 `ME_FINDER_APP_DATA_ROOT` 指向空的临时数据目录启动，0.2 秒内本地后端就绪；主页 HTML 与 14 个只读接口（文献库、来源、页码校准、作品组、偏好、本地 OCR、MinerU 配置、解析统计、对齐运行时与模型、译本作品、视觉模型等）均返回 200；日志无错误，收到终止信号后正常退出。
+
+未覆盖：窗口界面的人工点击；Windows 与 Intel 包；用户真实库上的写操作与重新导入。
