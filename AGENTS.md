@@ -12,11 +12,11 @@
 MEFinder 是本地优先(local-first)的 PDF / Word / EPUB 文献原句检索、页码定位与引文辅助工具。
 
 - **技术栈**:Python 3.12 + SQLite(FTS5 trigram)/ pywebview 桌面壳 / PyInstaller 打包 / 原生 JS + CSS(无框架)。
-- **架构**:src 布局(`src/me_finder/`),`persistence/` 分层,DB schema 以 `PRAGMA user_version` 版本化(以代码中实际值为准,勿在文档里写死数字)。
+- **架构**:src 布局(`src/me_finder/`),`persistence/` 分层,DB schema 以 `PRAGMA user_version` 版本化(以代码中实际值为准,勿在文档里写死数字)。领域代码按子包归属:`alignment/`(对齐)、`bibliographic/`(书目)、`components/`(可选组件与安装器)、`export/`(导出)、`parsers/`(MinerU / OCR / 视觉解析器)、`pdf/`(PDF 提取与页码映射)、`search/`(检索),另有 `application/`、`persistence/`、`tasks/`、`large_document/`;顶层只放入口(`__main__`、`mcp_server`、`web`)、controller、`*_assembly` 装配、web/桌面壳与尚未归类的文献库模块。新模块放进所属子包。
 - **三格式入口统一**:导入、扫描、删除、查询四处白名单必须同步为 `{".pdf", ".docx", ".epub"}`(见 `web_http.py` / `document_file_store.py` / `document_query_service.py` / `document_deletion.py`)。
 - **核心原则(违反即返工)**:
   1. 本地优先:数据不离开用户机器;任何新功能不得引入必须联网的路径。
-  2. 不重解析:下游模块(如 `markdown_export.py`)只读已入库数据,不重新解析源文件、不 OCR。
+  2. 不重解析:下游模块(如 `export/markdown.py`)只读已入库数据,不重新解析源文件、不 OCR。
   3. 引用可定位:一切检索/对齐结果必须携带页码锚点与字符区间,丢失定位信息的"优化"一律不接受。
   4. 存量兼容:DB 迁移走 `persistence/migrations.py` + `schema_installers.py`,`persistence/` 内禁止 `from ..` 上行 import(有边界测试钉死)。
   5. 证据优先:涉及质量结论(阈值、对齐准确率)的改动必须引用 `reports/` 实证报告,不得凭感觉调参。
@@ -86,7 +86,10 @@ feat(alignment): 模型选择持久化、正文区域参数化、DB v6
 
 ### 3.1 Python
 
-- src 布局,模块职责单一:注册表类配置(如 `embedding_models.py`)与运行时管理(如 `managed_embedding_models.py`)分文件。
+- src 布局,模块职责单一:注册表类配置(如 `alignment/embedding_models.py`)与运行时管理(如 `components/embedding_models.py`)分文件。
+- 跨模块共用的函数/常量用公开名,并从定义它的模块直接导入,不经旧模块转手;下划线名只在本模块内使用(`test_modules_do_not_import_each_others_private_names` 钉死)。
+- 给用户看的预期错误抛 `errors.UserFacingError`;`MinerUError` 只用于 MinerU 解析相关模块(白名单守卫)。
+- 移动模块时同步改所有导入、`mock.patch` 目标、`-m` 启动参数与守卫里的路径,不留旧路径转发模块(转发会让 patch 打到错误对象)。
 - 带类型注解;公共函数写 docstring(英文即可)。
 - 禁止为绕过架构边界引入函数内 import 环(参照 `docs/refactor-v0.5.0.md` 的分层原则)。
 - ruff 配置仅承载 lint(`["F"]` pyflakes),当前为零告警并阻塞回归。
@@ -120,10 +123,10 @@ EPUB 与 DOCX 共用文本语料通道(`corpus/raw_docx/`),不经 MinerU / PDF �
 
 - **提取**:`extractors.py` 按 `EPUB_TEXT_BLOCKS` 白名单(p / h1-h6 / blockquote / li / pre / dd / dt / figcaption / address)决定段落边界;命名空间 `EPUB_NS`(idpf 2007/ops);`source_id` 形如 `epub-<hash>`。新增可提取块类型必须同时考虑检索与对齐两侧的影响,不得只改一边。
 - **页码原则(EPUB 最高守则)**:**只采用出版方提供的 page-list / pagebreak,绝不按屏幕重排生成页码**。映射方法枚举固定为 `epub_page_list`(EPUB页码表)与 `epub_pagebreak`(EPUB分页标记),前端查表 `06-pure.js` 的 `mappingMethodLabel`。无出版方页码时如实标注 `uncalibrated`,不猜、不补、不推算——这是引用定位可信度的根基。
-- **检索**:全文检索走与 PDF/Word 相同的 `searchable_paragraphs` + FTS5 trigram;`source_type` 取值固定 `{all, word, epub, pdf}`,后端在 `search.py` 归一,前端 `20-search.js` / `30-library.js` 的 facet 判定与之保持一致(EPUB 在 DB 里可能挂在 `source_type == "word"` 下,靠 `source_format == "epub"` 区分,两侧判定逻辑必须同步改)。
+- **检索**:全文检索走与 PDF/Word 相同的 `searchable_paragraphs` + FTS5 trigram;`source_type` 取值固定 `{all, word, epub, pdf}`,后端在 `search/engine.py` 归一,前端 `20-search.js` / `30-library.js` 的 facet 判定与之保持一致(EPUB 在 DB 里可能挂在 `source_type == "word"` 下,靠 `source_format == "epub"` 区分,两侧判定逻辑必须同步改)。
 - **元数据**:导入时从 OPF 填好(来源显示"EPUB 元数据");「自动识别 / 重新识别」读 PDF 页面,仅 `source_type === 'pdf'` 显示;EPUB 走「查图书信息」+ 手动。书目信息面板对 PDF 与 EPUB 共用,UI 门不得再写成 `source_type==='pdf'` 独占。
-- **对齐**:EPUB 是自动对齐的一等公民(`text_alignment.py`:"自动对齐只支持 PDF 和 EPUB 文献");对照阅读、作品组成员均含 EPUB。
-- **导出**:EPUB 导出(`epub_export.py`)与 Markdown 导出共享 `markdown_export_normalize.py` 规范化层与同一 `PageMarker`;渲染分叉只在各自 renderer 里(Markdown 渲染成 `<!-- printed_page: N -->` 注释,EPUB 渲染成 EPUB 3 `pagebreak` 锚 + page-list nav)。页码模式默认 `printed`(`preferences.py` 的 `DEFAULT_PAGE_MARKER_MODE`)。改页码策略时两格式必须同步验证。
+- **对齐**:EPUB 是自动对齐的一等公民(`alignment/generation.py`:"自动对齐只支持 PDF 和 EPUB 文献");对照阅读、作品组成员均含 EPUB。
+- **导出**:EPUB 导出(`export/epub.py`)与 Markdown 导出共享 `export/normalize.py` 规范化层与同一 `PageMarker`;渲染分叉只在各自 renderer 里(Markdown 渲染成 `<!-- printed_page: N -->` 注释,EPUB 渲染成 EPUB 3 `pagebreak` 锚 + page-list nav)。页码模式默认 `printed`(`preferences.py` 的 `DEFAULT_PAGE_MARKER_MODE`)。改页码策略时两格式必须同步验证。
 
 ### 3.6 运行 / 测试 / lint 命令(权威)
 
