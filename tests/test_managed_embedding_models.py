@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src.me_finder.embedding_models import (
+from src.me_finder.alignment.embedding_models import (
     embedding_model_config,
     embedding_model_summaries,
 )

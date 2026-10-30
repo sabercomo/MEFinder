@@ -26,7 +26,7 @@ from unittest import mock
 from scripts.performance_fixture import create_fixture
 from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 from src.me_finder.search.engine import SearchEngine
-from src.me_finder.text_alignment import (
+from src.me_finder.alignment.text_alignment import (
     generate_alignment,
     list_alignment_targets,
 )
@@ -58,17 +58,17 @@ def fake_sequence_embeddings(sequences, cache_dir):
 def store_alignment_links(database: Path) -> None:
     """Generate stored links through the algorithm seam, like the product does."""
 
-    from src.me_finder.semantic_alignment import SemanticLink
+    from src.me_finder.alignment.semantic import SemanticLink
 
     links = [
         SemanticLink(0, 1, 0, 1, 0.09, 0.91, "automatic", "chapter:1"),
         SemanticLink(1, 2, 1, 2, 0.17, 0.83, "automatic", "chapter:1"),
     ]
     with mock.patch(
-        "src.me_finder.alignment_kernel.embed_text_sequences",
+        "src.me_finder.alignment.kernel.embed_text_sequences",
         side_effect=fake_sequence_embeddings,
     ), mock.patch(
-        "src.me_finder.alignment_generation.align_segment_sequences",
+        "src.me_finder.alignment.generation.align_segment_sequences",
         return_value=(links, []),
     ):
         generate_alignment(database, "bench-pair", "bench-002", "bench-003")
@@ -86,7 +86,7 @@ class NoCompute(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, NoCompute())
 from src.me_finder.web import make_handler
 from src.me_finder.app_context import AppContext
-from src.me_finder.text_alignment import locate_alignment, list_alignment_targets
+from src.me_finder.alignment.text_alignment import locate_alignment, list_alignment_targets
 root=Path(sys.argv[1]); db=root/'data/index.sqlite3'
 handler=make_handler(db,app_context=AppContext.create(root,index_path=db))
 try:
@@ -114,20 +114,20 @@ finally:
     def test_search_and_result_reads_run_without_compute_stack(self) -> None:
         with mock.patch.dict("sys.modules", BLOCKED_MODULES):
             with mock.patch(
-                "src.me_finder.alignment_kernel.embed_text_sequences",
+                "src.me_finder.alignment.kernel.embed_text_sequences",
                 side_effect=fake_sequence_embeddings,
             ), mock.patch(
-                "src.me_finder.alignment_generation.align_segment_sequences",
+                "src.me_finder.alignment.generation.align_segment_sequences",
                 return_value=([], []),
             ):
                 targets = list_alignment_targets(self.db, self.pivot)
             self.assertTrue(targets["targets"])
 
             with mock.patch(
-                "src.me_finder.alignment_kernel.embed_text_sequences",
+                "src.me_finder.alignment.kernel.embed_text_sequences",
                 side_effect=fake_sequence_embeddings,
             ), mock.patch(
-                "src.me_finder.alignment_generation.align_segment_sequences",
+                "src.me_finder.alignment.generation.align_segment_sequences",
                 return_value=([], []),
             ):
                 with closing(SearchEngine(self.db)) as engine:
@@ -188,10 +188,10 @@ finally:
         self.assertEqual(stored, 2)
 
         with mock.patch.dict("sys.modules", BLOCKED_MODULES), mock.patch(
-            "src.me_finder.alignment_kernel.embed_text_sequences",
+            "src.me_finder.alignment.kernel.embed_text_sequences",
             side_effect=fake_sequence_embeddings,
         ), mock.patch(
-            "src.me_finder.alignment_generation.align_segment_sequences",
+            "src.me_finder.alignment.generation.align_segment_sequences",
             return_value=([], []),
         ):
             targets = list_alignment_targets(self.db, self.pivot)
@@ -213,7 +213,7 @@ finally:
         from src.me_finder.components.embedding_models import download_embedding_model
 
         with mock.patch(
-            "src.me_finder.semantic_alignment.embed_texts"
+            "src.me_finder.alignment.semantic.embed_texts"
         ) as probe, mock.patch.dict("sys.modules", BLOCKED_MODULES):
             download_embedding_model("minilm-l12-v2", self.root / "components")
         self.assertTrue(probe.called)

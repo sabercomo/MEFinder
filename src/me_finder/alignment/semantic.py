@@ -30,19 +30,19 @@ from .embedding_runtime import (
     embedding_thread_count,
 )
 
-from .alignment_anchors import (
+from .anchors import (
     AnchorExtractorRegistry,
     CONTEXT_GATED_ANCHOR_PREFIXES,
     DEFAULT_ANCHOR_EXTRACTOR_REGISTRY,
     HeadingAnchor,
     MAX_ANCHOR_CORRIDOR_RATIO,
 )
-from .alignment_anchor_validation import drop_false_friend_anchors
-from .alignment_segment_quality import (
+from .anchor_validation import drop_false_friend_anchors
+from .segment_quality import (
     demote_noise_carried_links,
     demote_note_block_links,
 )
-from .alignment_structure import (
+from .structure import (
     CHINESE_HEADING,
     ENDNOTES_HEADING,
     EXPLICIT_TRANSLATOR_NOTE,

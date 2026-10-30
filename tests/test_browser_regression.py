@@ -27,7 +27,7 @@ from unittest import mock
 
 from src.me_finder.app_context import AppContext
 from src.me_finder.structured_reader import get_document_window
-from src.me_finder.text_alignment import generate_alignment
+from src.me_finder.alignment.text_alignment import generate_alignment
 from src.me_finder.web import ManagedThreadingHTTPServer, make_handler
 from tests import test_text_alignment
 

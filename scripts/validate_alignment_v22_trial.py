@@ -14,7 +14,7 @@ from pathlib import Path
 import sqlite3
 import time
 
-from src.me_finder.text_alignment import generate_alignment
+from src.me_finder.alignment.text_alignment import generate_alignment
 
 
 def link_snapshot(connection: sqlite3.Connection, run_id: str) -> list:

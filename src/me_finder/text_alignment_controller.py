@@ -19,8 +19,8 @@ from .application.text_alignment_coordinator import (
     TextAlignmentFailed,
     TextAlignmentRejected,
 )
-from .embedding_runtime import request_embedding_cancel
-from .text_alignment import (
+from .alignment.embedding_runtime import request_embedding_cancel
+from .alignment.text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
     TextAlignmentError,

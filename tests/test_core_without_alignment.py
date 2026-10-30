@@ -26,10 +26,10 @@ from scripts.performance_fixture import create_fixture
 from src.me_finder.app_context import AppContext
 from src.me_finder.web import make_handler
 from src.me_finder.web import ManagedThreadingHTTPServer
-from src.me_finder.text_alignment import locate_alignment
+from src.me_finder.alignment.text_alignment import locate_alignment
 from src.me_finder.components.embedding_models import ManagedEmbeddingModels
 from src.me_finder.application.text_alignment_coordinator import TextAlignmentCoordinator, TextAlignmentFailed
-from src.me_finder.semantic_alignment import cached_text_sequence_vectors, _sequence_cache_path
+from src.me_finder.alignment.semantic import cached_text_sequence_vectors, _sequence_cache_path
 root=Path(sys.argv[1]); create_fixture(root,documents=2,paragraphs=20,alignment_paragraphs=8)
 db=root/'data/index.sqlite3'
 fixture=json.loads(Path('tests/fixtures/core-stored-alignment.json').read_text())
@@ -69,7 +69,7 @@ try:
     # that external runtime (not a main-process find_spec), and there is no
     # silent fallback to in-process compute.
     from contextlib import contextmanager
-    from src.me_finder.alignment_compute import AlignmentComputeError, COMPONENT_MISSING
+    from src.me_finder.alignment.compute import AlignmentComputeError, COMPONENT_MISSING
     class _MissingComputeRuntime:
         def __init__(self,**kwargs): pass
         def probe(self): raise AlignmentComputeError(COMPONENT_MISSING,'compute runtime missing')

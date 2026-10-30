@@ -26,7 +26,7 @@ from unittest import mock
 from pathlib import Path
 from urllib.error import URLError
 
-from src.me_finder.alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
+from src.me_finder.alignment.compute import ALIGNMENT_COMPUTE_PROTOCOL
 import src.me_finder.components.alignment_runtime as align_runtime
 from src.me_finder.components.alignment_runtime import (
     ManagedAlignmentRuntime,
@@ -679,7 +679,7 @@ class AlignmentWorkerVerifyTests(unittest.TestCase):
             env = os.environ.copy()
             env["PYTHONPATH"] = os.pathsep.join([str(stub_root), str(repo_root)])
             result = subprocess.run(
-                [sys.executable, "-m", "src.me_finder.alignment_compute_worker",
+                [sys.executable, "-m", "src.me_finder.alignment.compute_worker",
                  "--verify", str(control)],
                 cwd=str(repo_root),
                 env=env,

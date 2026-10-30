@@ -8,14 +8,14 @@ from pathlib import Path
 
 import numpy as np
 
-from src.me_finder.edition_folio_anchors import (
+from src.me_finder.alignment.edition_folio_anchors import (
     FolioBoundaryCandidate,
     _margin_folios,
     detect_folio_boundary_candidates,
     verify_folio_boundary_candidates,
 )
 from src.me_finder.persistence.index_schema import SCHEMA
-from src.me_finder.text_alignment import align_segment_sequences
+from src.me_finder.alignment.text_alignment import align_segment_sequences
 
 
 def _body(text: str, start: int, end: int, y0: int, y1: int):

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from contextlib import contextmanager
 
-from .runtime_location import component_runtime_root
+from ..runtime_location import component_runtime_root
 
 COMPUTE_LOCK = ".compute.lock"
 MAINTENANCE_MARKER = ".maintenance"

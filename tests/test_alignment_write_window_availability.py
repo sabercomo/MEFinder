@@ -35,9 +35,9 @@ from src.me_finder.application.text_alignment_coordinator import (
     TextAlignmentFailed,
 )
 from src.me_finder.database import replace_source_in_database
-from src.me_finder.embedding_runtime import SemanticAlignmentCancelled
+from src.me_finder.alignment.embedding_runtime import SemanticAlignmentCancelled
 from src.me_finder.search.engine import SearchEngine
-from src.me_finder import alignment_generation as alignment_generation_module
+from src.me_finder.alignment import generation as alignment_generation_module
 from src.me_finder.persistence import alignment_store
 from scripts.performance_fixture import create_fixture
 

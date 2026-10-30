@@ -28,8 +28,8 @@ def propose_alignment_correction(
     target_segment_ids: Sequence[object],
     evidence: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    from ..alignment_overrides import create_override_proposal
-    from ..text_alignment import AlignmentNotFound
+    from ..alignment.overrides import create_override_proposal
+    from ..alignment.text_alignment import AlignmentNotFound
 
     source = _validate_id(source_file_id, name="source_file_id")
     target = _validate_id(target_source_file_id, name="target_source_file_id")
@@ -60,8 +60,8 @@ def confirm_alignment_correction(
     override_id: object,
     confirmation_token: object,
 ) -> dict[str, object]:
-    from ..alignment_overrides import confirm_override
-    from ..text_alignment import AlignmentNotFound
+    from ..alignment.overrides import confirm_override
+    from ..alignment.text_alignment import AlignmentNotFound
 
     validated_override = _validate_id(override_id, name="override_id")
     validated_token = _validate_id(confirmation_token, name="confirmation_token")
@@ -77,8 +77,8 @@ def revoke_alignment_correction(
     *,
     override_id: object,
 ) -> dict[str, object]:
-    from ..alignment_overrides import revoke_override
-    from ..text_alignment import AlignmentNotFound
+    from ..alignment.overrides import revoke_override
+    from ..alignment.text_alignment import AlignmentNotFound
 
     validated_override = _validate_id(override_id, name="override_id")
     try:
@@ -96,7 +96,7 @@ def list_alignment_corrections(
     status: object = None,
     limit: int = 50,
 ) -> dict[str, object]:
-    from ..alignment_overrides import list_overrides
+    from ..alignment.overrides import list_overrides
 
     validated_source = _validate_optional_id(source_file_id, name="source_file_id")
     validated_target = _validate_optional_id(

@@ -23,7 +23,7 @@ from desktop import create_main_window  # noqa: E402
 from src.me_finder.app_context import AppContext  # noqa: E402
 from src.me_finder.preferences import save_preferences  # noqa: E402
 from src.me_finder.reader_windows import ReaderWindows  # noqa: E402
-from src.me_finder.text_alignment import generate_alignment  # noqa: E402
+from src.me_finder.alignment.text_alignment import generate_alignment  # noqa: E402
 from src.me_finder.web import ManagedThreadingHTTPServer, make_handler  # noqa: E402
 from tests.test_text_alignment import TextAlignmentTests  # noqa: E402
 

@@ -33,12 +33,12 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import src.me_finder.semantic_alignment as SA  # noqa: E402
-from src.me_finder.alignment_anchors import CONTEXT_GATED_ANCHOR_PREFIXES  # noqa: E402
-from src.me_finder.semantic_alignment import (  # noqa: E402
+import src.me_finder.alignment.semantic as SA  # noqa: E402
+from src.me_finder.alignment.anchors import CONTEXT_GATED_ANCHOR_PREFIXES  # noqa: E402
+from src.me_finder.alignment.semantic import (  # noqa: E402
     _validate_soft_anchors as _orig_validate, _group_rows, _align_partition,
 )
-from src.me_finder.text_alignment import generate_alignment  # noqa: E402
+from src.me_finder.alignment.text_alignment import generate_alignment  # noqa: E402
 
 DISPLACEMENT_LIMIT = 50  # clear false-friend outliers (n53 权威=77); spares borderline (<=36)
 

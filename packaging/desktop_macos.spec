@@ -67,7 +67,7 @@ a = Analysis(
         ),
         # Phase 2C: ship the pure-Python me_finder source so the independent
         # alignment runtime's interpreter can run the compute worker
-        # (``python -m me_finder.alignment_compute_worker``) without the main
+        # (``python -m me_finder.alignment.compute_worker``) without the main
         # package carrying the numeric stack. Shipped as data — never analysed —
         # so it does not pull the excluded stack back into the main graph.
         *worker_source_datas(project_root),
@@ -86,9 +86,9 @@ a = Analysis(
         "src.me_finder.pdf.page_mapping",
         "src.me_finder.pdf.import_service",
         "src.me_finder.parsers.vision_api",
-        "src.me_finder.alignment_kernel",
-        "src.me_finder.alignment_compute",
-        "src.me_finder.alignment_compute_worker",
+        "src.me_finder.alignment.kernel",
+        "src.me_finder.alignment.compute",
+        "src.me_finder.alignment.compute_worker",
         "src.me_finder.preferences",
         "src.me_finder.macos_pdf_viewer",
         "webview",

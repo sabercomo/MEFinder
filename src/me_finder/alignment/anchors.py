@@ -13,7 +13,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Sequence, Tuple
 
-from .alignment_structure import (
+from .structure import (
     CHINESE_HEADING,
     CHINESE_NUMBER_VALUES,
     ENDNOTES_HEADING,

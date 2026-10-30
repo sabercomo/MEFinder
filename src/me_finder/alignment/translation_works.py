@@ -25,7 +25,7 @@ from itertools import combinations
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence, Tuple
 
-from .alignment_generation import (
+from .generation import (
     json_object,
     now,
     source_kind_of,
@@ -33,13 +33,13 @@ from .alignment_generation import (
     validate_nonnegative_integer,
     validate_source_id,
 )
-from .alignment_overrides import confirm_override, create_override_proposal
-from .alignment_regions import alignment_body_bounds
-from .persistence.alignment_store import latest_pair_run, ordered_segments_in_set
-from .persistence.connection import connect_index, table_exists
-from .tasks.background_tasks import BackgroundTasks
-from .persistence import translation_work_reads as reads
-from .persistence.translation_work_store import (
+from .overrides import confirm_override, create_override_proposal
+from .regions import alignment_body_bounds
+from ..persistence.alignment_store import latest_pair_run, ordered_segments_in_set
+from ..persistence.connection import connect_index, table_exists
+from ..tasks.background_tasks import BackgroundTasks
+from ..persistence import translation_work_reads as reads
+from ..persistence.translation_work_store import (
     clear_review_deferral_row,
     defer_review_row,
     dismiss_suggestion_row,

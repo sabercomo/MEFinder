@@ -13,9 +13,11 @@ from unittest import mock
 
 import numpy as np
 
-from src.me_finder import alignment_compute, alignment_compute_worker, semantic_alignment
-from src.me_finder.alignment_kernel import align_segment_sequences
-from src.me_finder.embedding_models import embedding_model_config
+from src.me_finder.alignment import compute as alignment_compute
+from src.me_finder.alignment import compute_worker as alignment_compute_worker
+from src.me_finder.alignment import semantic as semantic_alignment
+from src.me_finder.alignment.kernel import align_segment_sequences
+from src.me_finder.alignment.embedding_models import embedding_model_config
 from tests import test_text_alignment_controller
 
 

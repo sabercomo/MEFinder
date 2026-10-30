@@ -54,10 +54,10 @@ ALIGNMENT_COMPUTE_STACK: Tuple[str, ...] = (
 # Where the pure-Python worker source is shipped inside the frozen bundle, and
 # the module an external interpreter runs. ``default_worker_context`` resolves
 # ``sys._MEIPASS`` (the bundle's data root) as the source root, so the worker is
-# launched as ``python -m me_finder.alignment_compute_worker`` with that root on
+# launched as ``python -m me_finder.alignment.compute_worker`` with that root on
 # ``PYTHONPATH``.
 WORKER_SOURCE_DEST_ROOT = "me_finder"
-FROZEN_WORKER_MODULE = "me_finder.alignment_compute_worker"
+FROZEN_WORKER_MODULE = "me_finder.alignment.compute_worker"
 
 
 def worker_source_datas(project_root: Path) -> List[Tuple[str, str]]:

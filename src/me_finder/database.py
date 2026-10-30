@@ -198,7 +198,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         read_document_group_snapshot,
         restore_document_group_snapshot,
     )
-    from .alignment_snapshots import (
+    from .alignment.snapshots import (
         read_alignment_recipe_snapshot,
         restore_alignment_recipe_snapshot,
     )

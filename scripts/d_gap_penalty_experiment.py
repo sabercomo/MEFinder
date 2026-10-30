@@ -26,11 +26,11 @@ import sqlite3
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.me_finder.alignment_corridor_refine import (  # noqa: E402
+from src.me_finder.alignment.corridor_refine import (  # noqa: E402
     align_corridor, corridor_ratio, detect_edition_apparatus, group_similarity,
     non_space_lengths, prefix_sums,
 )
-from src.me_finder.semantic_alignment import cached_text_sequence_vectors  # noqa: E402
+from src.me_finder.alignment.semantic import cached_text_sequence_vectors  # noqa: E402
 from scripts.d_corridor_experiment import _frozen_links, _anchor_boundaries, _partitions, _find_partition  # noqa: E402
 from scripts.d_fixture_reverify import _map_order  # noqa: E402
 

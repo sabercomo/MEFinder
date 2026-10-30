@@ -22,11 +22,11 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from src.me_finder import alignment_compute as ac
-from src.me_finder.alignment_anchors import HeadingAnchor
-from src.me_finder.edition_folio_anchors import FolioBoundaryCandidate
-from src.me_finder.embedding_models import AlignmentThresholds
-from src.me_finder.semantic_alignment import SemanticLink
+from src.me_finder.alignment import compute as ac
+from src.me_finder.alignment.anchors import HeadingAnchor
+from src.me_finder.alignment.edition_folio_anchors import FolioBoundaryCandidate
+from src.me_finder.alignment.embedding_models import AlignmentThresholds
+from src.me_finder.alignment.semantic import SemanticLink
 
 # The compute stack is optional at runtime: a core-only CI env has none of it.
 # Only capability-present assertions are gated on it; the "reports missing"
@@ -165,7 +165,7 @@ class WorkerProtocolTests(unittest.TestCase):
             # Control goes to a file (not stdout/stderr), so this also verifies
             # the worker never depends on inherited std streams.
             subprocess.run(
-                [sys.executable, "-m", "src.me_finder.alignment_compute_worker",
+                [sys.executable, "-m", "src.me_finder.alignment.compute_worker",
                  str(request), str(result), str(control)],
                 cwd=str(REPO),
                 stdout=subprocess.DEVNULL,
@@ -202,7 +202,7 @@ class WorkerProtocolTests(unittest.TestCase):
             good["model_identity"]["alignment_algorithm_version"] = "999"
             request.write_text(json.dumps(good), encoding="utf-8")
             subprocess.run(
-                [sys.executable, "-m", "src.me_finder.alignment_compute_worker",
+                [sys.executable, "-m", "src.me_finder.alignment.compute_worker",
                  str(request), str(result), str(control)],
                 cwd=str(REPO), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 env={**os.environ, "PYTHONPATH": str(REPO)},
@@ -221,7 +221,7 @@ class WorkerProtocolTests(unittest.TestCase):
             control = Path(tmp) / "control.ndjson"
             script = (
                 "import sys; sys.stdout=None; sys.stderr=None; "
-                "from src.me_finder.alignment_compute_worker import main; "
+                "from src.me_finder.alignment.compute_worker import main; "
                 f"raise SystemExit(main(['--probe', {str(control)!r}]))"
             )
             proc = subprocess.run(
@@ -382,7 +382,7 @@ class NoPublishOnFailureTests(unittest.TestCase):
             ).fetchone()[0]
 
     def _assert_no_publish(self, simulate_code: str, expected_code: str) -> None:
-        from src.me_finder.text_alignment import generate_alignment
+        from src.me_finder.alignment.text_alignment import generate_alignment
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

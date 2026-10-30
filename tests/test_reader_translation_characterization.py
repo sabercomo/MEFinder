@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 from typing import Callable, Dict
 
-from src.me_finder import translation_works
+from src.me_finder.alignment import translation_works
 from src.me_finder.database import build_database
 from src.me_finder.document_outline import get_document_outline
 from src.me_finder.page_mapping_overview import describe_page_mapping
@@ -27,7 +27,7 @@ from src.me_finder.structured_reader import (
     get_document_citation,
     get_document_window,
 )
-from src.me_finder.text_alignment import generate_alignment
+from src.me_finder.alignment.text_alignment import generate_alignment
 from tests.test_translation_works import _ThreeVersionWork
 
 ROOT = Path(__file__).resolve().parents[1]

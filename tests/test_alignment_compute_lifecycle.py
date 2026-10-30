@@ -13,8 +13,8 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.performance_fixture import create_fixture
-from src.me_finder import alignment_compute as ac
-from src.me_finder import embedding_runtime
+from src.me_finder.alignment import compute as ac
+from src.me_finder.alignment import embedding_runtime
 from src.me_finder.app_context import AppContext
 from src.me_finder.web_runtime import build_application_runtime
 

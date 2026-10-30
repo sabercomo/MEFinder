@@ -385,7 +385,7 @@ def main() -> None:
     if args.output.exists():
         parser.error("Output already exists; use a new filename to preserve evidence")
     from scripts.performance_fixture import create_fixture
-    from src.me_finder.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
+    from src.me_finder.alignment.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
     from src.me_finder.preferences import save_preferences
     import psutil
 

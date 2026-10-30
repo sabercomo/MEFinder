@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Sequence, Tuple
 
-from .alignment_segmentation import (
+from .segmentation import (
     MAX_SEGMENT_LENGTH as MAX_SEGMENT_LENGTH,
     PageText,
     ParagraphText,
@@ -22,8 +22,8 @@ from .alignment_segmentation import (
     segment_pdf_text,
     segment_paragraph_text,
 )
-from .runtime_location import component_runtime_root
-from .calibration_library import item_language_code
+from ..runtime_location import component_runtime_root
+from ..calibration_library import item_language_code
 from .edition_folio_anchors import (
     FolioBoundaryCandidate,
     detect_folio_boundary_candidates,
@@ -33,8 +33,8 @@ from .embedding_models import (
     DEFAULT_EMBEDDING_MODEL_ID,
     embedding_model_config,
 )
-from .pdf.extractors import attach_page_block_offsets, pdf_page_text_hash
-from .persistence.alignment_store import (
+from ..pdf.extractors import attach_page_block_offsets, pdf_page_text_hash
+from ..persistence.alignment_store import (
     completed_run_candidates,
     completed_run_status_counts,
     existing_segment_set,
@@ -55,9 +55,9 @@ from .persistence.alignment_store import (
     segment_text_rows,
     supersede_completed_runs,
 )
-from .alignment_regions import alignment_body_bounds
-from .alignment_kernel import align_segment_sequences
-from .semantic_alignment import (
+from .regions import alignment_body_bounds
+from .kernel import align_segment_sequences
+from .semantic import (
     ALIGNMENT_REGION_VERSION,
     EMBEDDING_RUNTIME_VERSION,
     HeadingAnchor,

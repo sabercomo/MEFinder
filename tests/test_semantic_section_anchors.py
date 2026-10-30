@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from src.me_finder.semantic_alignment import (
+from src.me_finder.alignment.semantic import (
     HeadingAnchor,
     align_semantic_sequences,
     find_heading_anchors,

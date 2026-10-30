@@ -12,19 +12,19 @@ from pathlib import Path
 from typing import Dict, Mapping
 
 from .embedding_models import DEFAULT_EMBEDDING_MODEL_ID
-from .persistence.alignment_store import (
+from ..persistence.alignment_store import (
     alignment_database_file,
     alignment_recipe_replace_transaction,
     read_alignment_recipe_rows,
     recipe_sources_and_group_exist,
 )
-from .persistence.schema_installers import install_text_alignment_schema
-from .semantic_alignment import EmbeddingProvider
+from ..persistence.schema_installers import install_text_alignment_schema
+from .semantic import EmbeddingProvider
 from .text_alignment import (
     ALIGNMENT_ALGORITHM,
     RESTORABLE_ALIGNMENT_VERSIONS,
 )
-from .alignment_generation import (
+from .generation import (
     default_alignment_model_cache,
     generate_alignment_on_connection,
     json_object,

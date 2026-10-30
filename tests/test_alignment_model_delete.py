@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.me_finder.embedding_models import embedding_model_config
+from src.me_finder.alignment.embedding_models import embedding_model_config
 from src.me_finder.components.embedding_models import (
     ManagedEmbeddingModels,
     ManagedEmbeddingModelsError,

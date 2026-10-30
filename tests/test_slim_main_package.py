@@ -8,7 +8,7 @@ These tests pin the packaging invariants that make the slim main package safe:
 * every main-process module that the app imports at load loads *without* the
   numeric stack (the runtime justification for the exclude);
 * the shipped worker-source tree is a complete, importable ``me_finder`` package
-  runnable as ``python -m me_finder.alignment_compute_worker`` by an external
+  runnable as ``python -m me_finder.alignment.compute_worker`` by an external
   interpreter; and
 * ``default_worker_context`` resolves that tree from ``sys._MEIPASS`` when
   frozen, so the launch path agrees with where the specs put the source.
@@ -80,17 +80,17 @@ class WorkerSourceDatasTests(unittest.TestCase):
             Path(src).resolve().relative_to(package).as_posix() for src in self.sources
         }
         for expected in (
-            "alignment_compute_worker.py",
-            "alignment_compute.py",
-            "semantic_alignment.py",
-            "text_alignment.py",
-            "embedding_models.py",
+            "alignment/compute_worker.py",
+            "alignment/compute.py",
+            "alignment/semantic.py",
+            "alignment/text_alignment.py",
+            "alignment/embedding_models.py",
             "components/embedding_models.py",
         ):
             self.assertIn(expected, shipped)
 
     def test_dest_tree_is_top_level_me_finder(self) -> None:
-        # The worker is launched as ``me_finder.alignment_compute_worker``; every
+        # The worker is launched as ``me_finder.alignment.compute_worker``; every
         # dest must live under the ``me_finder`` top-level tree.
         self.assertEqual(FROZEN_WORKER_MODULE.split(".")[0], WORKER_SOURCE_DEST_ROOT)
         for dest in self.dests:
@@ -138,10 +138,10 @@ class MainPathLoadsWithoutStackTests(unittest.TestCase):
             "    'src.me_finder.managed_component_assembly',\n"
             "    'src.me_finder.components.alignment_runtime',\n"
             "    'src.me_finder.components.embedding_models',\n"
-            "    'src.me_finder.alignment_compute',\n"
+            "    'src.me_finder.alignment.compute',\n"
             "    'src.me_finder.application.text_alignment_coordinator',\n"
-            "    'src.me_finder.text_alignment',\n"
-            "    'src.me_finder.semantic_alignment',\n"
+            "    'src.me_finder.alignment.text_alignment',\n"
+            "    'src.me_finder.alignment.semantic',\n"
             "]\n"
             "for m in mods:\n"
             "    importlib.import_module(m)\n"
@@ -162,7 +162,7 @@ class ShippedWorkerSourceIsImportableTests(unittest.TestCase):
     """The shipped tree is a self-contained, runnable ``me_finder`` package.
 
     Copies exactly what ``worker_source_datas`` would ship into a scratch
-    ``me_finder/`` tree and runs ``python -m me_finder.alignment_compute_worker
+    ``me_finder/`` tree and runs ``python -m me_finder.alignment.compute_worker
     --probe`` against it with only that tree on ``PYTHONPATH`` (no ``src`` on the
     path). This proves the frozen-source-delivery contract: an external
     interpreter can import the worker as the top-level ``me_finder`` package with
@@ -273,7 +273,7 @@ class WorkerContextResolutionTests(unittest.TestCase):
         mod = importlib.import_module("src.me_finder.components.alignment_runtime")
         # Not frozen in the test process.
         module, source_root = mod.default_worker_context()
-        self.assertEqual(module, "src.me_finder.alignment_compute_worker")
+        self.assertEqual(module, "src.me_finder.alignment.compute_worker")
         self.assertEqual(source_root, ROOT)
 
 

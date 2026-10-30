@@ -11,8 +11,8 @@ from __future__ import annotations
 import re
 from typing import Sequence, Tuple
 
-from .alignment_structure import CHINESE_HEADING
-from .semantic_alignment import (
+from .structure import CHINESE_HEADING
+from .semantic import (
     DECIMAL_SECTION,
     INTRODUCTION_HEADING,
     document_heading_positions,

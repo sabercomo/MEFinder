@@ -56,9 +56,9 @@ create_fixture(
 import fastembed  # noqa: E402
 
 from scripts import mem_profile_common as common  # noqa: E402
-from src.me_finder import alignment_generation as alignment_generation_module  # noqa: E402
-from src.me_finder import semantic_alignment as semantic_alignment_module  # noqa: E402
-from src.me_finder import text_alignment as text_alignment_module  # noqa: E402
+from src.me_finder.alignment import generation as alignment_generation_module  # noqa: E402
+from src.me_finder.alignment import semantic as semantic_alignment_module  # noqa: E402
+from src.me_finder.alignment import text_alignment as text_alignment_module  # noqa: E402
 from src.me_finder.app_context import AppPaths  # noqa: E402
 from src.me_finder.application import (  # noqa: E402
     text_alignment_coordinator as coordinator_module,
@@ -68,7 +68,7 @@ from src.me_finder.application.text_alignment_coordinator import (  # noqa: E402
     TextAlignmentCoordinator,
 )
 from src.me_finder.database import replace_source_in_database  # noqa: E402
-from src.me_finder.embedding_models import (  # noqa: E402
+from src.me_finder.alignment.embedding_models import (  # noqa: E402
     DEFAULT_EMBEDDING_MODEL_ID,
     EMBEDDING_MODELS,
 )
@@ -530,7 +530,7 @@ def _public_workload(workload: dict, arguments) -> dict:
 
 def _embedding_thread_count() -> int | None:
     try:
-        from src.me_finder.embedding_runtime import embedding_thread_count
+        from src.me_finder.alignment.embedding_runtime import embedding_thread_count
 
         return embedding_thread_count()
     except Exception:

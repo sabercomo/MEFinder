@@ -5,7 +5,8 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from src.me_finder import embedding_runtime, semantic_alignment
+from src.me_finder.alignment import embedding_runtime
+from src.me_finder.alignment import semantic as semantic_alignment
 
 
 class EmbeddingThreadCountTests(unittest.TestCase):
@@ -26,13 +27,13 @@ class EmbeddingThreadCountTests(unittest.TestCase):
     def test_non_apple_platform_leaves_two_logical_cores(self) -> None:
         with mock.patch.object(
             embedding_runtime, "_macos_performance_core_count", return_value=None
-        ), mock.patch("src.me_finder.embedding_runtime.os.cpu_count", return_value=12):
+        ), mock.patch("src.me_finder.alignment.embedding_runtime.os.cpu_count", return_value=12):
             self.assertEqual(embedding_runtime.embedding_thread_count(), 8)
 
     def test_thread_count_is_always_at_least_one(self) -> None:
         with mock.patch.object(
             embedding_runtime, "_macos_performance_core_count", return_value=None
-        ), mock.patch("src.me_finder.embedding_runtime.os.cpu_count", return_value=1):
+        ), mock.patch("src.me_finder.alignment.embedding_runtime.os.cpu_count", return_value=1):
             self.assertEqual(embedding_runtime.embedding_thread_count(), 1)
 
 

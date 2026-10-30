@@ -22,7 +22,7 @@ def find_parallel_passages(
     source_formatter: Callable[[Mapping[str, object]], dict[str, object]],
 ) -> dict[str, object]:
     from ..structured_reader import SourceNotFound
-    from ..text_alignment import (
+    from ..alignment.text_alignment import (
         AlignmentNotFound,
         list_alignment_targets,
         locate_alignment,

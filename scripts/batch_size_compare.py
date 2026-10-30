@@ -276,10 +276,10 @@ def run_experiment(arguments) -> dict:  # pragma: no cover - requires model cach
     import numpy as np
     from unittest import mock
 
-    from src.me_finder import semantic_alignment
-    from src.me_finder import text_alignment as text_alignment_module
-    from src.me_finder.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
-    from src.me_finder.embedding_runtime import begin_embedding_run, embedding_thread_count
+    from src.me_finder.alignment import semantic as semantic_alignment
+    from src.me_finder.alignment import text_alignment as text_alignment_module
+    from src.me_finder.alignment.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
+    from src.me_finder.alignment.embedding_runtime import begin_embedding_run, embedding_thread_count
 
     model = EMBEDDING_MODELS[DEFAULT_EMBEDDING_MODEL_ID]
 
@@ -392,7 +392,7 @@ def main() -> int:
                         help="fastembed cache root containing the model dir")
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args()
-    from src.me_finder.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
+    from src.me_finder.alignment.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
     model_dirname = EMBEDDING_MODELS[DEFAULT_EMBEDDING_MODEL_ID].fastembed_cache_dirname
     if not (arguments.models / model_dirname).is_dir():
         parser.error(

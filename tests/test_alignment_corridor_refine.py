@@ -8,8 +8,8 @@ import unittest
 
 import numpy as np
 
-from src.me_finder import alignment_corridor_refine as refine
-from src.me_finder import semantic_alignment as sa
+from src.me_finder.alignment import corridor_refine as refine
+from src.me_finder.alignment import semantic as sa
 
 
 class LinkCostFidelity(unittest.TestCase):

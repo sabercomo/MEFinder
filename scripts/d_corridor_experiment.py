@@ -32,11 +32,11 @@ import sqlite3
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.me_finder.alignment_corridor_refine import (  # noqa: E402
+from src.me_finder.alignment.corridor_refine import (  # noqa: E402
     align_corridor, arm_a_refine, corridor_ratio, group_similarity,
     non_space_lengths, prefix_sums, SEARCH_BAND,
 )
-from src.me_finder.semantic_alignment import (  # noqa: E402
+from src.me_finder.alignment.semantic import (  # noqa: E402
     cached_text_sequence_vectors, _align_partition, _group_rows,
 )
 import math  # noqa: E402

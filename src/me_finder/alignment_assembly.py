@@ -11,8 +11,8 @@ from .import_assembly import ImportAssembly
 from .translation_work_controller import TranslationWorkController
 from .structured_reader import get_document_citation, get_document_window
 from .structured_reader_controller import StructuredReaderController
-from .alignment_body_range import read_body_range_segments, read_pair_body_ranges
-from .text_alignment import list_alignment_targets, locate_alignment
+from .alignment.body_range import read_body_range_segments, read_pair_body_ranges
+from .alignment.text_alignment import list_alignment_targets, locate_alignment
 from .text_alignment_controller import TextAlignmentController
 from .preferences import read_preferences, resolve_preferences_path
 

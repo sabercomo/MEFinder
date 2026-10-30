@@ -11,7 +11,7 @@ from src.me_finder import runtime_location
 from src.me_finder.parsers.local_ocr_settings import resolve_local_ocr_config_path
 from src.me_finder.components.local_ocr_installer import LocalOCRInstaller
 from src.me_finder.components.embedding_models import ManagedEmbeddingModels
-from src.me_finder.alignment_generation import default_alignment_model_cache
+from src.me_finder.alignment.generation import default_alignment_model_cache
 
 
 class ComponentRuntimeLocationTests(unittest.TestCase):

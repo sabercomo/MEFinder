@@ -137,7 +137,7 @@ class LiteratureVerificationService:
         """Add each document's work group and which fellow versions are aligned."""
 
         from ..document_groups import read_group_memberships
-        from ..text_alignment import list_alignment_targets
+        from ..alignment.text_alignment import list_alignment_targets
 
         index_path = self._existing_index_path()
         memberships = read_group_memberships(index_path)

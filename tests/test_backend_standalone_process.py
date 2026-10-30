@@ -60,7 +60,7 @@ class BackendStandaloneProcessTests(unittest.TestCase):
         self._link_model_cache()
 
     def _link_model_cache(self) -> None:
-        from src.me_finder.embedding_models import (
+        from src.me_finder.alignment.embedding_models import (
             EMBEDDING_MODELS,
             DEFAULT_EMBEDDING_MODEL_ID,
         )

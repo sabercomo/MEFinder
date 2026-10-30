@@ -1,6 +1,6 @@
 """Read model for reviewing one pair's body ranges before alignment.
 
-The automatic detector in :mod:`me_finder.alignment_regions` decides where each
+The automatic detector in :mod:`me_finder.alignment.regions` decides where each
 book's main text starts and ends.  This module exposes what the user needs to
 check that decision and correct it: the two books' real indexed segments, their
 existing page anchors, a chapter list derived from the same heading detection,
@@ -19,9 +19,9 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence, Tuple
 
-from .alignment_regions import alignment_body_bounds
-from .page_display import build_page_display
-from .persistence.alignment_store import (
+from .regions import alignment_body_bounds
+from ..page_display import build_page_display
+from ..persistence.alignment_store import (
     alignment_read_connection,
     body_range_write_transaction,
     first_segment_on_pdf_page,
@@ -31,13 +31,13 @@ from .persistence.alignment_store import (
     segment_count,
     segment_set_owner,
 )
-from .semantic_alignment import document_heading_positions
+from .semantic import document_heading_positions
 from .text_alignment import (
     InvalidAlignmentRequest,
     WriteWindow,
     latest_reviewed_body_ranges,
 )
-from .alignment_generation import (
+from .generation import (
     json_object,
     require_pair,
     segment_set,

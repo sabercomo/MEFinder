@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from src.me_finder.embedding_models import model_component_dir, model_component_installed
-from src.me_finder.semantic_alignment import FastEmbedEmbeddingProvider, embedding_model_config
+from src.me_finder.alignment.embedding_models import model_component_dir, model_component_installed
+from src.me_finder.alignment.semantic import FastEmbedEmbeddingProvider, embedding_model_config
 
 
 class AlignmentOfflineBoundaryTests(unittest.TestCase):
@@ -55,6 +55,6 @@ class AlignmentOfflineBoundaryTests(unittest.TestCase):
 
     def test_only_explicit_download_enables_network(self):
         from src.me_finder.components.embedding_models import download_embedding_model
-        with TemporaryDirectory() as directory, patch('src.me_finder.semantic_alignment.embed_texts') as embed:
+        with TemporaryDirectory() as directory, patch('src.me_finder.alignment.semantic.embed_texts') as embed:
             download_embedding_model('minilm-l12-v2', Path(directory))
         self.assertIs(embed.call_args.kwargs['local_files_only'], False)

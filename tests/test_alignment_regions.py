@@ -4,9 +4,9 @@ from unittest import TestCase
 
 import numpy as np
 
-from src.me_finder.embedding_models import embedding_model_config
-from src.me_finder.alignment_regions import alignment_body_bounds
-from src.me_finder.text_alignment import align_segment_sequences
+from src.me_finder.alignment.embedding_models import embedding_model_config
+from src.me_finder.alignment.regions import alignment_body_bounds
+from src.me_finder.alignment.text_alignment import align_segment_sequences
 
 
 class AlignmentRegionTests(TestCase):

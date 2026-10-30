@@ -31,8 +31,8 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from src.me_finder.alignment_compute import SubprocessAlignmentComputeRunner
-from src.me_finder.text_alignment import generate_alignment
+from src.me_finder.alignment.compute import SubprocessAlignmentComputeRunner
+from src.me_finder.alignment.text_alignment import generate_alignment
 
 
 def _run_rows(db: Path, run_id: str):

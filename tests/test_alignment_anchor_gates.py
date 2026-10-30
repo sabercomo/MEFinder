@@ -24,8 +24,8 @@ import unittest
 
 import numpy as np
 
-from src.me_finder.embedding_models import AlignmentThresholds
-from src.me_finder.semantic_alignment import (
+from src.me_finder.alignment.embedding_models import AlignmentThresholds
+from src.me_finder.alignment.semantic import (
     HeadingAnchor,
     align_semantic_sequences,
 )

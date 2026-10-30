@@ -17,13 +17,13 @@ from unittest import mock
 
 import numpy as np
 
-from src.me_finder.alignment_body_range import (
+from src.me_finder.alignment.body_range import (
     MAX_SEGMENT_WINDOW,
     read_body_range_segments,
     read_pair_body_ranges,
 )
 from src.me_finder.persistence.index_schema import SCHEMA
-from src.me_finder.text_alignment import (
+from src.me_finder.alignment.text_alignment import (
     InvalidAlignmentRequest,
     generate_alignment,
 )
@@ -265,7 +265,7 @@ class BodyRangeReviewTests(unittest.TestCase):
         self,
     ) -> None:
         with mock.patch(
-            "src.me_finder.alignment_kernel.embed_text_sequences",
+            "src.me_finder.alignment.kernel.embed_text_sequences",
             side_effect=_fake_embedding_sequences,
         ):
             result = generate_alignment(
@@ -349,7 +349,7 @@ class BodyRangeReviewTests(unittest.TestCase):
                 (json.dumps(payload, ensure_ascii=False),),
             )
             connection.commit()
-        with mock.patch("src.me_finder.alignment_kernel.embed_text_sequences") as embed:
+        with mock.patch("src.me_finder.alignment.kernel.embed_text_sequences") as embed:
             with self.assertRaisesRegex(InvalidAlignmentRequest, "重新加载"):
                 generate_alignment(
                     self.db, "work", "pdf-zh", "epub-en", force=True,
@@ -363,7 +363,7 @@ class BodyRangeReviewTests(unittest.TestCase):
     def test_matching_segment_sets_accept_both_ranges_and_reuse_them(self) -> None:
         sets = {side["side"]: side["segment_set_id"] for side in self._overview()["sides"]}
         ranges = {"pivot": [3, 12], "target": [1, 8]}
-        with mock.patch("src.me_finder.alignment_kernel.embed_text_sequences",
+        with mock.patch("src.me_finder.alignment.kernel.embed_text_sequences",
                         side_effect=_fake_embedding_sequences):
             for options in ({"reviewed_body_ranges": ranges, "expected_segment_set_ids": sets}, {}):
                 result = generate_alignment(

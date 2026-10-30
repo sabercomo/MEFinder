@@ -16,14 +16,14 @@ from pathlib import Path
 from unittest import mock
 
 from src.me_finder.persistence.index_schema import SCHEMA
-from src.me_finder.alignment_overrides import (
+from src.me_finder.alignment.overrides import (
     confirm_override,
     create_override_proposal,
     list_overrides,
     resolve_override_context,
     revoke_override,
 )
-from src.me_finder.text_alignment import (
+from src.me_finder.alignment.text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
     generate_alignment,
@@ -40,7 +40,7 @@ class AlignmentOverrideTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.embedding_patch = mock.patch(
-            "src.me_finder.alignment_kernel.embed_text_sequences",
+            "src.me_finder.alignment.kernel.embed_text_sequences",
             side_effect=_fake_embedding_sequences,
         )
         self.embedding_patch.start()

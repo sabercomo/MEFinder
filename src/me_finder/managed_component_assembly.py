@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict
 
 from .components.catalog import ComponentCatalog
-from .embedding_runtime import embedding_run_active
+from .alignment.embedding_runtime import embedding_run_active
 from .components.local_ocr_installer import LOCAL_OCR_MANIFEST_FILE, LocalOCRInstaller
 from .parsers.local_ocr_settings import resolve_local_ocr_config_path
 from .components.alignment_runtime import (

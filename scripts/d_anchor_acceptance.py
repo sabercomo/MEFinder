@@ -25,7 +25,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.me_finder.semantic_alignment import cached_text_sequence_vectors  # noqa: E402
+from src.me_finder.alignment.semantic import cached_text_sequence_vectors  # noqa: E402
 
 PAIRS = {
     "R9(权威)": ("pdf-import-a47c115e247c8194", "pdf-import-1d4016f99fc5dbba",

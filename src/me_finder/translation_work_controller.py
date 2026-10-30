@@ -6,12 +6,12 @@ import sqlite3
 from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from .text_alignment import (
+from .alignment.text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
     TextAlignmentError,
 )
-from . import translation_works
+from .alignment import translation_works
 
 WorkResponse = Tuple[int, Dict[str, object]]
 ReadyRunner = Callable[[Callable[[Path], Dict[str, object]]], Optional[Dict[str, object]]]

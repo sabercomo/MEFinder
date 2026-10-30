@@ -99,7 +99,7 @@ def _stage_model(models_root: Path, model_id: str, destination: Path) -> int:
     reads them, and ``document-vectors/`` stays empty so round 1 really embeds.
     """
 
-    from src.me_finder.embedding_models import EMBEDDING_MODELS
+    from src.me_finder.alignment.embedding_models import EMBEDDING_MODELS
 
     model = EMBEDDING_MODELS[model_id]
     source_dir = models_root / model.fastembed_cache_dirname

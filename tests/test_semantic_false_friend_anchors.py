@@ -10,9 +10,9 @@ import unittest
 
 import numpy as np
 
-from src.me_finder import semantic_alignment as sa
-from src.me_finder import alignment_anchor_validation as av
-from src.me_finder.alignment_anchors import HeadingAnchor
+from src.me_finder.alignment import semantic as sa
+from src.me_finder.alignment import anchor_validation as av
+from src.me_finder.alignment.anchors import HeadingAnchor
 
 
 def _diagonal(n, dim=48, seed=0):

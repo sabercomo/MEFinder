@@ -112,7 +112,7 @@ def main() -> None:
     fixture = json.loads((snapshot / 'manifest.json').read_text())
     if digest(snapshot / 'index.sqlite3') != fixture['content_sha256']:
         raise ValueError('Frozen snapshot changed; prepare a new baseline')
-    from src.me_finder.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
+    from src.me_finder.alignment.embedding_models import EMBEDDING_MODELS, DEFAULT_EMBEDDING_MODEL_ID
     from src.me_finder.preferences import save_preferences
     import psutil
     model = EMBEDDING_MODELS[DEFAULT_EMBEDDING_MODEL_ID]

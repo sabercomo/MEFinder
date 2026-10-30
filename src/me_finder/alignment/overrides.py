@@ -13,8 +13,8 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Dict, Mapping, Sequence
 
-from .alignment_generation import now, source_row, validate_source_id
-from .persistence.alignment_store import (
+from .generation import now, source_row, validate_source_id
+from ..persistence.alignment_store import (
     alignment_read_connection,
     confirm_pending_override,
     insert_pending_override,

@@ -20,7 +20,7 @@ SQL_EXECUTE_OUTSIDE_PERSISTENCE = {
     "data_location.py": 5,
     "document_deletion.py": 1,
     "export/service.py": 10,
-    "edition_folio_anchors.py": 4,
+    "alignment/edition_folio_anchors.py": 4,
     "index_publisher.py": 1,
     "indexer.py": 1,
     "large_document/job_ledger.py": 43,
@@ -248,19 +248,19 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # semantic_alignment 锚点抽取器 → text_alignment 覆盖/快照
             # → bibliographic_metadata 写库路径 → search 上帝类。
             # 人工覆盖与配方快照已拆出，上限随之下调（只降不升）。
-            "text_alignment.py": 960,
-            "alignment_generation.py": 820,
-            "alignment_segmentation.py": 350,
-            "alignment_snapshots.py": 150,
-            "alignment_overrides.py": 425,
+            "alignment/text_alignment.py": 960,
+            "alignment/generation.py": 820,
+            "alignment/segmentation.py": 350,
+            "alignment/snapshots.py": 150,
+            "alignment/overrides.py": 425,
             # 锚点抽取与结构识别已拆出，上限随之下调（只降不升）。
-            "semantic_alignment.py": 1675,
-            "alignment_anchors.py": 875,
-            "alignment_structure.py": 500,
+            "alignment/semantic.py": 1675,
+            "alignment/anchors.py": 875,
+            "alignment/structure.py": 500,
             # 对齐产出的段质量门（噪声段/脚注块降级）拆为独立叶模块。
-            "alignment_segment_quality.py": 200,
+            "alignment/segment_quality.py": 200,
             # 共有词假锚点移除（leave-one-out + 源端更优替代门）拆为独立叶模块。
-            "alignment_anchor_validation.py": 150,
+            "alignment/anchor_validation.py": 150,
             # 共用取值底座与三类文献抽取器已拆出，上限随之下调。
             "bibliographic/metadata.py": 1550,
             "bibliographic/values.py": 325,

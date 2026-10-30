@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from src.me_finder.preferences import read_preferences, save_preferences
-from src.me_finder.embedding_models import (
+from src.me_finder.alignment.embedding_models import (
     DEFAULT_EMBEDDING_MODEL_ID,
     default_alignment_threshold_settings,
 )

@@ -19,13 +19,13 @@ from src.me_finder.database import (
     replace_source_in_database,
 )
 from src.me_finder.document_groups import add_group_member, set_document_group_base
-from src.me_finder.alignment_snapshots import (
+from src.me_finder.alignment.snapshots import (
     read_alignment_recipe_snapshot,
     replace_alignment_recipe_snapshot,
 )
 from src.me_finder.persistence.index_schema import SCHEMA
 from src.me_finder.persistence.connection import open_readonly_index
-from src.me_finder.text_alignment import (
+from src.me_finder.alignment.text_alignment import (
     ALIGNMENT_ALGORITHM_VERSION,
     AlignmentNotFound,
     InvalidAlignmentRequest,
@@ -38,8 +38,8 @@ from src.me_finder.text_alignment import (
     PageText,
     ParagraphText,
 )
-from src.me_finder.alignment_generation import load_pages
-from src.me_finder.semantic_alignment import (
+from src.me_finder.alignment.generation import load_pages
+from src.me_finder.alignment.semantic import (
     SemanticLink,
     embed_texts,
     embed_text_sequences as cache_text_sequences,
@@ -78,7 +78,7 @@ def _fake_embedding_sequences(sequences, cache_dir, **_kwargs):
 class TextAlignmentTests(unittest.TestCase):
     def setUp(self) -> None:
         self.embedding_patch = mock.patch(
-            "src.me_finder.alignment_kernel.embed_text_sequences",
+            "src.me_finder.alignment.kernel.embed_text_sequences",
             side_effect=_fake_embedding_sequences,
         )
         self.embedding_patch.start()
@@ -682,7 +682,7 @@ class TextAlignmentTests(unittest.TestCase):
             SemanticLink(1, 2, 2, 2, 2.2, 0.0, "unmatched"),
         ]
         with mock.patch(
-            "src.me_finder.alignment_generation.align_segment_sequences",
+            "src.me_finder.alignment.generation.align_segment_sequences",
             return_value=(links, []),
         ):
             generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
@@ -924,7 +924,7 @@ class TextAlignmentTests(unittest.TestCase):
     def test_unchanged_completed_pair_is_reused_without_recomputing(self) -> None:
         first = generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
         with mock.patch(
-            "src.me_finder.alignment_generation.align_segment_sequences",
+            "src.me_finder.alignment.generation.align_segment_sequences",
             side_effect=AssertionError("cached pair should not be recomputed"),
         ):
             second = generate_alignment(
@@ -1127,7 +1127,7 @@ class TextAlignmentTests(unittest.TestCase):
         generate_alignment(self.db, "work-one", "pdf-de", "epub-en")
         snapshot = read_alignment_recipe_snapshot(self.db)
         with mock.patch(
-            "src.me_finder.alignment_snapshots.generate_alignment_on_connection",
+            "src.me_finder.alignment.snapshots.generate_alignment_on_connection",
             side_effect=RuntimeError("generation failed"),
         ):
             with self.assertRaisesRegex(RuntimeError, "generation failed"):
@@ -1584,7 +1584,7 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
                 return np.ones((len(texts), 3), dtype=np.float32)
 
             with mock.patch(
-                "src.me_finder.semantic_alignment.embed_texts",
+                "src.me_finder.alignment.semantic.embed_texts",
                 side_effect=fake_embed,
             ):
                 cache_text_sequences(
@@ -1610,7 +1610,7 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
 
             sequences = [["pivot one", "pivot two"], ["target one"]]
             with mock.patch(
-                "src.me_finder.semantic_alignment.embed_texts",
+                "src.me_finder.alignment.semantic.embed_texts",
                 side_effect=fake_embed,
             ):
                 first = cache_text_sequences(sequences, cache_dir)
@@ -1632,7 +1632,7 @@ class SemanticEmbeddingCacheTests(unittest.TestCase):
             previous = ["unchanged", "old combined segment"]
             current = ["unchanged", "new split segment"]
             with mock.patch(
-                "src.me_finder.semantic_alignment.embed_texts",
+                "src.me_finder.alignment.semantic.embed_texts",
                 side_effect=fake_embed,
             ):
                 cache_text_sequences([previous], cache_dir)

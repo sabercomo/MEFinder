@@ -11,8 +11,8 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
-from src.me_finder import translation_works
-from src.me_finder.alignment_overrides import (
+from src.me_finder.alignment import translation_works
+from src.me_finder.alignment.overrides import (
     confirm_override,
     create_override_proposal,
     revoke_override,
@@ -23,7 +23,7 @@ from src.me_finder.document_groups import (
 )
 from src.me_finder.persistence.index_schema import SCHEMA
 from src.me_finder.persistence.migrations import migrate_index_database
-from src.me_finder.text_alignment import (
+from src.me_finder.alignment.text_alignment import (
     AlignmentNotFound,
     InvalidAlignmentRequest,
     generate_alignment,

@@ -6,9 +6,9 @@ import logging
 import time
 from pathlib import Path
 
-from .. import translation_works
+from ..alignment import translation_works
 from ..application.bibliographic_update_applier import run_applier
-from ..embedding_runtime import request_embedding_cancel
+from ..alignment.embedding_runtime import request_embedding_cancel
 from ..import_assembly import ImportAssembly
 from ..managed_component_assembly import ManagedComponents
 from ..zotero_sync import ZoteroSyncService

@@ -10,7 +10,7 @@ from unittest import mock
 
 from desktop import error_html, loading_html
 from src.me_finder import __version__
-from src.me_finder.embedding_models import (
+from src.me_finder.alignment.embedding_models import (
     DEFAULT_EMBEDDING_MODEL_ID,
     default_alignment_threshold_settings,
 )

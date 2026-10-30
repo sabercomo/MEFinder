@@ -8,13 +8,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
-from ..embedding_models import (
+from ..alignment.embedding_models import (
     model_component_installed,
     resolve_alignment_thresholds,
 )
 from ..runtime_location import component_runtime_root
 from ..preferences import read_preferences, resolve_preferences_path
-from ..embedding_runtime import (
+from ..alignment.embedding_runtime import (
     SemanticAlignmentCancelled,
     begin_embedding_run,
     embedding_cancel_requested,
@@ -27,7 +27,7 @@ from ..components.alignment_runtime import (
     resolve_installed_runtime_launch,
 )
 from ..lifecycle import DurableOperationClosedError
-from ..alignment_compute import (
+from ..alignment.compute import (
     AlignmentComputeError,
     CANCELLED,
     COMPONENT_MISSING,
@@ -35,7 +35,7 @@ from ..alignment_compute import (
     WORKER_START_FAILED,
     SubprocessAlignmentComputeRunner,
 )
-from ..text_alignment import InvalidAlignmentRequest, generate_alignment
+from ..alignment.text_alignment import InvalidAlignmentRequest, generate_alignment
 
 
 class TextAlignmentRejected(ValueError):

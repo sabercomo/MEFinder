@@ -11,7 +11,7 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Mapping, Sequence, Tuple
 
-from .alignment_generation import (
+from .generation import (
     SEGMENTER as SEGMENTER,
     SEGMENTER_VERSION as SEGMENTER_VERSION,
     ALIGNMENT_ALGORITHM as ALIGNMENT_ALGORITHM,
@@ -34,8 +34,8 @@ from .alignment_generation import (
     validate_nonnegative_integer,
     validate_source_id,
 )
-from .alignment_kernel import align_segment_sequences as align_segment_sequences
-from .alignment_segmentation import (
+from .kernel import align_segment_sequences as align_segment_sequences
+from .segmentation import (
     MAX_SEGMENT_LENGTH as MAX_SEGMENT_LENGTH,
     PageText as PageText,
     ParagraphText,
@@ -44,11 +44,11 @@ from .alignment_segmentation import (
     segment_pdf_text as segment_pdf_text,
     segment_paragraph_text as segment_paragraph_text,
 )
-from .alignment_regions import alignment_body_bounds
-from .document_group_metadata import member_display_name
+from .regions import alignment_body_bounds
+from ..document_group_metadata import member_display_name
 from .embedding_models import DEFAULT_EMBEDDING_MODEL_ID, embedding_model_config
-from .pdf.extractors import attach_page_block_offsets, pdf_page_text_hash
-from .persistence.alignment_store import (
+from ..pdf.extractors import attach_page_block_offsets, pdf_page_text_hash
+from ..persistence.alignment_store import (
     body_segment_texts,
     body_selected_orders,
     candidate_aligned_rows,
@@ -77,8 +77,8 @@ from .persistence.alignment_store import (
     target_pdf_spans,
     target_source_row,
 )
-from .persistence.connection import connect_index, table_exists
-from .semantic_alignment import cached_text_sequence_vectors, mutual_nearest_target_index
+from ..persistence.connection import connect_index, table_exists
+from .semantic import cached_text_sequence_vectors, mutual_nearest_target_index
 
 
 def segment_set_id_for_source(run: Mapping[str, object], source_id: str) -> str:

@@ -7,7 +7,7 @@ import json, sqlite3, sys, time
 from collections import Counter
 from pathlib import Path
 sys.path.insert(0, '.')
-from src.me_finder.text_alignment import generate_alignment
+from src.me_finder.alignment.text_alignment import generate_alignment
 E2E = Path(sys.argv[1]); DB = E2E / 'index.sqlite3'; CACHE = E2E / 'cache'
 MODEL = 'multilingual-e5-large'
 base = json.load(open('.codex-tmp/d-round2/baseline-2026-09-14.json'))

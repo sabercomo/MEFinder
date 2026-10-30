@@ -12,7 +12,7 @@ run without any numeric stack in the main process.
 This module owns only the install / upgrade / uninstall / validate lifecycle of
 that runtime and its cross-process safety. It never opens the official
 database, never re-parses source files and never triggers OCR. The compute seam
-itself lives in :mod:`me_finder.alignment_compute`; the launch resolution that
+itself lives in :mod:`me_finder.alignment.compute`; the launch resolution that
 prefers an installed runtime lives there too (``installed_runtime_command``).
 
 The mechanics (uv download + isolated venv, staging → publish → previous swap,
@@ -43,8 +43,8 @@ from urllib.error import URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from ..alignment_compute import ALIGNMENT_COMPUTE_PROTOCOL
-from ..alignment_runtime_lock import (
+from ..alignment.compute import ALIGNMENT_COMPUTE_PROTOCOL
+from ..alignment.runtime_lock import (
     RuntimeFileLock,
     ComputeUnavailable as ComputeUnavailable,
     compute_admission as compute_admission,
@@ -488,7 +488,7 @@ class ManagedAlignmentRuntime:
     def installed_venv_python(self) -> Optional[Path]:
         """The interpreter of a validly installed runtime, else None.
 
-        The launch resolver in :mod:`me_finder.alignment_compute` uses this to
+        The launch resolver in :mod:`me_finder.alignment.compute` uses this to
         prefer the independent runtime over the main interpreter.
         """
 
@@ -1508,10 +1508,10 @@ def default_worker_context() -> tuple[str, Path]:
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass is not None:
-            return "me_finder.alignment_compute_worker", Path(meipass)
+            return "me_finder.alignment.compute_worker", Path(meipass)
         # Defensive fallback for a frozen build without _MEIPASS (unexpected):
         # the bundle resources directory, next to which datas are placed.
         from ..runtime_location import app_root
 
-        return "me_finder.alignment_compute_worker", app_root()
-    return "src.me_finder.alignment_compute_worker", Path(__file__).resolve().parents[3]
+        return "me_finder.alignment.compute_worker", app_root()
+    return "src.me_finder.alignment.compute_worker", Path(__file__).resolve().parents[3]

@@ -26,8 +26,8 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.me_finder.alignment_generation import segment_set  # noqa: E402
-from src.me_finder.text_alignment import (  # noqa: E402
+from src.me_finder.alignment.generation import segment_set  # noqa: E402
+from src.me_finder.alignment.text_alignment import (  # noqa: E402
     SEGMENTER_VERSION,
     generate_alignment,
     open_writable_index,

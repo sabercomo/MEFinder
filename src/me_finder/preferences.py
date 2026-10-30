@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from typing import Any, Mapping
 
-from .embedding_models import (
+from .alignment.embedding_models import (
     DEFAULT_EMBEDDING_MODEL_ID,
     EMBEDDING_MODELS,
     default_alignment_threshold_settings,

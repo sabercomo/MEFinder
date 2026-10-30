@@ -14,8 +14,8 @@ from src.me_finder.application.text_alignment_coordinator import (
     TextAlignmentFailed,
     TextAlignmentRejected,
 )
-from src.me_finder import embedding_runtime
-from src.me_finder.text_alignment import AlignmentNotFound
+from src.me_finder.alignment import embedding_runtime
+from src.me_finder.alignment.text_alignment import AlignmentNotFound
 from src.me_finder.text_alignment_controller import TextAlignmentController
 
 

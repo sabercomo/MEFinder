@@ -5,7 +5,7 @@ Run before and after a region-detection change and diff the two outputs.
 """
 import json, sqlite3, sys
 sys.path.insert(0, 'src')
-from me_finder.alignment_regions import alignment_body_bounds
+from me_finder.alignment.regions import alignment_body_bounds
 db = sys.argv[1]
 c = sqlite3.connect(f'file:{db}?mode=ro', uri=True)
 out = {}

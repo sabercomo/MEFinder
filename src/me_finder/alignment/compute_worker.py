@@ -20,8 +20,8 @@ identity are reported and enforced from *this* process (the runtime that would
 actually compute).
 
 Usage:
-    python -m src.me_finder.alignment_compute_worker --probe <control.ndjson>
-    python -m src.me_finder.alignment_compute_worker <request.json> <result.json> <control.ndjson>
+    python -m src.me_finder.alignment.compute_worker --probe <control.ndjson>
+    python -m src.me_finder.alignment.compute_worker <request.json> <result.json> <control.ndjson>
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import IO
 
-from .alignment_compute import (
+from .compute import (
     ALIGNMENT_COMPUTE_PROTOCOL,
     COMPONENT_MISSING,
     COMPUTE_FAILED,
@@ -63,7 +63,7 @@ def _emit(control: IO[str], **message: object) -> None:
 
 
 def _run_compute(request: dict, result_path: Path, control: IO[str]) -> int:
-    from .alignment_compute import run_in_process, deserialize_folio
+    from .compute import run_in_process, deserialize_folio
     from .embedding_models import AlignmentThresholds
 
     inputs = request["inputs"]
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         control = _open_control(positional[2])
         model_id, cache_dir = positional[0], positional[1]
         try:
-            from .components.embedding_models import download_embedding_model
+            from ..components.embedding_models import download_embedding_model
 
             download_embedding_model(model_id, Path(cache_dir))
         except BaseException as exc:  # noqa: BLE001 - report any download/load failure

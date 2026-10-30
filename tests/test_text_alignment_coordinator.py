@@ -9,8 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from src.me_finder import embedding_runtime
-from src.me_finder.alignment_compute import (
+from src.me_finder.alignment import embedding_runtime
+from src.me_finder.alignment.compute import (
     AlignmentComputeError,
     CANCELLED,
     COMPONENT_MISSING,

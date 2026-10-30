@@ -8,7 +8,7 @@ re-parses nothing: it turns two segment-text sequences into
 
 It lives in its own module (the boundary the compute seam introduced) so the
 main process can drive it either in-process or, via
-:mod:`me_finder.alignment_compute`, in a separate process. ``text_alignment``
+:mod:`me_finder.alignment.compute`, in a separate process. ``text_alignment``
 re-exports ``align_segment_sequences`` for backward compatibility, so existing
 importers and test patch targets keep working.
 """
@@ -19,8 +19,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Dict, List, Sequence, Tuple
 
-from .alignment_anchors import HeadingAnchor
-from .alignment_regions import alignment_body_bounds
+from .anchors import HeadingAnchor
+from .regions import alignment_body_bounds
 from .edition_folio_anchors import (
     FolioBoundaryCandidate,
     verify_folio_boundary_candidates,
@@ -30,7 +30,7 @@ from .embedding_models import (
     AlignmentThresholds,
     embedding_model_config,
 )
-from .semantic_alignment import (
+from .semantic import (
     EmbeddingProvider,
     SemanticLink,
     align_semantic_sequences,

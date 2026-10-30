@@ -43,10 +43,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Callable, Dict, List, Mapping, Sequence, Tuple
 
-from .alignment_anchors import HeadingAnchor
+from .anchors import HeadingAnchor
 from .edition_folio_anchors import FolioBoundaryCandidate
 from .embedding_models import AlignmentThresholds, DEFAULT_EMBEDDING_MODEL_ID
-from .semantic_alignment import (
+from .semantic import (
     ALIGNMENT_REGION_VERSION,
     EMBEDDING_RUNTIME_VERSION,
     SEMANTIC_ALIGNMENT_VERSION,
@@ -291,12 +291,12 @@ def default_worker_command() -> List[str]:
 
     if getattr(sys, "frozen", False):
         return [sys.executable, "alignment-compute-worker"]
-    return [sys.executable, "-m", "src.me_finder.alignment_compute_worker"]
+    return [sys.executable, "-m", "src.me_finder.alignment.compute_worker"]
 
 
 def _repo_root() -> Path:
-    # src/me_finder/alignment_compute.py -> repo root is parents[2].
-    return Path(__file__).resolve().parents[2]
+    # src/me_finder/alignment/compute.py -> repo root is parents[3].
+    return Path(__file__).resolve().parents[3]
 
 
 def _terminate(process: subprocess.Popen) -> None:

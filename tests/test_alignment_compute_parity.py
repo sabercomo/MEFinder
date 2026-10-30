@@ -20,11 +20,11 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from src.me_finder.alignment_compute import (
+from src.me_finder.alignment.compute import (
     SubprocessAlignmentComputeRunner,
     run_in_process,
 )
-from src.me_finder.embedding_models import (
+from src.me_finder.alignment.embedding_models import (
     DEFAULT_EMBEDDING_MODEL_ID,
     embedding_model_config,
     model_component_installed,
@@ -197,7 +197,7 @@ def _run_rows(db: Path, run_id: str):
 @unittest.skipUnless(MODEL_PRESENT, "requires local MiniLM model cache")
 class EndToEndParityTests(unittest.TestCase):
     def test_generate_alignment_matches_across_runners(self) -> None:
-        from src.me_finder.text_alignment import generate_alignment
+        from src.me_finder.alignment.text_alignment import generate_alignment
 
         with tempfile.TemporaryDirectory() as tmp_a, tempfile.TemporaryDirectory() as tmp_b:
             db_a = _fixture(Path(tmp_a))
@@ -236,8 +236,8 @@ class NoCompute(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, NoCompute())
 root = Path(sys.argv[1]); model_cache = Path(sys.argv[2])
 from scripts.performance_fixture import create_fixture
-from src.me_finder.text_alignment import generate_alignment
-from src.me_finder.alignment_compute import SubprocessAlignmentComputeRunner
+from src.me_finder.alignment.text_alignment import generate_alignment
+from src.me_finder.alignment.compute import SubprocessAlignmentComputeRunner
 import sqlite3
 # isolated compute cache: symlink only read-only model blobs; fresh writable
 # installed/ and document-vectors/ so nothing writes back into the user cache.

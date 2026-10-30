@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping
 
 from ..runtime_location import component_runtime_root
-from ..alignment_runtime_lock import compute_admission
-from ..embedding_models import (
+from ..alignment.runtime_lock import compute_admission
+from ..alignment.embedding_models import (
     EMBEDDING_MODELS,
     embedding_model_config,
     embedding_model_summaries,
@@ -41,7 +41,7 @@ def download_embedding_model(model_id: str, cache_dir: Path) -> None:
     summarising or uninstalling components must not require the compute stack.
     """
 
-    from ..semantic_alignment import embed_texts
+    from ..alignment.semantic import embed_texts
 
     embed_texts(["MEFinder semantic alignment model probe"], cache_dir,
                 model_id=model_id, local_files_only=False)
