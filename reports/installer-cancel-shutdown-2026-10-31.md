@@ -99,3 +99,26 @@ components/
 - `test_every_source_subpackage_declares_an_init`：包内任何含 `.py` 的目录都必须有 `__init__.py`。缺 `__init__` 时 Python 按命名空间包照常导入，不会自己报错，只能靠守卫发现。
 
 这条和取消/关停收口无关，是提交时撞上的；一并修掉，因为它会让此后每一次改 `components/` 下的文件都踩同一个坑。
+
+## 补记：macOS arm64 测试包（2026-10-31 22:50–22:55，本地，未上传未安装）
+
+与上一轮不同，本轮改动落在 `components/` 下，冻结包里确实有份，因此验收能落到实处。
+
+- 源码边界：`5cfa5bb`。工作区只有既有的 `.hallmark/log.json` 与三个未跟踪文件，都不进包。
+- 构建：`MEFINDER_PYTHON="$PWD/.venv-macos312-arm64/bin/python" MEFINDER_TARGET_ARCH=arm64 ./build_macos.sh`，退出码 0；构建内全量 unittest 2,862 项通过（39 跳过，190.709 秒）。
+- 产物（替换了 `e736a9c` 那一版：ZIP 96,295,494 字节 `e7fbc594…`、DMG 104,264,926 字节 `d03d7678…`）：
+
+| 产物 | 字节 | SHA-256 |
+|---|---:|---|
+| `release/MEFinder-v0.6.1-macos-arm64.zip` | 96,298,815 | `32d5ba036440241a992ab2ff091dc523b953ed46f807ef38a68cb84a884596ec` |
+| `release/MEFinder-v0.6.1-macos-arm64.dmg` | 104,392,240 | `6eaeb1c84f102e6fe881ce916d3abefdae8487a0ea6a7a0202469e67ede9c50f` |
+
+独立复核（新空目录 `ditto -x -k` 解 ZIP 后）：
+
+1. `codesign --verify --deep --strict` 通过；106 个 Mach-O 全为 arm64；无 `data_root.txt` / `*.local.json` / `._*`；`shasum -c` 两项 OK。
+2. **组件模块在主程序里，不在侧车里**。侧车 PYZ 完全没有 `components.*` —— MCP 侧车是只读工具集，依赖分析本就不该把安装器拉进去；上一轮查 `search` 时在侧车里能查到，是因为 MCP 确实用检索。本轮的组件检查因此落在主程序（754 个模块），9 个条目齐全：`components`（即补入库的 `__init__.py`）、`alignment_runtime`、`catalog`、`contract`、`embedding_models`、`install`、`local_ocr_installer`、`mineru`、`transfer_rate`。
+3. **本轮共用件确实进了包**：直接读冻结 `install` 模块的 code object，10 个新符号全在 —— `cancel_and_join_operations` / `request_cancel` / `check_cancelled` / `wait_unless_cancelled` / `stop_if_cancelled` / `resolve_manifest_path` / `remove_tree_if_present` / `CANCELLED_MESSAGE` / `CANCELLING_MESSAGE` / `OperationState`，两句取消文案也只存在于该模块。
+4. **反向核对**：三个安装器的冻结 code object 里硬编码取消文案均为 **0 处**，且各自引用的共用件恰好是该有的子集 —— MinerU 与本地 OCR 七个/六个，`alignment_runtime` 只有 `check_cancelled` / `wait_unless_cancelled` / `stop_if_cancelled` / `resolve_manifest_path`，不含 `cancel_and_join_operations` / `request_cancel` / `remove_tree_if_present`，与"它的 `close()`、`_cancel` 与 strict 删目录登记为例外"一致。这同时也是导入兼容性检查：安装器 `from .install import` 的每个名字都在冻结的 `install` 模块里。
+5. 冻结侧车端到端：一次性数据根（`ME_FINDER_APP_DATA_ROOT`，索引在 `<root>/runtime/data/index.sqlite3`）驱动包内 `MEFinderMCP` 走 STDIO，`initialize` 返回 `mefinder 0.6.1`，`tools/list` 17 个，`list_documents` / `search_passages` / `locate_quote` 均返回结果。不接触用户真实文献库。
+
+**未验证**：取消与关停的**运行时行为**没有在冻结包里跑过 —— 那需要真实下载并安装一个组件，再中途取消 / 关闭应用。本轮只静态证明了代码进包与符号配对。三个组件的真实网络安装、Windows 实机（文件占用）、GUI 人工点击同样未做；未安装到 `/Applications`、未上传、未发布。
