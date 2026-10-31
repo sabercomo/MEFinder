@@ -87,3 +87,27 @@ translation_work_controller -> alignment.translation_works
 - `ruff check .`（排除既有未入库 `.codex-tmp`）：通过。
 - 第 5、6 项的计数与边集合由一次性脚本在 `src/me_finder` 上实测，数字即上文表格所列。
 - 未做：Windows 实机、打包、真实大库检索对照。本轮不触碰检索算法与排序，真实库对照不在本轮门禁内。
+
+## 补记：macOS arm64 测试包（2026-10-31 15:13–15:18，本地，未上传未安装）
+
+重打的原因是上一版 0.6.1 测试包打于 `d36ce58`，不含本轮三项。**第 5、6 项只改测试守卫，冻结包里看不到；能在包里验的只有第 7 项（检索层）。**
+
+- 源码边界：`e736a9c`。工作区只有既有的 `.hallmark/log.json` 修改与三个未跟踪文件（`.codex-tmp/`、两份 draft），都不进包。
+- 构建：`MEFINDER_PYTHON="$PWD/.venv-macos312-arm64/bin/python" MEFINDER_TARGET_ARCH=arm64 ./build_macos.sh`，退出码 0。构建内全量 unittest 2,847 项通过（39 跳过，200.580 秒）。
+- 产物（替换了 d36ce58 那一版：ZIP 96,309,782 字节 `a895dd23…`、DMG 104,343,671 字节 `a121106a…`）：
+
+| 产物 | 字节 | SHA-256 |
+|---|---:|---|
+| `release/MEFinder-v0.6.1-macos-arm64.zip` | 96,295,494 | `e7fbc594bde304a926dbead0d53f4846591ad5318feb4b715ad85c0b49349686` |
+| `release/MEFinder-v0.6.1-macos-arm64.dmg` | 104,264,926 | `d03d767871d8f0603f21c8b3a70ab7e657a6e2242f5827403972b80066756509` |
+
+脚本自带门禁（`set -euo pipefail`，全部通过）：5 次 `codesign --verify --deep --strict`、4 次侧车 STDIO 冒烟（构建产物 / ZIP 回解 / DMG 挂载 / DMG 拖出副本）、Finder 元数据与 AppleDouble 检查、DMG verify + 挂载 + `/Applications` 捷径检查、ZIP 与 DMG 的 `shasum -c` 自校。
+
+独立复核（在新空目录里 `ditto -x -k` 解 ZIP 后）：
+
+1. `codesign --verify --deep --strict` 通过；包内 106 个 Mach-O 全为 arm64，无非 arm64 条目。
+2. 无 `data_root.txt`、无 `*.local.json`、无 `._*` AppleDouble。
+3. **第 7 项已进包**：读两个可执行文件内嵌的 PYZ 模块表——侧车 1,262 个模块里 `search` 子包是 11 个（`anchors / assembly / citation / citations / contract / cross_page / engine / recall / recall_passages / scoring` 加 `search` 本身），主程序 754 个模块里是 10 个；两者都**没有** `recall_memory`，而 `recall_passages` 在，确认这项检查不是空断言。
+4. **冻结态检索真跑通**：用一次性数据根（`ME_FINDER_APP_DATA_ROOT`，索引建在 `<root>/runtime/data/index.sqlite3`——冻结态 `runtime_root` 是 `<数据根>/runtime`）驱动包内 `MEFinderMCP` 走 STDIO JSON-RPC：`initialize` 返回 `mefinder 0.6.1`，`tools/list` 17 个工具，`list_documents` → “找到 1 篇文献”，`search_passages`（BM25 通道）→ “召回了 1 段原文”，`locate_quote`（逐字通道）→ “找到 1 个原句候选”。全程不接触用户真实文献库。
+
+未做：未安装到 `/Applications`、未上传、未发布；GUI 未人工点击；Windows 与 Intel 包未构建。
