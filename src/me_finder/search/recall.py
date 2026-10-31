@@ -1,8 +1,8 @@
 """Candidate recall: run the accuracy-stage cascade against one library.
 
 Recall owns where candidates come from (FTS trigram MATCH plus ``instr``
-verification on SQLite, or the in-memory scans on the legacy JSON backend).
-It never orders the final list and never formats results — scoring lives in
+verification on SQLite, the one search backend).  It never orders the final
+list and never formats results — scoring lives in
 :mod:`search_scoring`, assembly in :mod:`search_assembly`.
 """
 
@@ -31,30 +31,23 @@ from .contract import (
     SQL_CANDIDATE_MULTIPLIER,
     fuzzy_needs_bigram_scan,
 )
-from .recall_memory import InMemoryRecallPasses
 from .recall_passages import PassageRetrieval, gram_overlap
 from .scoring import best_window_ratio
 
 Scope = Optional[frozenset]
 
 
-class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
-    """Recall candidates for one query from a SQLite or in-memory index."""
+class CandidateRecall(PassageRetrieval):
+    """Recall candidates for one query from the SQLite index."""
 
     def __init__(
         self,
         *,
         db_provider: Callable[[], object],
-        backend: str,
-        paragraphs: List[Dict[str, object]],
-        ngram_index: Dict[str, List[int]],
         ensure_fts: Callable[[], bool],
         short_gram_ready: Callable[[], bool] = lambda: False,
     ) -> None:
         self._db_provider = db_provider
-        self.backend = backend
-        self.paragraphs = paragraphs
-        self.ngram_index = ngram_index
         self._ensure_fts = ensure_fts
         self._short_gram_ready = short_gram_ready
 
@@ -85,35 +78,23 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
         candidates: Dict[str, Dict[str, object]] = {}
         truncated = False
         if mode in {"auto", "exact"}:
-            if self.backend == "sqlite":
-                truncated = self._sql_exact_pass(
-                    query, q_norm, q_plain, candidates, source_type, source_file_id, scope, candidate_budget,
-                )
-            else:
-                self._exact_pass(query, q_norm, candidates, source_type, source_file_id, scope)
+            truncated = self._sql_exact_pass(
+                query, q_norm, q_plain, candidates, source_type, source_file_id, scope, candidate_budget,
+            )
         if mode in {"auto", "compact"} and (mode != "auto" or not candidates):
-            if self.backend == "sqlite":
-                truncated = self._sql_mapped_substring_pass(
-                    q_compact, q_plain, "compact_text", "space_insensitive", 0.96,
-                    candidates, source_type, source_file_id, scope, candidate_budget,
-                ) or truncated
-            else:
-                self._mapped_substring_pass(q_compact, "compact", "space_insensitive", 0.96, candidates, source_type, source_file_id, scope)
+            truncated = self._sql_mapped_substring_pass(
+                q_compact, q_plain, "compact_text", "space_insensitive", 0.96,
+                candidates, source_type, source_file_id, scope, candidate_budget,
+            ) or truncated
         if mode in {"auto", "punctuation"} and (mode != "auto" or not candidates):
-            if self.backend == "sqlite":
-                truncated = self._sql_mapped_substring_pass(
-                    q_plain, q_plain, "plain_text", "punctuation_insensitive", 0.92,
-                    candidates, source_type, source_file_id, scope, candidate_budget,
-                ) or truncated
-            else:
-                self._mapped_substring_pass(q_plain, "plain", "punctuation_insensitive", 0.92, candidates, source_type, source_file_id, scope)
+            truncated = self._sql_mapped_substring_pass(
+                q_plain, q_plain, "plain_text", "punctuation_insensitive", 0.92,
+                candidates, source_type, source_file_id, scope, candidate_budget,
+            ) or truncated
         if mode in {"auto", "fuzzy"} and (mode != "auto" or not candidates):
-            if self.backend == "sqlite":
-                truncated = self._sql_fuzzy_pass(
-                    q_plain, candidates, source_type, source_file_id, scope, candidate_budget,
-                ) or truncated
-            else:
-                self._fuzzy_pass(q_plain, candidates, source_type, source_file_id, scope)
+            truncated = self._sql_fuzzy_pass(
+                q_plain, candidates, source_type, source_file_id, scope, candidate_budget,
+            ) or truncated
         return candidates, truncated
 
     # ------------------------------------------------------------------
@@ -337,28 +318,6 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
             "match_end": end,
         }
 
-    def _source_allowed(
-        self,
-        paragraph: Dict[str, object],
-        source_type: str,
-        source_file_id: Optional[str],
-        scope: Scope,
-    ) -> bool:
-        paragraph_type = str(paragraph.get("source_type") or "word")
-        paragraph_format = str(paragraph.get("source_format") or "").casefold()
-        if source_type == "epub":
-            if paragraph_type != "word" or paragraph_format != "epub":
-                return False
-        elif source_type == "word":
-            if paragraph_type != "word" or paragraph_format == "epub":
-                return False
-        elif source_type != "all" and paragraph_type != source_type:
-            return False
-        if scope is not None:
-            # Explicit set scope; an empty set matches nothing.
-            return str(paragraph.get("source_file_id") or "") in scope
-        return not source_file_id or str(paragraph.get("source_file_id") or "") == source_file_id
-
     def _normalization_spans(
         self, paragraph: Dict[str, object], raw: str, mode: str
     ) -> Tuple[str, List[Tuple[int, int]]]:
@@ -390,9 +349,3 @@ class CandidateRecall(PassageRetrieval, InMemoryRecallPasses):
         if len(text) <= n:
             return {text} if text else set()
         return {text[index : index + n] for index in range(len(text) - n + 1)}
-
-    @staticmethod
-    def _ngrams(text: str, n: int = 2) -> List[str]:
-        if len(text) <= n:
-            return [text] if text else []
-        return [text[i : i + n] for i in range(len(text) - n + 1)]

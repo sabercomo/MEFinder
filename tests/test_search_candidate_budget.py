@@ -118,8 +118,7 @@ class ShortQueryInstrPathTests(unittest.TestCase):
         recorder = _RecordingConnection(engine.db)
         try:
             recall = CandidateRecall(
-                db_provider=lambda: recorder, backend="sqlite", paragraphs=[],
-                ngram_index={}, ensure_fts=lambda: True,
+                db_provider=lambda: recorder, ensure_fts=lambda: True,
             )
             self.assertIsNone(recall.fts_match_expression("社会", "AND"))  # <3 chars
             candidates: dict = {}
@@ -172,8 +171,7 @@ class ShortQueryInstrPathTests(unittest.TestCase):
             # truncation itself is tested — NOT limit=BUDGET, which would raise
             # the budget to BUDGET*8=512 and never truncate 70 candidates at 64.
             recall = CandidateRecall(
-                db_provider=lambda: engine.db, backend="sqlite", paragraphs=[],
-                ngram_index={}, ensure_fts=lambda: True,
+                db_provider=lambda: engine.db, ensure_fts=lambda: True,
             )
             candidates: dict = {}
             truncated = recall._sql_exact_pass(
@@ -220,8 +218,7 @@ class ShortQueryScopeTests(unittest.TestCase):
         recorder = _RecordingConnection(engine.db)
         try:
             recall = CandidateRecall(
-                db_provider=lambda: recorder, backend="sqlite", paragraphs=[],
-                ngram_index={}, ensure_fts=lambda: True,
+                db_provider=lambda: recorder, ensure_fts=lambda: True,
             )
             candidates: dict = {}
             recall._sql_exact_pass(
@@ -302,8 +299,7 @@ class FtsPassBudgetTests(unittest.TestCase):
         recorder = _RecordingConnection(engine.db)
         try:
             recall = CandidateRecall(
-                db_provider=lambda: recorder, backend="sqlite", paragraphs=[],
-                ngram_index={}, ensure_fts=lambda: True,
+                db_provider=lambda: recorder, ensure_fts=lambda: True,
             )
             self.assertIsNotNone(recall.fts_match_expression(self.TERM, "AND"))
             return engine.search(self.TERM, mode="exact", limit=LIMIT)

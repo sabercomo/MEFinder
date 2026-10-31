@@ -45,19 +45,13 @@ def make_index(texts, *, epub=False):
 
 
 class _SearchCases:
-    backend = 'sqlite'
-
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name) / ('index.sqlite3' if self.backend == 'sqlite' else 'index.json')
+        self.path = Path(self.temp.name) / 'index.sqlite3'
 
     def engine(self, texts):
-        index = make_index(texts)
-        if self.backend == 'sqlite':
-            build_database(index, self.path)
-        else:
-            self.path.write_text(json.dumps(index), encoding='utf-8')
+        build_database(make_index(texts), self.path)
         engine = SearchEngine(self.path)
         self.addCleanup(engine.close)
         return engine
@@ -136,11 +130,6 @@ class _SearchCases:
 @unittest.skipUnless(is_available(), 'OpenCC is unavailable')
 class SQLiteScriptSearchTests(_SearchCases, unittest.TestCase):
     pass
-
-
-@unittest.skipUnless(is_available(), 'OpenCC is unavailable')
-class JsonScriptSearchTests(_SearchCases, unittest.TestCase):
-    backend = 'json'
 
 
 class ScriptPreferenceTests(unittest.TestCase):

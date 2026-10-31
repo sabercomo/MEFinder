@@ -77,9 +77,27 @@ sqlite3.connect(path).execute("SELECT 1")
         )
         baseline = boundaries.SQL_EXECUTE_OUTSIDE_PERSISTENCE
         with patch.object(boundaries, "SQL_EXECUTE_OUTSIDE_PERSISTENCE",
-                          {"indexer.py": baseline["indexer.py"]}):
+                          {"indexer.py": baseline["indexer.py"]}), \
+                patch.object(boundaries, "SQL_EXECUTE_REVIEWED_STORES", {}):
             gate.test_sql_execute_calls_outside_persistence_only_shrink()
             self.write_source("indexer.py", '''
+connection.execute("SELECT 1")
+connection.execute("SELECT 2")
+''')
+            with self.assertRaises(AssertionError):
+                gate.test_sql_execute_calls_outside_persistence_only_shrink()
+
+    def test_reviewed_store_is_still_a_ratchet(self) -> None:
+        # 登记为例外的仓储模块同样只许减不许增:多出一个调用点就该红。
+        self.write_source("ledger/store.py", 'connection.execute("SELECT 1")')
+        gate = boundaries.ArchitectureBoundaryTests(
+            "test_sql_execute_calls_outside_persistence_only_shrink"
+        )
+        with patch.object(boundaries, "SQL_EXECUTE_OUTSIDE_PERSISTENCE", {}), \
+                patch.object(boundaries, "SQL_EXECUTE_REVIEWED_STORES",
+                             {"ledger/store.py": 1}):
+            gate.test_sql_execute_calls_outside_persistence_only_shrink()
+            self.write_source("ledger/store.py", '''
 connection.execute("SELECT 1")
 connection.execute("SELECT 2")
 ''')
@@ -91,7 +109,8 @@ connection.execute("SELECT 2")
         gate = boundaries.ArchitectureBoundaryTests(
             "test_sql_execute_calls_outside_persistence_only_shrink"
         )
-        with patch.object(boundaries, "SQL_EXECUTE_OUTSIDE_PERSISTENCE", {}):
+        with patch.object(boundaries, "SQL_EXECUTE_OUTSIDE_PERSISTENCE", {}), \
+                patch.object(boundaries, "SQL_EXECUTE_REVIEWED_STORES", {}):
             with self.assertRaises(AssertionError):
                 gate.test_sql_execute_calls_outside_persistence_only_shrink()
 

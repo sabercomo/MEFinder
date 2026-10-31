@@ -136,9 +136,6 @@ class ShortQueryRecallPlanTests(unittest.TestCase):
         try:
             recall = CandidateRecall(
                 db_provider=lambda: recorder,
-                backend="sqlite",
-                paragraphs=[],
-                ngram_index={},
                 ensure_fts=lambda: False,  # force the non-FTS instr path
             )
             candidates: dict = {}

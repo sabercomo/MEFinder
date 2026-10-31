@@ -43,3 +43,13 @@
 - 事实:边界表加两行——`search_recall_passages → {search_contract}`,`search_recall → {search_contract, search_recall_memory, search_recall_passages, search_scoring}`;依赖仍单向,新模块不 import 门面。`test_architecture_boundaries.py` 把 `search_recall.py` 上限从 580 降到 477,并为新模块封顶 135。
 - 推断:范围谓词进了 persistence 之后,若再把 recall 其余三条 SQLite 通道也下沉,`search_recall.py` 有机会整份移出「persistence 之外执行 SQL」的棘轮基线;本轮未做。
 - 验证:`tests/test_search_passages_short_query.py`(6 项,修复前按预期失败)、`tests/test_search_pipeline_boundaries.py`、`tests/test_architecture_boundaries.py`,加全量 2682 项 unittest(34 跳过)与 Ruff F 零告警。
+
+## 2026-10-31 追加:JSON 后端删除,`search_recall_memory` 不复存在
+
+上面两节提到的 `search_recall_memory`(后迁为 `search/recall_memory.py`)已整份删除,边界表的那一行随之移除;旧结论保留不删。
+
+- 事实:JSON 索引在写入侧早已降级——`build_index` 默认不写 `data/index.json`,只有 CLI 的 `--export-json` 才写,SQLite 一律构建;`search` / `serve` 与 `web_runtime` 的索引路径都是 SQLite。读取侧的 JSON 通道在产品里没有调用方,只被测试当作第二套实现用于交叉比对。
+- 事实:删除 `search/recall_memory.py`(98 行)与 `recall.py` 四处、`engine.py` 两处、`recall_passages.py`/`assembly.py` 各一处共 8 个后端分支,以及随之无人使用的 `_source_allowed`、`_ngrams`、`_scan_passages`、`paragraph_context` 内存分支。`CandidateRecall` 的构造参数去掉 `backend` / `paragraphs` / `ngram_index`。
+- 事实:`SearchEngine` 拿到非 SQLite 后缀的索引改抛 `UserFacingError`;传 `data/index.json` 时继续重定向到 `DEFAULT_DATABASE_PATH`,该库不存在时如实报找不到索引,不再退回 JSON。`load_index`、`backup_index` 与 `--export-json` 保留,JSON 仍是可回读的导出格式。
+- 代价(如实记):14 项靠两个后端互证的契约测试(`InMemoryBackendScopeTests` 6 项、`JsonScriptSearchTests` 8 项)删除。被比对的断言没有丢,契约类仍在 SQLite 侧完整运行;`test_json_and_sqlite_backends_return_the_same_anchor_payload` 改写为对唯一后端断具体值,比"两边相等"更强。
+- 验证:全量 unittest 2,847 项通过(39 跳过),Ruff 通过。详见 [架构评估收尾三项报告](../../reports/architecture-tail-2026-10-31.md)。

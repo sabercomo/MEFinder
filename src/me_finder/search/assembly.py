@@ -201,74 +201,8 @@ def highlight_html(text: str, start: int, end: int) -> str:
 
 # ----------------------------------------------------------------------
 # Adjacent-paragraph context (one real page away for PDFs, one paragraph
-# otherwise).  The engine owns backend state; these helpers take it explicitly.
+# otherwise).  The engine owns the connection; this helper takes it explicitly.
 # ----------------------------------------------------------------------
-
-
-def paragraph_context(
-    db: object,
-    by_volume: Dict[str, List[Dict[str, object]]],
-    paragraph: Dict[str, object],
-    before: bool,
-    backend: str,
-) -> List[Dict[str, str]]:
-    if backend == "sqlite":
-        return sql_context(db, paragraph, before)
-    volume_id = str(paragraph.get("volume_id"))
-    pidx = int(paragraph.get("paragraph_index", 0))
-    source_file_id = str(paragraph.get("source_file_id") or "")
-    plist = [
-        item
-        for item in by_volume[volume_id]
-        if not source_file_id
-        or str(item.get("source_file_id") or "") == source_file_id
-    ]
-    if str(paragraph.get("source_type") or "word") == "pdf":
-        bounds = pdf_page_bounds(paragraph)
-        if bounds is None:
-            return []
-        start_page, end_page = bounds
-        positioned = [
-            item
-            for item in plist
-            if (
-                int(item.get("paragraph_index") or 0) < pidx
-                if before
-                else int(item.get("paragraph_index") or 0) > pidx
-            )
-        ]
-        if before:
-            positioned.reverse()
-        for item in positioned:
-            item_bounds = pdf_page_bounds(item)
-            if not is_real_pdf_page(item, item_bounds):
-                continue
-            item_start, item_end = item_bounds
-            if (before and item_end < start_page) or (
-                not before and item_start > end_page
-            ):
-                return [context_item(item)]
-        return []
-
-    candidates = [
-        item
-        for item in plist
-        if str(item.get("source_type") or "word") != "pdf"
-        and str(item.get("text_raw") or "").strip()
-        and (
-            int(item.get("paragraph_index") or 0) < pidx
-            if before
-            else int(item.get("paragraph_index") or 0) > pidx
-        )
-    ]
-    if not candidates:
-        return []
-    selected = (
-        max(candidates, key=lambda item: int(item.get("paragraph_index") or 0))
-        if before
-        else min(candidates, key=lambda item: int(item.get("paragraph_index") or 0))
-    )
-    return [context_item(selected)]
 
 
 def sql_context(db: object, paragraph: Dict[str, object], before: bool) -> List[Dict[str, str]]:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -76,12 +75,7 @@ class SearchOccurrenceIdentityTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            json_path = root / "index.json"
-            json_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
-            self._assert_both_occurrences(json_path)
-
-            database_path = root / "index.sqlite3"
+            database_path = Path(temp_dir) / "index.sqlite3"
             build_database(index, database_path)
             self._assert_both_occurrences(database_path)
 

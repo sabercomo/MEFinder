@@ -1,14 +1,13 @@
 """Full-text search DocumentGroup scope (C3).
 
 The search engine only ever receives source_file_id / source_file_ids — it never
-knows about DocumentGroups. These tests verify the set scope on BOTH engine
-backends (sqlite/FTS and in-memory/json), the None-vs-empty distinction, the
-single/set mutual exclusion, and the request DTO parsing.
+knows about DocumentGroups. These tests verify the set scope on the engine
+(sqlite/FTS), the None-vs-empty distinction, the single/set mutual exclusion,
+and the request DTO parsing.
 """
 
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -118,19 +117,6 @@ class FtsBackendScopeTests(_EngineScopeContract, unittest.TestCase):
         engine = SearchEngine(db)
         self._engines.append(engine)
         return engine
-
-
-class InMemoryBackendScopeTests(_EngineScopeContract, unittest.TestCase):
-    def setUp(self) -> None:
-        self._dir = tempfile.TemporaryDirectory()
-
-    def tearDown(self) -> None:
-        self._dir.cleanup()
-
-    def _engine(self, source_ids) -> SearchEngine:
-        path = Path(self._dir.name) / "index.json"
-        path.write_text(json.dumps(_index(source_ids), ensure_ascii=False), encoding="utf-8")
-        return SearchEngine(path)
 
 
 class SearchRequestScopeTests(unittest.TestCase):

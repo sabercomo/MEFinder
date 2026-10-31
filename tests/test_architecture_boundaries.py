@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,7 @@ PACKAGE = ROOT / "src" / "me_finder"
 # 移入 persistence/structured_reader_reads.py、translation_work_reads.py,移出基线。
 SQLITE_CONNECT_OUTSIDE_PERSISTENCE: dict[str, int] = {}
 
+# 仍待收进 persistence 仓储的散落 SQL。只许删不许增。
 SQL_EXECUTE_OUTSIDE_PERSISTENCE = {
     "data_location.py": 5,
     "document_deletion.py": 1,
@@ -23,8 +25,20 @@ SQL_EXECUTE_OUTSIDE_PERSISTENCE = {
     "alignment/edition_folio_anchors.py": 4,
     "index_publisher.py": 1,
     "indexer.py": 1,
-    "large_document/job_ledger.py": 43,
     "parsers/statistics.py": 3,
+}
+
+# 2026-10-31(0.6.1)已核实的例外:自带一个独立数据库的仓储模块。
+# large_document/job_ledger.py 不是"业务代码里散落 SQL",它就是
+# data/parser_jobs.sqlite3 这个**另一个库**的仓储——自带 LEDGER_SCHEMA_VERSION
+# 与迁移,连接仍走 persistence/connection.py。整体搬进 persistence/ 会把
+# large_document 的领域 dataclass 和状态词表一并拖进存储层,而且它需要
+# large_document.slicing.SliceDescriptor,那是 persistence 的红线(禁止 from ..
+# 上行 import)。因此留在 large_document/,改为登记例外并用下面三条守卫钉住:
+# 单一 SQL 执行者、单一 schema 所有者、读路径仍走 persistence。
+# 它同样是棘轮:新增 SQL 调用点必须在这里把计数改对。
+SQL_EXECUTE_REVIEWED_STORES = {
+    "large_document/job_ledger.py": 43,
 }
 
 # 已核实的非 SQL 调用只按文件 + 完整调用目标豁免，不放行整个模块。
@@ -61,6 +75,28 @@ MINERU_ERROR_IMPORTERS = {
     "parsers/mineru_provider.py",
     "pdf/parser_adapters.py",
 }
+
+
+# 建表 / 改表语句里的表名。用于钉住"一个库只有一个 schema 所有者"。
+DDL_TABLE = re.compile(
+    r"(?:CREATE|ALTER)\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+(\w+)",
+    re.IGNORECASE,
+)
+
+
+def _package_module(dotted: str) -> str | None:
+    """Map an absolute import onto a package-relative module name.
+
+    ``me_finder.search.engine`` and ``src.me_finder.search.engine`` both become
+    ``search.engine``; anything outside the package returns ``None``.
+    """
+
+    for root in ("src.me_finder", "me_finder"):
+        if dotted == root:
+            return ""
+        if dotted.startswith(f"{root}."):
+            return dotted[len(root) + 1 :]
+    return None
 
 
 def _sqlite_usage_outside_persistence() -> tuple[dict[str, int], dict[str, int]]:
@@ -216,9 +252,69 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         _connects, executes = _sqlite_usage_outside_persistence()
         self.assertEqual(
             executes,
-            SQL_EXECUTE_OUTSIDE_PERSISTENCE,
+            SQL_EXECUTE_OUTSIDE_PERSISTENCE | SQL_EXECUTE_REVIEWED_STORES,
             "persistence 之外不得新增执行 SQL 的调用点;SQL 请收进 persistence 仓储。"
-            "迁走调用后请下调计数，清零后删项；非 SQL execute 调用须逐目标核实。",
+            "迁走调用后请下调计数，清零后删项；非 SQL execute 调用须逐目标核实。"
+            "自带独立数据库的仓储模块登记进 SQL_EXECUTE_REVIEWED_STORES，"
+            "并须同时满足下面三条 ledger 守卫。",
+        )
+
+    def test_reviewed_sql_stores_stay_separate_from_the_backlog(self) -> None:
+        # 例外不是口子:登记过的仓储模块不得同时留在待收口清单里，
+        # 否则"还剩多少散落 SQL"这个数字就不可信了。
+        self.assertEqual(
+            set(SQL_EXECUTE_OUTSIDE_PERSISTENCE) & set(SQL_EXECUTE_REVIEWED_STORES),
+            set(),
+        )
+
+    def test_job_ledger_is_the_only_sql_owner_in_large_document(self) -> None:
+        """账本是 large_document 下唯一执行 SQL 的模块。
+
+        例外只对"一个模块独占一个库"成立。一旦 engine / credential_pool /
+        mineru_accounts 也开始自己写 SQL，例外的前提就不存在了。
+        """
+
+        executors = set()
+        for path in sorted((PACKAGE / "large_document").glob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr
+                    in {"execute", "executemany", "executescript"}
+                ):
+                    executors.add(path.name)
+        self.assertEqual(executors, {"job_ledger.py"})
+
+    def test_parser_job_ledger_has_one_schema_owner(self) -> None:
+        """账本的建表与迁移只许写在 job_ledger.py 里。"""
+
+        ledger_tables = {"document_jobs", "slice_jobs"}
+        owners = set()
+        for path in sorted(PACKAGE.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            tables = DDL_TABLE.findall(path.read_text(encoding="utf-8"))
+            if ledger_tables & set(tables):
+                owners.add(path.relative_to(PACKAGE).as_posix())
+        self.assertEqual(owners, {"large_document/job_ledger.py"})
+        ledger = (PACKAGE / "large_document/job_ledger.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("LEDGER_SCHEMA_VERSION", ledger)
+
+    def test_parser_job_ledger_reads_from_outside_go_through_persistence(self) -> None:
+        """账本以外的模块只读账本时走 persistence/parser_job_reads.py。
+
+        写入口仍是 JobLedger;后续阶段读账本不得再在业务模块里裸写 SELECT。
+        """
+
+        tree = ast.parse(
+            (PACKAGE / "persistence/parser_job_reads.py").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.level],
+            ["connection"],
         )
 
     def test_web_boundary_stays_split_by_responsibility(self) -> None:
@@ -287,21 +383,20 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             # 任务 2 已把 search 上帝类拆为 recall/scoring/anchors/citation/
             # assembly/contract 六个单向依赖模块；门面 317 行，上限随之下调，
             # 新模块按当前行数封顶。
-            "search/engine.py": 350,
-            # JSON 后端内存召回拆为 search_recall_memory（短查询两字索引同轮接入）。
-            "search/recall_memory.py": 98,
-            # search_passages 的相关性召回拆为 search_recall_passages（两字查询
-            # 不再扫描 SQLite 后端从不加载的内存段落表），SQL 下沉到
+            # 2026-10-31(0.6.1)：JSON 索引降级为纯导出格式，内存召回整支删除
+            # （recall_memory.py 不复存在），三个模块的上限按删后行数重封。
+            "search/engine.py": 281,
+            # search_passages 的相关性召回拆为 search_recall_passages，SQL 下沉到
             # persistence/passage_reads.py 与 paragraph_scope.py；
             # search_recall.py 的上限随之只降不升。
-            "search/recall.py": 400,
+            "search/recall.py": 351,
             # 2026-09-30：两字扫描改为截断后才解析段落、子串计重合度（gram_overlap）；
             # 同日改为先读排序列、截断后按 rowid 取整行（persistence.passage_reads）。
-            "search/recall_passages.py": 149,
+            "search/recall_passages.py": 117,
             "search/scoring.py": 250,
             "search/anchors.py": 240,
             "search/citation.py": 140,
-            "search/assembly.py": 365,
+            "search/assembly.py": 295,
             "persistence/passage_reads.py": 245,
             # 0.6.1：导入编排、原生解析、段落/页码锚点构造分别归属。
             "pdf/extractors.py": 900,
@@ -438,35 +533,61 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         这里冻结剩余的已知环，任何新环都会让门禁失败。
         """
 
-        edges: dict[str, set[str]] = {}
+        # 先建模块名索引。`from . import native as pdf_native` 的真实目标是子
+        # 模块,不是父包的 __init__;只看 node.module 会把这条边记成父包,顶层
+        # 模块(prefix 为空)更是整条丢掉——环就能从这个盲区里长出来。
+        # 根 __init__.py 只有 __version__、不 import 任何模块,故不建节点。
+        modules: dict[Path, str] = {}
         for path in sorted(PACKAGE.rglob("*.py")):
             if "__pycache__" in str(path):
                 continue
-            relative = path.relative_to(PACKAGE).with_suffix("")
-            parts = list(relative.parts)
+            parts = list(path.relative_to(PACKAGE).with_suffix("").parts)
             if parts[-1] == "__init__":
                 parts = parts[:-1]
-            module = ".".join(parts)
-            if not module:
-                continue
+            name = ".".join(parts)
+            if name:
+                modules[path] = name
+        known_modules = set(modules.values())
+
+        edges: dict[str, set[str]] = {}
+        for path, module in sorted(modules.items()):
             targets = edges.setdefault(module, set())
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
-                if not isinstance(node, ast.ImportFrom) or not node.level:
+                if isinstance(node, ast.Import):
+                    # 绝对写法 `import me_finder.x`:包内当前为零,守住未来。
+                    for alias in node.names:
+                        absolute = _package_module(alias.name)
+                        if absolute in known_modules:
+                            targets.add(absolute)
                     continue
-                base = module.split(".")
-                prefix = (
-                    ".".join(base[: -node.level])
-                    if node.level <= len(base)
-                    else ""
-                )
-                target = (
-                    f"{prefix}.{node.module}".strip(".")
-                    if node.module
-                    else prefix
-                )
-                if target:
-                    targets.add(target)
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                if node.level:
+                    base = module.split(".")
+                    if node.level > len(base):
+                        continue
+                    prefix = ".".join(base[: -node.level])
+                    head = (
+                        f"{prefix}.{node.module}".strip(".")
+                        if node.module
+                        else prefix
+                    )
+                else:
+                    head = _package_module(node.module or "")
+                    if head is None:
+                        continue
+                if head in known_modules:
+                    targets.add(head)
+                # `from <head> import name` 的 name 本身可能就是子模块。
+                for alias in node.names:
+                    candidate = f"{head}.{alias.name}".strip(".")
+                    if candidate in known_modules:
+                        targets.add(candidate)
+
+        # 盲区回归钉子:这两条边只有解析了 import 的 names 才看得到。
+        self.assertIn("pdf.native", edges["pdf.extractors"])
+        self.assertIn("alignment_assembly", edges["web_runtime"])
 
         colors: dict[str, int] = {}
         cycles: list[tuple[str, ...]] = []

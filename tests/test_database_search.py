@@ -22,8 +22,8 @@ class SQLiteSearchTests(unittest.TestCase):
         cls.engine = SearchEngine()
 
     def test_default_search_uses_sqlite(self) -> None:
-        self.assertEqual(self.engine.backend, "sqlite")
         self.assertEqual(self.engine.index_path, DEFAULT_DATABASE_PATH)
+        self.assertIsNotNone(self.engine.db)
 
     def test_word_and_pdf_search_share_sqlite_backend(self) -> None:
         word = self.engine.search("宗教是人民的鸦片。", source_type="word", limit=1)

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.database import DEFAULT_DATABASE_PATH
-from src.me_finder.indexer import DEFAULT_INDEX_PATH, build_index
+from src.me_finder.indexer import build_index
 from src.me_finder.pdf.extractors import (
     _attach_bibliographic_metadata,
     attach_page_block_offsets,
@@ -29,7 +29,7 @@ COMPLEX_PDF = PDF_CORPUS / "Axel Honneth Reconceiving Social Philosophy (Dagmar 
 
 
 def ensure_pdf_index() -> None:
-    if not DEFAULT_INDEX_PATH.exists():
+    if not DEFAULT_DATABASE_PATH.exists():
         build_index(include_pdf=True, pdf_limit=1, backup_existing=False)
         return
     connection = sqlite3.connect(str(DEFAULT_DATABASE_PATH))

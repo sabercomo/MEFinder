@@ -4,17 +4,18 @@ import json
 import unittest
 from pathlib import Path
 
-from src.me_finder.indexer import DEFAULT_INDEX_PATH, build_index
+from src.me_finder.database import DEFAULT_DATABASE_PATH
+from src.me_finder.indexer import build_index
 from src.me_finder.search.engine import SearchEngine
 
 from tests.corpus_fixtures import CORPUS_REASON, has_corpus
 
 
-@unittest.skipUnless(has_corpus() or DEFAULT_INDEX_PATH.exists(), CORPUS_REASON)
+@unittest.skipUnless(has_corpus() or DEFAULT_DATABASE_PATH.exists(), CORPUS_REASON)
 class KnownQuoteSearchTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        if not DEFAULT_INDEX_PATH.exists():
+        if not DEFAULT_DATABASE_PATH.exists():
             build_index()
         cls.engine = SearchEngine()
         cls.cases = json.loads(Path("tests/known_quotes.json").read_text(encoding="utf-8"))

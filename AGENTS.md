@@ -116,6 +116,8 @@ feat(alignment): 模型选择持久化、正文区域参数化、DB v6
 
 - schema 变更走 `user_version` 递增 + `migrations.py` + `schema_installers.py`,禁止在业务代码里裸 `ALTER TABLE`。
 - 向量/嵌入类数据必须携带 `model_id`,禁止跨模型混用向量空间(向量漂移)。
+- **检索只有 SQLite 一条路**。`data/index.json` 自 0.6.1 起是纯导出格式(`build-index --export-json` 才写),`SearchEngine` 拿到非 SQLite 后缀会抛 `UserFacingError`。不要再为"另一个后端"保留分支,也不要拿它当测试里的第二套实现做对照——产品不跑的那一侧会自己漂,漂了也没人发现。
+- **SQL 棘轮分两张表**(`tests/test_architecture_boundaries.py`):`SQL_EXECUTE_OUTSIDE_PERSISTENCE` 是待收进 persistence 仓储的散落 SQL;`SQL_EXECUTE_REVIEWED_STORES` 是已核实例外——"一个模块独占一个自带 schema 的数据库",当前只有 `large_document/job_ledger.py`(`data/parser_jobs.sqlite3`)。两表都只许减不许增;登记例外必须同时满足单一 SQL 执行者、单一 schema 所有者、外部只读走 persistence 三条守卫。索引库的业务 SQL 不走这个口子。
 
 ### 3.5 EPUB 处理与检索标准
 

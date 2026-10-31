@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Iterator, List
 
-from src.me_finder.database import build_database
+from src.me_finder.database import build_database, paragraph_from_database_row
+from src.me_finder.persistence.passage_reads import read_paragraph_rows
 from src.me_finder.normalization import (
     compact_text,
     normalize_pdf_text,
@@ -33,29 +33,6 @@ class SearchMatchSpanTests(unittest.TestCase):
             "pdf_pages": pdf_pages or [],
         }
         with tempfile.TemporaryDirectory() as temp_dir:
-            index_path = Path(temp_dir) / "index.json"
-            index_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
-            engine = SearchEngine(index_path)
-            try:
-                yield engine
-            finally:
-                engine.close()
-
-    @contextmanager
-    def _sqlite_engine(
-        self,
-        paragraphs: List[Dict[str, object]],
-        pdf_pages: List[Dict[str, object]] | None = None,
-    ) -> Iterator[SearchEngine]:
-        index = {
-            "metadata": {"anchor_spec_version": 1},
-            "source_files": [],
-            "volumes": [],
-            "works": [],
-            "paragraphs": paragraphs,
-            "pdf_pages": pdf_pages or [],
-        }
-        with tempfile.TemporaryDirectory() as temp_dir:
             database_path = Path(temp_dir) / "index.sqlite3"
             build_database(index, database_path)
             engine = SearchEngine(database_path)
@@ -63,6 +40,20 @@ class SearchMatchSpanTests(unittest.TestCase):
                 yield engine
             finally:
                 engine.close()
+
+    @staticmethod
+    def _stored(engine: SearchEngine, paragraph_id: str) -> Dict[str, object]:
+        """The paragraph as recall hands it to ``_format_result``.
+
+        Reads it back through the database so the anchors under test are the
+        stored ones, not the fixture dict.
+        """
+
+        rowid = engine.db.execute(
+            "SELECT rowid FROM paragraphs WHERE paragraph_id = ?", (paragraph_id,)
+        ).fetchone()[0]
+        row = read_paragraph_rows(engine.db, [(rowid, paragraph_id)])[0]
+        return paragraph_from_database_row(row)
 
     @staticmethod
     def _paragraph(
@@ -166,29 +157,27 @@ class SearchMatchSpanTests(unittest.TestCase):
         expected_start = text.index("inter-")
         expected_end = expected_start + len("inter-\nnational")
 
-        for engine_factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=engine_factory.__name__):
-                with engine_factory([paragraph]) as engine:
-                    item = engine.search(
-                        "international", mode="exact", source_type="pdf"
-                    )["results"][0]
+        with self._engine([paragraph]) as engine:
+            item = engine.search(
+                "international", mode="exact", source_type="pdf"
+            )["results"][0]
 
-                self.assertEqual(
-                    (item["match_start"], item["match_end"]),
-                    (expected_start, expected_end),
-                )
-                self.assertEqual(item["matched_text"], "inter-\nnational")
-                self.assertEqual(
-                    item["page_match_spans"],
-                    [
-                        {
-                            "pdf_page_id": "pdf-test-PAGE-000000",
-                            "page_char_start": 20 + expected_start,
-                            "page_char_end": 20 + expected_end,
-                            "match_quote": "inter-\nnational",
-                        }
-                    ],
-                )
+        self.assertEqual(
+            (item["match_start"], item["match_end"]),
+            (expected_start, expected_end),
+        )
+        self.assertEqual(item["matched_text"], "inter-\nnational")
+        self.assertEqual(
+            item["page_match_spans"],
+            [
+                {
+                    "pdf_page_id": "pdf-test-PAGE-000000",
+                    "page_char_start": 20 + expected_start,
+                    "page_char_end": 20 + expected_end,
+                    "match_quote": "inter-\nnational",
+                }
+            ],
+        )
 
     def test_nfkc_composition_maps_to_all_consumed_source_codepoints(self) -> None:
         text = "prefix e\u0301 suffix"
@@ -346,21 +335,20 @@ class SearchMatchSpanTests(unittest.TestCase):
             ),
         ]
 
-        for factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
-                results = engine.search(
-                    query, mode="compact", limit="all", source_type="pdf"
-                )["results"]
+        with self._engine(paragraphs) as engine:
+            results = engine.search(
+                query, mode="compact", limit="all", source_type="pdf"
+            )["results"]
 
-            by_id = {item["paragraph_id"]: item for item in results}
-            self.assertEqual(
-                set(by_id),
-                {"PDF-PAGE-TRUE-CROSS-0", "PDF-CROSS-TRUE-0-1"},
-            )
-            self.assertEqual(
-                {span["pdf_page_id"] for span in by_id["PDF-CROSS-TRUE-0-1"]["page_match_spans"]},
-                {"pdf-test-PAGE-000000", "pdf-test-PAGE-000001"},
-            )
+        by_id = {item["paragraph_id"]: item for item in results}
+        self.assertEqual(
+            set(by_id),
+            {"PDF-PAGE-TRUE-CROSS-0", "PDF-CROSS-TRUE-0-1"},
+        )
+        self.assertEqual(
+            {span["pdf_page_id"] for span in by_id["PDF-CROSS-TRUE-0-1"]["page_match_spans"]},
+            {"pdf-test-PAGE-000000", "pdf-test-PAGE-000001"},
+        )
 
     def test_single_page_cross_helper_exact_duplicate_is_removed(self) -> None:
         query = "页内唯一目标"
@@ -428,16 +416,15 @@ class SearchMatchSpanTests(unittest.TestCase):
             ),
         ]
 
-        for factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
-                results = engine.search(
-                    query, mode="exact", limit="all", source_type="pdf"
-                )["results"]
+        with self._engine(paragraphs) as engine:
+            results = engine.search(
+                query, mode="exact", limit="all", source_type="pdf"
+            )["results"]
 
-            self.assertEqual(
-                [item["paragraph_id"] for item in results],
-                ["PDF-PAGE-SINGLE-0"],
-            )
+        self.assertEqual(
+            [item["paragraph_id"] for item in results],
+            ["PDF-PAGE-SINGLE-0"],
+        )
 
     def test_cross_joiner_only_has_no_page_mapping(self) -> None:
         left = "左页"
@@ -466,7 +453,7 @@ class SearchMatchSpanTests(unittest.TestCase):
         )
         with self._engine([paragraph]) as engine:
             item = engine._format_result(
-                engine.by_id["PDF-CROSS-JOINER"],
+                self._stored(engine, "PDF-CROSS-JOINER"),
                 "exact",
                 1.0,
                 len(left),
@@ -479,7 +466,7 @@ class SearchMatchSpanTests(unittest.TestCase):
         self.assertFalse(item["precise_highlight_available"])
         with self._engine([paragraph]) as engine:
             empty_item = engine._format_result(
-                engine.by_id["PDF-CROSS-JOINER"],
+                self._stored(engine, "PDF-CROSS-JOINER"),
                 "exact",
                 1.0,
                 len(left),
@@ -699,23 +686,22 @@ class SearchMatchSpanTests(unittest.TestCase):
             }
         )
 
-        for factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=factory.__name__), factory([paragraph], [page]) as engine:
-                left = engine.search("左页包含", mode="exact", source_type="pdf")["results"][0]
-                right = engine.search("右页同样", mode="exact", source_type="pdf")["results"][0]
-                both = engine.search("目标\n右页", mode="exact", source_type="pdf")["results"][0]
+        with self._engine([paragraph], [page]) as engine:
+            left = engine.search("左页包含", mode="exact", source_type="pdf")["results"][0]
+            right = engine.search("右页同样", mode="exact", source_type="pdf")["results"][0]
+            both = engine.search("目标\n右页", mode="exact", source_type="pdf")["results"][0]
 
-            self.assertEqual(left["page"], "引用页码：28")
-            self.assertEqual(left["citation_page_start"], "28")
-            self.assertEqual(left["citation_page_end"], "28")
-            self.assertEqual(left["logical_page_side"], "left")
-            self.assertEqual(left["spread_hit_precision"], "exact_region")
-            self.assertEqual(left["page_match_spans"][0]["logical_page_side"], "left")
-            self.assertEqual(right["page"], "引用页码：29")
-            self.assertEqual(right["logical_page_side"], "right")
-            self.assertEqual(both["page"], "引用页码：28–29")
-            self.assertEqual(both["logical_page_side"], "both")
-            self.assertIn("第28—29页", both["citation_formats"]["chinese"])
+        self.assertEqual(left["page"], "引用页码：28")
+        self.assertEqual(left["citation_page_start"], "28")
+        self.assertEqual(left["citation_page_end"], "28")
+        self.assertEqual(left["logical_page_side"], "left")
+        self.assertEqual(left["spread_hit_precision"], "exact_region")
+        self.assertEqual(left["page_match_spans"][0]["logical_page_side"], "left")
+        self.assertEqual(right["page"], "引用页码：29")
+        self.assertEqual(right["logical_page_side"], "right")
+        self.assertEqual(both["page"], "引用页码：28–29")
+        self.assertEqual(both["logical_page_side"], "both")
+        self.assertIn("第28—29页", both["citation_formats"]["chinese"])
 
         rtl_page = dict(page)
         rtl_page["reading_direction"] = "rtl"
@@ -818,7 +804,7 @@ class SearchMatchSpanTests(unittest.TestCase):
         self.assertEqual(item["page_match_spans"], [])
         self.assertFalse(item["precise_highlight_available"])
 
-    def test_json_and_sqlite_backends_return_the_same_anchor_payload(self) -> None:
+    def test_emoji_hit_keeps_codepoint_anchors_through_the_database(self) -> None:
         text = "前文😀数据库一致性后文"
         paragraph = self._paragraph(
             "PDF-BACKEND-PARITY",
@@ -834,30 +820,29 @@ class SearchMatchSpanTests(unittest.TestCase):
                 }
             ],
         )
-        with self._engine([paragraph]) as json_engine:
-            json_item = json_engine.search(
-                "😀数据库",
-                mode="exact",
-                source_type="pdf",
-            )["results"][0]
-        with self._sqlite_engine([paragraph]) as sqlite_engine:
-            sqlite_item = sqlite_engine.search(
-                "😀数据库",
-                mode="exact",
-                source_type="pdf",
-            )["results"][0]
+        with self._engine([paragraph]) as engine:
+            item = engine.search("😀数据库", mode="exact", source_type="pdf")["results"][0]
 
-        for key in (
-            "match_start",
-            "match_end",
-            "match_offset_unit",
-            "match_quote",
-            "page_match_spans",
-            "precise_highlight_available",
-        ):
-            self.assertEqual(sqlite_item[key], json_item[key], key)
+        # 表情符号是一个码点、两个 UTF-16 单元;存一轮再读回来后偏移仍是码点。
+        self.assertEqual(item["match_start"], 2)
+        self.assertEqual(item["match_end"], 6)
+        self.assertEqual(item["match_offset_unit"], "unicode_codepoint")
+        self.assertEqual(item["match_quote"], "😀数据库")
+        self.assertEqual(
+            item["page_match_spans"],
+            [
+                {
+                    "pdf_page_id": "pdf-test-PAGE-000008",
+                    "page_char_start": 27,
+                    "page_char_end": 31,
+                    "match_quote": "😀数据库",
+                    "page_text_hash": "same-page-hash",
+                }
+            ],
+        )
+        self.assertTrue(item["precise_highlight_available"])
 
-    def test_context_uses_one_real_neighbor_per_side_on_both_backends(self) -> None:
+    def test_context_uses_one_real_neighbor_per_side(self) -> None:
         word_paragraphs = [
             self._paragraph(
                 "WORD-0",
@@ -888,20 +873,19 @@ class SearchMatchSpanTests(unittest.TestCase):
         # other non-searchable paragraphs must behave the same in both stores.
         word_paragraphs[0]["eligible_for_search"] = False
 
-        for factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=factory.__name__), factory(word_paragraphs) as engine:
-                item = engine.search(
-                    "唯一检索目标", mode="exact", source_type="word"
-                )["results"][0]
+        with self._engine(word_paragraphs) as engine:
+            item = engine.search(
+                "唯一检索目标", mode="exact", source_type="word"
+            )["results"][0]
 
-            self.assertEqual(
-                item["context_before"],
-                [{"paragraph_id": "WORD-0", "text": "完整的第一段上文"}],
-            )
-            self.assertEqual(
-                item["context_after"],
-                [{"paragraph_id": "WORD-2", "text": "完整的第三段下文"}],
-            )
+        self.assertEqual(
+            item["context_before"],
+            [{"paragraph_id": "WORD-0", "text": "完整的第一段上文"}],
+        )
+        self.assertEqual(
+            item["context_after"],
+            [{"paragraph_id": "WORD-2", "text": "完整的第三段下文"}],
+        )
 
     def test_pdf_context_skips_cross_windows_and_selected_page_range(self) -> None:
         previous_text = "前一真实页完整文本" + "甲" * 80
@@ -959,32 +943,31 @@ class SearchMatchSpanTests(unittest.TestCase):
         paragraphs[0]["eligible_for_search"] = False
         paragraphs[-1]["eligible_for_search"] = False
 
-        for factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
-                cross_item = engine.search(
-                    "跨页唯一检索目标", mode="exact", source_type="pdf"
-                )["results"][0]
-                page_item = engine.search(
-                    "命中范围左页", mode="exact", source_type="pdf"
-                )["results"][0]
+        with self._engine(paragraphs) as engine:
+            cross_item = engine.search(
+                "跨页唯一检索目标", mode="exact", source_type="pdf"
+            )["results"][0]
+            page_item = engine.search(
+                "命中范围左页", mode="exact", source_type="pdf"
+            )["results"][0]
 
-            self.assertTrue(cross_item["is_cross_page"])
-            self.assertEqual(
-                cross_item["context_before"],
-                [{"paragraph_id": "PDF-PAGE-0", "text": previous_text}],
-            )
-            self.assertEqual(
-                cross_item["context_after"],
-                [{"paragraph_id": "PDF-PAGE-3", "text": following_text}],
-            )
-            self.assertEqual(
-                page_item["context_before"],
-                [{"paragraph_id": "PDF-PAGE-0", "text": previous_text}],
-            )
-            self.assertEqual(
-                page_item["context_after"],
-                [{"paragraph_id": "PDF-PAGE-2", "text": "命中范围右页"}],
-            )
+        self.assertTrue(cross_item["is_cross_page"])
+        self.assertEqual(
+            cross_item["context_before"],
+            [{"paragraph_id": "PDF-PAGE-0", "text": previous_text}],
+        )
+        self.assertEqual(
+            cross_item["context_after"],
+            [{"paragraph_id": "PDF-PAGE-3", "text": following_text}],
+        )
+        self.assertEqual(
+            page_item["context_before"],
+            [{"paragraph_id": "PDF-PAGE-0", "text": previous_text}],
+        )
+        self.assertEqual(
+            page_item["context_after"],
+            [{"paragraph_id": "PDF-PAGE-2", "text": "命中范围右页"}],
+        )
 
     def test_pdf_context_is_empty_outside_first_and_last_real_pages(self) -> None:
         paragraphs = [
@@ -1010,23 +993,22 @@ class SearchMatchSpanTests(unittest.TestCase):
             ),
         ]
 
-        for factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
-                results = engine.search(
-                    "首尾边界检索词", mode="exact", source_type="pdf"
-                )["results"]
+        with self._engine(paragraphs) as engine:
+            results = engine.search(
+                "首尾边界检索词", mode="exact", source_type="pdf"
+            )["results"]
 
-            by_id = {item["paragraph_id"]: item for item in results}
-            self.assertEqual(by_id["PDF-FIRST"]["context_before"], [])
-            self.assertEqual(by_id["PDF-FIRST"]["context_after"], [
-                {"paragraph_id": "PDF-LAST", "text": "最后一页首尾边界检索词"}
-            ])
-            self.assertEqual(by_id["PDF-LAST"]["context_before"], [
-                {"paragraph_id": "PDF-FIRST", "text": "第一页首尾边界检索词"}
-            ])
-            self.assertEqual(by_id["PDF-LAST"]["context_after"], [])
+        by_id = {item["paragraph_id"]: item for item in results}
+        self.assertEqual(by_id["PDF-FIRST"]["context_before"], [])
+        self.assertEqual(by_id["PDF-FIRST"]["context_after"], [
+            {"paragraph_id": "PDF-LAST", "text": "最后一页首尾边界检索词"}
+        ])
+        self.assertEqual(by_id["PDF-LAST"]["context_before"], [
+            {"paragraph_id": "PDF-FIRST", "text": "第一页首尾边界检索词"}
+        ])
+        self.assertEqual(by_id["PDF-LAST"]["context_after"], [])
 
-    def test_pdf_context_skips_empty_real_page_records_on_both_backends(self) -> None:
+    def test_pdf_context_skips_empty_real_page_records(self) -> None:
         paragraphs = [
             self._paragraph(
                 "PDF-NONEMPTY-BEFORE",
@@ -1060,20 +1042,19 @@ class SearchMatchSpanTests(unittest.TestCase):
             ),
         ]
 
-        for factory in (self._engine, self._sqlite_engine):
-            with self.subTest(backend=factory.__name__), factory(paragraphs) as engine:
-                item = engine.search(
-                    "空页上下文唯一检索目标", mode="exact", source_type="pdf"
-                )["results"][0]
+        with self._engine(paragraphs) as engine:
+            item = engine.search(
+                "空页上下文唯一检索目标", mode="exact", source_type="pdf"
+            )["results"][0]
 
-            self.assertEqual(item["context_before"], [
-                {"paragraph_id": "PDF-NONEMPTY-BEFORE", "text": "空页之前的真实全文"}
-            ])
-            self.assertEqual(item["context_after"], [
-                {"paragraph_id": "PDF-NONEMPTY-AFTER", "text": "空页之后的真实全文"}
-            ])
+        self.assertEqual(item["context_before"], [
+            {"paragraph_id": "PDF-NONEMPTY-BEFORE", "text": "空页之前的真实全文"}
+        ])
+        self.assertEqual(item["context_after"], [
+            {"paragraph_id": "PDF-NONEMPTY-AFTER", "text": "空页之后的真实全文"}
+        ])
 
-    def test_sqlite_pdf_context_query_uses_position_index_without_temp_sort(self) -> None:
+    def test_pdf_context_query_uses_position_index_without_temp_sort(self) -> None:
         paragraphs = [
             self._paragraph(
                 "PDF-PLAN-0",
@@ -1111,7 +1092,7 @@ class SearchMatchSpanTests(unittest.TestCase):
             ),
         ]
 
-        with self._sqlite_engine(paragraphs) as engine:
+        with self._engine(paragraphs) as engine:
             statements: List[str] = []
             self.assertIsNotNone(engine.db)
             engine.db.set_trace_callback(statements.append)

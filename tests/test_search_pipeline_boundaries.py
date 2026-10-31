@@ -2,8 +2,8 @@
 
 The pipeline is one-way: ``search/engine.py`` (facade) orchestrates recall,
 scoring and assembly; assembly consumes anchors, cross-page narrowing and
-citation helpers; recall only needs scoring's fuzzy-window helper plus its two
-leaf sub-stages (``recall_memory``, ``recall_passages``).  Stages must never
+citation helpers; recall only needs scoring's fuzzy-window helper plus its
+leaf sub-stage ``recall_passages``.  Stages must never
 import the facade or reach backwards across the pipeline — this keeps every
 stage testable and the frozen response contract reviewable in one place.
 """
@@ -24,11 +24,9 @@ ALLOWED: dict[str, set[str]] = {
     "citation": set(),
     "cross_page": {"anchors"},
     "scoring": {"anchors"},
-    "recall_memory": set(),
     "recall_passages": {"contract"},
     "recall": {
         "contract",
-        "recall_memory",
         "recall_passages",
         "scoring",
     },

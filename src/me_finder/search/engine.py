@@ -1,6 +1,6 @@
 """Local deterministic search engine.
 
-``SearchEngine`` is the compatibility facade: it owns the index/backend state
+``SearchEngine`` is the compatibility facade: it owns the SQLite index state
 and orchestrates the one-way pipeline stages — candidate recall
 (:mod:`search_recall`), scoring and deduplication (:mod:`search_scoring`) and
 result assembly (:mod:`search_assembly`, backed by :mod:`search_anchors` and
@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from collections import defaultdict
 from pathlib import Path
 from typing import (
     Dict,
@@ -32,10 +31,11 @@ from ..database import (
     load_database_index,
     open_database,
 )
-from ..indexer import DEFAULT_INDEX_PATH, load_index
+from ..errors import UserFacingError
+from ..indexer import DEFAULT_INDEX_PATH
 from ..persistence.short_gram_index import short_gram_prefilter_ready
 from ..persistence.structured_reader_reads import read_pdf_page_payload
-from .assembly import format_passage, format_result, highlight_html, paragraph_context
+from .assembly import format_passage, format_result, highlight_html, sql_context
 from .citation import hit_page
 from .contract import SEARCH_MODES
 from .recall import CandidateRecall
@@ -48,54 +48,24 @@ __all__ = ["SearchEngine", "best_window_ratio", "highlight_html"]
 class SearchEngine:
     def __init__(self, index_path: Optional[Path] = None) -> None:
         requested_path = Path(index_path) if index_path is not None else None
-        if requested_path is None:
-            requested_path = DEFAULT_DATABASE_PATH if DEFAULT_DATABASE_PATH.exists() else DEFAULT_INDEX_PATH
-        elif requested_path == DEFAULT_INDEX_PATH and DEFAULT_DATABASE_PATH.exists():
-            # Keep old callers that pass data/index.json on the SQLite backend.
+        if requested_path is None or requested_path == DEFAULT_INDEX_PATH:
+            # 老调用点仍可能传 data/index.json;检索一律落到 SQLite 库。
             requested_path = DEFAULT_DATABASE_PATH
         self.index_path = requested_path
+        if self.index_path.suffix.lower() not in {".sqlite", ".sqlite3", ".db"}:
+            raise UserFacingError(
+                "检索索引必须是 SQLite 库（data/index.sqlite3）；"
+                "JSON 索引只是导出格式，不能用于检索"
+            )
         if not self.index_path.exists():
             raise FileNotFoundError(f"Index not found: {self.index_path}")
-        self.backend = "sqlite" if self.index_path.suffix.lower() in {".sqlite", ".sqlite3", ".db"} else "json"
         self.db: Optional[sqlite3.Connection] = None
         self._db_init_lock = threading.RLock()
         self._fts_install_attempted = False
-        self._fts_ready = False
-        if self.backend == "sqlite":
-            self.db = open_database(self.index_path)
-            self._fts_ready = database_has_fts5_search_index(self.db)
-            self.index = load_database_index(self.index_path)
-            self._init_catalog_maps()
-            self.paragraphs = []
-            self.by_id = {}
-            self.by_volume = defaultdict(list)
-            self.ngram_index = defaultdict(list)
-            return
-
-        self.index = load_index(self.index_path)
+        self.db = open_database(self.index_path)
+        self._fts_ready = database_has_fts5_search_index(self.db)
+        self.index = load_database_index(self.index_path)
         self._init_catalog_maps()
-        self.paragraphs: List[Dict[str, object]] = [
-            p for p in self.index.get("paragraphs", []) if p.get("eligible_for_search") and p.get("text_raw")
-        ]
-        self.by_id = {p["paragraph_id"]: p for p in self.paragraphs}
-        self.by_volume: Dict[str, List[Dict[str, object]]] = defaultdict(list)
-        for paragraph in self.index.get("paragraphs", []):
-            if not isinstance(paragraph, dict) or not paragraph.get("text_raw"):
-                continue
-            self.by_volume[str(paragraph.get("volume_id"))].append(paragraph)
-        for plist in self.by_volume.values():
-            plist.sort(key=lambda p: int(p.get("paragraph_index", 0)))
-        self.ngram_index: Dict[str, List[int]] = defaultdict(list)
-        for idx, paragraph in enumerate(self.paragraphs):
-            grams = set(self._ngrams(str(paragraph.get("plain_text") or "")))
-            for gram in grams:
-                self.ngram_index[gram].append(idx)
-
-    @staticmethod
-    def _ngrams(text: str, n: int = 2) -> List[str]:
-        if len(text) <= n:
-            return [text] if text else []
-        return [text[i : i + n] for i in range(len(text) - n + 1)]
 
     def close(self) -> None:
         if self.db is not None:
@@ -129,9 +99,6 @@ class SearchEngine:
     def _recall(self) -> CandidateRecall:
         return CandidateRecall(
             db_provider=lambda: self.db,
-            backend=self.backend,
-            paragraphs=self.paragraphs,
-            ngram_index=self.ngram_index,
             ensure_fts=self._ensure_fts_ready,
             short_gram_ready=lambda: self.db is not None and short_gram_prefilter_ready(self.db),
         )
@@ -265,11 +232,9 @@ class SearchEngine:
         return page
 
     def context(self, paragraph: Dict[str, object], before: bool) -> List[Dict[str, str]]:
-        return paragraph_context(self.db, self.by_volume, paragraph, before, self.backend)
+        return sql_context(self.db, paragraph, before)
 
     def _ensure_fts_ready(self) -> bool:
-        if self.backend != "sqlite":
-            return False
         if self._fts_ready:
             return True
         with self._db_init_lock:
