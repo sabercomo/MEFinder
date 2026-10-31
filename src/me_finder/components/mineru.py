@@ -6,7 +6,6 @@ import json
 import os
 import platform
 import re
-import shutil
 import socket
 import subprocess
 import sys
@@ -23,10 +22,17 @@ from urllib.request import Request, getproxies, urlopen
 
 from .install import (
     begin_download_progress,
+    cancel_and_join_operations,
+    check_cancelled,
+    stop_if_cancelled,
+    wait_unless_cancelled,
     copy_response_to_file,
     install_uv_executable,
     read_log_tail,
     record_download_progress,
+    remove_tree_if_present,
+    request_cancel,
+    resolve_manifest_path,
     stop_process,
     uv_download_totals,
     verify_download,
@@ -699,20 +705,11 @@ class ManagedMinerU:
     def close(self, timeout: float | None = 30) -> bool:
         """Cancel operations and wait for worker file handles to close."""
 
-        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
-        with self._lock:
-            active = [state for state in self._states.values() if state.operation is not None]
-            threads = [state.thread for state in active if state.thread is not None]
-            processes = [state.process for state in active if state.process is not None]
-            for state in active:
-                state.cancel_event.set()
-        for process in processes:
-            stop_process(process)
-        self.stop()
-        for thread in threads:
-            thread.join(None if deadline is None else max(0.0, deadline - time.monotonic()))
-        stopped = all(not thread.is_alive() for thread in threads)
+        stopped = cancel_and_join_operations(
+            self._states.values(), self._lock, timeout, before_join=self.stop
+        )
         if stopped:
+            # 第二次 stop 收掉 worker 在 finally 里刚放手的服务进程。
             self.stop()
         return stopped
 
@@ -924,10 +921,11 @@ class ManagedMinerU:
                         self._states[profile_id].message = (
                             f"模型下载网络中断，正在自动重试（{attempt}/2）"
                         )
-                    if self._states[profile_id].cancel_event.wait(
-                        _MODEL_DOWNLOAD_RETRY_DELAYS[attempt - 1]
-                    ):
-                        raise _Cancelled("操作已取消。")
+                    wait_unless_cancelled(
+                        self._states[profile_id],
+                        _MODEL_DOWNLOAD_RETRY_DELAYS[attempt - 1],
+                        _Cancelled,
+                    )
             atomic_write_json(
                 staging / "installed.json",
                 {
@@ -1156,9 +1154,9 @@ class ManagedMinerU:
                 tracked_log_size = progress_log_offset
                 last_activity_change = time.monotonic()
                 while process.poll() is None:
-                    if self._states[profile_id].cancel_event.wait(0.1):
-                        stop_process(process)
-                        raise _Cancelled("操作已取消。")
+                    stop_if_cancelled(
+                        self._states[profile_id], process, 0.1, _Cancelled
+                    )
                     now = time.monotonic()
                     if now >= next_progress_update:
                         if track_uv_downloads:
@@ -1461,26 +1459,14 @@ class ManagedMinerU:
         return total
 
     def _cancel(self, profile_id: str) -> None:
-        with self._lock:
-            state = self._states[profile_id]
-            if state.state not in ACTIVE_STATES:
-                raise ManagedMinerUError("该 MinerU 组件当前没有可取消的操作。")
-            state.cancel_event.set()
-            process = state.process
-            state.message = "正在取消并清理…"
-        if process is not None:
-            stop_process(process)
+        if not request_cancel(self._states[profile_id], self._lock, ACTIVE_STATES):
+            raise ManagedMinerUError("该 MinerU 组件当前没有可取消的操作。")
 
     def _raise_if_cancelled(self, profile_id: str) -> None:
-        if self._states[profile_id].cancel_event.is_set():
-            raise _Cancelled("操作已取消。")
+        check_cancelled(self._states[profile_id], _Cancelled)
 
     def _current_manifest_path(self) -> Path:
-        return Path(
-            self._manifest_path()
-            if callable(self._manifest_path)
-            else self._manifest_path
-        )
+        return resolve_manifest_path(self._manifest_path)
 
     def _venv_executable(self, root: Path, name: str) -> Path:
         if self.manifest.platform is None:
@@ -1513,5 +1499,4 @@ class ManagedMinerU:
 
     @staticmethod
     def _remove_tree(path: Path) -> None:
-        if path.exists():
-            shutil.rmtree(path)
+        remove_tree_if_present(path)

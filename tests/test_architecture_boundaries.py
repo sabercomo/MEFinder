@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -189,6 +190,102 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     imports_kernel = True
             self.assertEqual(defined & duplicated, set(), name)
             self.assertTrue(imports_kernel, name)
+
+    def test_component_installers_share_cancel_and_shutdown(self) -> None:
+        """取消与关停只有一处实现。
+
+        2026-10-31(0.6.1)续:三个安装器此前各写一遍"等待取消事件→停子进程→抛
+        自己的取消错误"和"取消全部→join 工作线程"。收进 components/install.py
+        后,这里钉住两件事:取消文案不许再硬编码,关停的 join 循环不许回到安装
+        器里。alignment_runtime 的 close() 是单实例状态 + begin_shutdown,结构
+        本就不同,登记为例外。
+        """
+
+        installers = (
+            "components/local_ocr_installer.py",
+            "components/alignment_runtime.py",
+            "components/mineru.py",
+        )
+        kernel = (PACKAGE / "components/install.py").read_text(encoding="utf-8")
+        for message in ("操作已取消。", "正在取消并清理…"):
+            self.assertIn(message, kernel)
+        for name in installers:
+            source = (PACKAGE / name).read_text(encoding="utf-8")
+            for message in ("操作已取消。", "正在取消并清理…"):
+                self.assertNotIn(
+                    message,
+                    source,
+                    f"{name}:取消文案请用 install.CANCELLED_MESSAGE / "
+                    "CANCELLING_MESSAGE，不要再硬编码。",
+                )
+
+        join_owners = set()
+        for path in sorted((PACKAGE / "components").glob("*.py")):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "join"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "thread"
+                ):
+                    join_owners.add(path.name)
+        self.assertEqual(
+            join_owners,
+            {
+                "install.py",
+                # 单实例状态 + begin_shutdown,且要避开 join 当前线程。
+                "alignment_runtime.py",
+                # 组件目录与模型下载各有自己的线程账本,不走安装器的关停路径。
+                "catalog.py",
+                "embedding_models.py",
+            },
+            "安装器的关停 join 循环请用 install.cancel_and_join_operations。",
+        )
+
+    def test_every_package_module_is_tracked_in_git(self) -> None:
+        """源码包里的每个 .py 都必须在版本控制里。
+
+        2026-10-31：`.gitignore` 的 `components/` 规则（本意是从源码跑 serve 时
+        在工作目录生成的组件状态）顺带命中了源码子包
+        `src/me_finder/components/`，分子包那轮的 `__init__.py` 因此从未入库 ——
+        命名空间包让导入照常工作，冻结包也照常打出来，CI 没有红过。规则已把
+        该目录显式放回，这条守卫钉住不再复发。
+        """
+
+        if not (ROOT / ".git").exists():
+            self.skipTest("不是 Git 检出（源码导出副本）")
+        listed = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "src/me_finder"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        tracked = {ROOT / name for name in listed}
+        untracked = sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in PACKAGE.rglob("*.py")
+            if "__pycache__" not in path.parts and path not in tracked
+        )
+        self.assertEqual(
+            untracked,
+            [],
+            "这些模块在磁盘上但不在 Git 里；清洁检出会缺它们。"
+            "先确认不是 .gitignore 顺带命中了源码目录。",
+        )
+
+    def test_every_source_subpackage_declares_an_init(self) -> None:
+        # 六个子包都有 __init__.py，components 当初漏了；缺 __init__ 时 Python
+        # 按命名空间包照常导入，所以只能靠守卫发现，不会自己报错。
+        missing = sorted(
+            directory.relative_to(PACKAGE).as_posix()
+            for directory in PACKAGE.rglob("*")
+            if directory.is_dir()
+            and "__pycache__" not in directory.parts
+            and any(directory.glob("*.py"))
+            and not (directory / "__init__.py").is_file()
+        )
+        self.assertEqual(missing, [])
 
     def test_root_entry_scripts_import_existing_modules(self) -> None:
         # 2026-10-31：模块移入子包后，desktop.py 冻结包的对齐计算进程分派曾漏改；
@@ -398,6 +495,9 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             "search/citation.py": 140,
             "search/assembly.py": 295,
             "persistence/passage_reads.py": 245,
+            # 2026-10-31(0.6.1)：安装器共用内核。它是"机制"的去处，不是杂物抽屉：
+            # 清单、状态模型、重试策略与安装步骤仍归各安装器。
+            "components/install.py": 409,
             # 0.6.1：导入编排、原生解析、段落/页码锚点构造分别归属。
             "pdf/extractors.py": 900,
             "pdf/native.py": 580,

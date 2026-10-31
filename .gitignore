@@ -38,6 +38,10 @@ config/*.pre-restore
 .venv*/
 config/mineru_accounts.local.json
 
-# 从源码运行 `serve` 时 ComponentCatalog 在工作目录生成的本地组件状态
+# 从源码运行 `serve` 时 ComponentCatalog 在工作目录生成的本地组件状态。
+# 这条也会命中源码子包 src/me_finder/components/,必须显式放回——否则
+# 该目录下的文件无法用 `git add <path>` 暂存(2026-10-31 实测:分子包那轮
+# 的 components/__init__.py 就是这样漏提交的)。
 components/
+!src/me_finder/components/
 config/general_model.local.json

@@ -110,6 +110,8 @@ feat(alignment): 模型选择持久化、正文区域参数化、DB v6
 - 测试命名 `test_<模块>_<场景>.py`;实验验证类测试(如 `test_bertalign_corridor_experiment.py`)允许存在,但须注明是实验路径。
 - **测试与其驱动同进退**:入库的测试不得依赖未入库的模块。实验驱动脚本(`scripts/` 下的 `bertalign_corridor_experiment.py` 等)要么随实验分支一并入库,要么显式写进 `.gitignore` 并让对应测试在缺失时 `skipUnless` 跳过——不允许再出现"测试入库、驱动既未入库也未忽略"的悬空(clean checkout / CI 上直接 `ModuleNotFoundError`,历史教训见合并入 #19 的 `test_bertalign_corridor_experiment` 修复)。
 - 修 bug 先写复现测试,再修,提交正文引用测试名。
+- **测关停/取消的假 worker 不许自解**:写 `cancel_event.wait(5)` 这种带超时的假线程,5 秒后它自己就结束了,于是"忘了发取消信号"这个退化也能让 join 成功——断言变成空断言。用无超时的 `wait()` 并以 `addCleanup` 收尾(2026-10-31 实测:第一版就是这么漏的,变异检查才抓出来)。
+- **断言"某东西已删除"要双向**:既查该没的不在,也查同目录该在的还在,否则路径/名字写错会得到假阳性的"已删除"。
 - **测试运行器是 `unittest`(与 CI 一致),不是 pytest**;命令见 §3.6。
 
 ### 3.4 数据库

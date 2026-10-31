@@ -58,8 +58,12 @@ from .local_ocr_installer import (
     load_local_ocr_installer_manifest,
 )
 from .install import (
+    check_cancelled,
     copy_response_to_file,
+    stop_if_cancelled,
+    wait_unless_cancelled,
     install_uv_executable,
+    resolve_manifest_path,
     stop_process,
     verify_download,
 )
@@ -373,8 +377,7 @@ class ManagedAlignmentRuntime:
 
     # --- manifest -------------------------------------------------------- #
     def _current_manifest_path(self) -> Path:
-        manifest_path = self._manifest_path
-        return manifest_path() if callable(manifest_path) else manifest_path
+        return resolve_manifest_path(self._manifest_path)
 
     def refresh_manifest(self) -> None:
         manifest = self._load_manifest_safely()
@@ -929,8 +932,7 @@ class ManagedAlignmentRuntime:
                     break
                 if time.monotonic() >= deadline:
                     raise ManagedAlignmentRuntimeError("等待当前对齐任务结束超时。")
-                if self._state.cancel_event.wait(0.1):
-                    raise _Cancelled("操作已取消。")
+                wait_unless_cancelled(self._state, 0.1, _Cancelled)
         except BaseException:
             lease.release()
             marker.unlink(missing_ok=True)
@@ -1121,8 +1123,9 @@ class ManagedAlignmentRuntime:
     def _backoff_sleep(self, attempt: int) -> None:
         index = min(attempt - 1, len(_DOWNLOAD_BACKOFF_SECONDS) - 1)
         # Cancel-aware wait so a retry backoff never delays a cancellation.
-        if self._state.cancel_event.wait(_DOWNLOAD_BACKOFF_SECONDS[index]):
-            raise _Cancelled("操作已取消。")
+        wait_unless_cancelled(
+            self._state, _DOWNLOAD_BACKOFF_SECONDS[index], _Cancelled
+        )
 
     def _install_environment(self, staging: Path, *, use_mirror: bool) -> Dict[str, str]:
         environment = os.environ.copy()
@@ -1210,9 +1213,7 @@ class ManagedAlignmentRuntime:
             try:
                 deadline = time.monotonic() + timeout
                 while process.poll() is None:
-                    if self._state.cancel_event.wait(0.1):
-                        stop_process(process)
-                        raise _Cancelled("操作已取消。")
+                    stop_if_cancelled(self._state, process, 0.1, _Cancelled)
                     if time.monotonic() >= deadline:
                         stop_process(process)
                         raise ManagedAlignmentRuntimeError("对齐计算安装子进程超时。")
@@ -1239,8 +1240,7 @@ class ManagedAlignmentRuntime:
             stop_process(process)
 
     def _raise_if_cancelled(self) -> None:
-        if self._state.cancel_event.is_set():
-            raise _Cancelled("操作已取消。")
+        check_cancelled(self._state, _Cancelled)
 
     _INSTALL_STEPS = 4
 

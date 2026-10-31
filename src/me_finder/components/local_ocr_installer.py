@@ -22,10 +22,16 @@ from urllib.request import Request, urlopen
 
 from .install import (
     begin_download_progress,
+    cancel_and_join_operations,
+    check_cancelled,
+    stop_if_cancelled,
     copy_response_to_file,
     install_uv_executable,
     read_log_tail,
     record_download_progress,
+    remove_tree_if_present,
+    request_cancel,
+    resolve_manifest_path,
     stop_process,
     uv_download_totals,
     verify_download,
@@ -328,12 +334,7 @@ class LocalOCRInstaller:
             }
 
     def _current_manifest_path(self) -> Path:
-        value = (
-            self._manifest_path()
-            if callable(self._manifest_path)
-            else self._manifest_path
-        )
-        return Path(value)
+        return resolve_manifest_path(self._manifest_path)
 
     def perform(self, payload: Mapping[str, object]) -> Dict[str, object]:
         provider_id = str(payload.get("provider_id") or "").strip()
@@ -355,18 +356,9 @@ class LocalOCRInstaller:
     def close(self, timeout: float | None = 30) -> bool:
         """Cancel installation and wait for worker file handles to close."""
 
-        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
-        with self._state_lock:
-            active = [state for state in self._states.values() if state.operation is not None]
-            threads = [state.thread for state in active if state.thread is not None]
-            processes = [state.process for state in active if state.process is not None]
-            for state in active:
-                state.cancel_event.set()
-        for process in processes:
-            stop_process(process)
-        for thread in threads:
-            thread.join(None if deadline is None else max(0.0, deadline - time.monotonic()))
-        return all(not thread.is_alive() for thread in threads)
+        return cancel_and_join_operations(
+            self._states.values(), self._state_lock, timeout
+        )
 
     def _start_operation(self, provider_id: str, action: str) -> None:
         with self._state_lock:
@@ -974,9 +966,9 @@ class LocalOCRInstaller:
             next_progress_update = 0.0
             try:
                 while process.poll() is None:
-                    if self._states[provider_id].cancel_event.wait(0.1):
-                        stop_process(process)
-                        raise _InstallCancelled("操作已取消。")
+                    stop_if_cancelled(
+                        self._states[provider_id], process, 0.1, _InstallCancelled
+                    )
                     now = time.monotonic()
                     if track_uv_downloads and now >= next_progress_update:
                         self._update_uv_download_progress(
@@ -997,8 +989,7 @@ class LocalOCRInstaller:
                 log_path,
                 start_offset=progress_log_offset,
             )
-        if self._states[provider_id].cancel_event.is_set():
-            raise _InstallCancelled("操作已取消。")
+        self._raise_if_cancelled(provider_id)
         if process.returncode:
             detail = log_path.read_text(
                 encoding="utf-8", errors="replace"
@@ -1259,19 +1250,12 @@ class LocalOCRInstaller:
             )
 
     def _cancel(self, provider_id: str) -> None:
-        with self._state_lock:
-            state = self._states[provider_id]
-            if state.state not in ACTIVE_INSTALL_STATES:
-                raise LocalOCRInstallerError("该组件当前没有可取消的操作。")
-            state.cancel_event.set()
-            process = state.process
-            state.message = "正在取消并清理…"
-        if process is not None:
-            stop_process(process)
+        state = self._states[provider_id]
+        if not request_cancel(state, self._state_lock, ACTIVE_INSTALL_STATES):
+            raise LocalOCRInstallerError("该组件当前没有可取消的操作。")
 
     def _raise_if_cancelled(self, provider_id: str) -> None:
-        if self._states[provider_id].cancel_event.is_set():
-            raise _InstallCancelled("操作已取消。")
+        check_cancelled(self._states[provider_id], _InstallCancelled)
 
     def _uv_tool_dir(self) -> Path:
         assert self.platform is not None
@@ -1299,5 +1283,4 @@ class LocalOCRInstaller:
 
     @staticmethod
     def _remove_tree(path: Path) -> None:
-        if path.exists():
-            shutil.rmtree(path)
+        remove_tree_if_present(path)
