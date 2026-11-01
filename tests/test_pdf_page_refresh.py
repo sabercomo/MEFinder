@@ -146,6 +146,35 @@ class PageTextRefreshTests(unittest.TestCase):
         self.assertEqual((book["status"], book["reason"]), ("skipped", "citation_pages_changed"))
         self.assertEqual(self.page_texts(), before)
 
+    def test_named_book_takes_the_current_citation_pages_and_mapping(self):
+        with closing(sqlite3.connect(self.index)) as connection, connection:
+            payload = json.loads(connection.execute(
+                "SELECT payload_json FROM pdf_pages WHERE pdf_page_index=0").fetchone()[0])
+            payload["citation_page_start"] = payload["citation_page_end"] = "1"
+            connection.execute("UPDATE pdf_pages SET payload_json=? WHERE pdf_page_index=0",
+                               (json.dumps(payload, ensure_ascii=False),))
+            mapping = json.loads(connection.execute(
+                "SELECT payload_json FROM pdf_page_mappings WHERE source_file_id='book'").fetchone()[0])
+            connection.execute("UPDATE pdf_page_mappings SET payload_json=? WHERE source_file_id='book'",
+                               (json.dumps({**mapping, "method": "旧映射"}, ensure_ascii=False),))
+            source = json.loads(connection.execute(
+                "SELECT payload_json FROM source_files WHERE source_file_id='book'").fetchone()[0])
+            source["pdf_profile"] = {**(source.get("pdf_profile") or {}), "mapping_status": "旧状态"}
+            connection.execute("UPDATE source_files SET payload_json=? WHERE source_file_id='book'",
+                               (json.dumps(source, ensure_ascii=False),))
+
+        [book] = self.refresh(apply=True, renumber={"book"})["books"]
+
+        self.assertEqual(book["status"], "refreshed")
+        [page] = [p for p in self.payloads("pdf_pages") if p["pdf_page_index"] == 0]
+        self.assertIsNone(page["citation_page_start"])
+        [mapping] = self.payloads("pdf_page_mappings")
+        self.assertEqual(mapping["method"], "uncalibrated")
+        [source] = self.payloads("source_files")
+        self.assertEqual(source["title"], "用户改过的书名")
+        self.assertNotEqual(source["pdf_profile"].get("mapping_status"), "旧状态")
+        self.assertEqual(self.refresh(apply=True)["books"][0]["status"], "unchanged")
+
     def test_requested_skip_and_only_filters(self):
         self.assertEqual(self.refresh(skip={"book"})["books"][0]["reason"], "requested")
         self.assertEqual(self.refresh(only={"other"})["books"], [])

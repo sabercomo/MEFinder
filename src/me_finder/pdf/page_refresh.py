@@ -7,8 +7,11 @@ current import code, and replaces only its page records and search
 paragraphs.  The book's own records (title, metadata, mapping record, import
 history, audit notes) and reader positions are written back unchanged.  A book
 is skipped, never re-numbered, when its pages or citation pages would come out
-different.  Its alignment runs are removed with the old text (their spans
-point into it) and must be generated again.
+different, unless the user named it in ``renumber``: such a book takes the
+citation pages of the current import, with its mapping record and the mapping
+part of its PDF profile, while its other records are still kept.  Its
+alignment runs are removed with the old text (their spans point into it) and
+must be generated again.
 """
 
 from __future__ import annotations
@@ -51,6 +54,7 @@ def refresh_page_text(
     apply: bool = False,
     skip: Collection[str] = (),
     only: Optional[Collection[str]] = None,
+    renumber: Collection[str] = (),
     on_event: Optional[Event] = None,
 ) -> Dict[str, object]:
     """Plan, and with ``apply`` perform, the page-text refresh of MinerU books.
@@ -91,7 +95,8 @@ def refresh_page_text(
             book.update(status="failed", reason=f"{type(exc).__name__}: {exc}")
             _emit(on_event, book)
             continue
-        reason = _skip_reason(stored, extracted)
+        renumbered = source_id in renumber
+        reason = _skip_reason(stored, extracted, renumber=renumbered)
         changed = _changed_pages(stored["pdf_pages"], extracted["pdf_pages"])
         book["changed_pages"] = changed
         if reason is not None:
@@ -105,6 +110,11 @@ def refresh_page_text(
                 backup_path = backup_index_copy(database_path)
                 _emit(on_event, {"event": "backup", "path": str(backup_path)})
             replacement = {table: stored[table] for table in KEPT_SOURCE_TABLES}
+            if renumbered:
+                replacement["pdf_page_mappings"] = extracted["pdf_page_mappings"]
+                replacement["source_files"] = _with_new_page_profile(
+                    stored["source_files"], extracted["source_files"]
+                )
             replacement["pdf_pages"] = extracted["pdf_pages"]
             replacement["paragraphs"] = extracted["paragraphs"]
             positions = read_reading_positions(database_path, source_id)
@@ -152,8 +162,27 @@ def _has_parser_results(config: Mapping[str, object]) -> bool:
     return isinstance(results, dict) and bool(results.get("manifest") or results.get("segments"))
 
 
+def _with_new_page_profile(
+    stored_rows: Sequence[Mapping[str, object]], extracted_rows: Sequence[Mapping[str, object]]
+) -> List[Dict[str, object]]:
+    """Keep the stored source record but take the re-derived page-mapping profile."""
+
+    profiles = {str(row.get("source_file_id")): row.get("pdf_profile") for row in extracted_rows}
+    rows: List[Dict[str, object]] = []
+    for row in stored_rows:
+        updated = dict(row)
+        profile = profiles.get(str(row.get("source_file_id")))
+        if isinstance(profile, dict):
+            updated["pdf_profile"] = profile
+        rows.append(updated)
+    return rows
+
+
 def _skip_reason(
-    stored: Mapping[str, List[Dict[str, object]]], extracted: Mapping[str, object]
+    stored: Mapping[str, List[Dict[str, object]]],
+    extracted: Mapping[str, object],
+    *,
+    renumber: bool = False,
 ) -> Optional[str]:
     old_pages = stored["pdf_pages"]
     new_pages = extracted["pdf_pages"]
@@ -162,7 +191,7 @@ def _skip_reason(
     if [p["pdf_page_index"] for p in old_pages] != [p["pdf_page_index"] for p in new_pages]:
         return "page_count_changed"
     for old, new in zip(old_pages, new_pages):
-        if any(old.get(field) != new.get(field) for field in _CITATION_FIELDS):
+        if not renumber and any(old.get(field) != new.get(field) for field in _CITATION_FIELDS):
             return "citation_pages_changed"
     if _ids(stored["volumes"], "volume_id") != _ids(extracted["volumes"], "volume_id") or _ids(
         stored["works"], "work_id"
@@ -178,8 +207,11 @@ def _ids(rows: Sequence[Mapping[str, object]], key: str) -> List[str]:
 def _changed_pages(
     old_pages: Sequence[Mapping[str, object]], new_pages: Sequence[Mapping[str, object]]
 ) -> int:
-    old_text = {page["pdf_page_index"]: page.get("text_raw") for page in old_pages}
-    return sum(1 for page in new_pages if old_text.get(page["pdf_page_index"]) != page.get("text_raw"))
+    fields = ("text_raw", *_CITATION_FIELDS)
+    old = {page["pdf_page_index"]: tuple(page.get(field) for field in fields) for page in old_pages}
+    return sum(
+        1 for page in new_pages if old.get(page["pdf_page_index"]) != tuple(page.get(field) for field in fields)
+    )
 
 
 def _emit(on_event: Optional[Event], item: Dict[str, object]) -> None:

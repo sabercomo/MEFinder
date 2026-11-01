@@ -705,6 +705,163 @@ def extract_native_pdf_edge_candidates(
     return sorted(candidates, key=lambda item: (item.page_idx, -item.score, item.number))
 
 
+# Characters a printed folio may sit between, e.g. ``· 25 ·`` or ``— 3 —``.
+_FOLIO_DECORATIONS = frozenset("·•‧∙-—–~*")
+# A glyph further than this many font sizes from its neighbour starts a new run.
+_GLYPH_RUN_GAP = 0.6
+# A run must be this many font sizes clear of any other text on its line.
+_GLYPH_RUN_CLEARANCE = 1.2
+
+
+def extract_native_pdf_glyph_run_candidates(
+    path: Path,
+    *,
+    thresholds: Optional[Dict[str, float]] = None,
+) -> List[PageNumberCandidate]:
+    """Re-read edge numbers whose digits a native PDF draws out of order.
+
+    Some journal PDFs (CNKI exports among them) draw every folio digit as its
+    own text object, in right-to-left stream order: printed page 16 arrives as
+    ``6`` then ``1``, so block text reads ``61``.  Ordering the glyphs by their
+    position restores the number actually printed on the page.  Only such
+    out-of-order runs are returned, so a PDF whose text stream is in reading
+    order gains no candidate here and keeps exactly its block-text evidence.
+    A run also has to stand alone on its line: issue numbers inside a running
+    head and note numbers in front of note text are left out.  Digits of
+    different sizes, or starting almost at the same spot, come from two text
+    layers drawn on top of one another (OCR over scan text), not a reversed
+    folio, and are left to block text too.  Glyph boxes are not compared: full-width digits overlap their
+    neighbours' boxes by design.
+    """
+
+    try:
+        import fitz  # type: ignore
+    except Exception:
+        return []
+    try:
+        document = fitz.open(str(path))
+    except Exception:
+        return []
+    thresholds = {**AUTO_PAGE_MAPPING_THRESHOLDS, **(thresholds or {})}
+    edge = float(thresholds["edge_ratio"])
+    candidates: List[PageNumberCandidate] = []
+    try:
+        for page_idx in range(len(document)):
+            page = document.load_page(page_idx)
+            rect = page.rect
+            if rect.width <= 0 or rect.height <= 0:
+                continue
+            for top in (True, False):
+                band = (
+                    fitz.Rect(rect.x0, rect.y0, rect.x1, rect.y0 + rect.height * edge)
+                    if top
+                    else fitz.Rect(rect.x0, rect.y1 - rect.height * edge, rect.x1, rect.y1)
+                )
+                for digits, box in _standalone_digit_runs(page.get_text("rawdict", clip=band)):
+                    number = int(digits)
+                    if number <= 0 or 1800 <= number <= 2099:
+                        continue
+                    bbox = [
+                        (box[0] - rect.x0) / rect.width,
+                        (box[1] - rect.y0) / rect.height,
+                        (box[2] - rect.x0) / rect.width,
+                        (box[3] - rect.y0) / rect.height,
+                    ]
+                    candidates.append(
+                        PageNumberCandidate(
+                            page_idx=page_idx,
+                            raw_candidate=digits,
+                            normalized_candidate=str(number),
+                            candidate_type="native_edge_glyphs",
+                            number_style="arabic",
+                            number=number,
+                            bbox=bbox,
+                            source="native_pdf_edge_text",
+                            confidence=0.9,
+                            score=0.92,
+                        )
+                    )
+    finally:
+        document.close()
+    return sorted(candidates, key=lambda item: (item.page_idx, -item.score, item.number))
+
+
+def _is_digit_glyph(text: str) -> bool:
+    return len(text) == 1 and text.isdecimal()
+
+
+def _standalone_digit_runs(raw: object) -> List[Tuple[str, List[float]]]:
+    """Return ``(digits, bbox)`` for each standalone digit run drawn out of order.
+
+    Glyphs are ``(x0, x1, baseline, size, y0, text, stream_order)``.
+    """
+
+    glyphs: List[Tuple[float, float, float, float, float, str, int]] = []
+    for block in (raw or {}).get("blocks", []) if isinstance(raw, dict) else []:
+        for line in block.get("lines", []) or []:
+            direction = line.get("dir") or (1.0, 0.0)
+            if abs(float(direction[1])) > 0.05 or float(direction[0]) <= 0:
+                continue
+            for span in line.get("spans", []) or []:
+                size = float(span.get("size") or 0.0)
+                if size <= 0:
+                    continue
+                for char in span.get("chars", []) or []:
+                    text = unicodedata.normalize("NFKC", str(char.get("c") or ""))
+                    if not text.strip():
+                        continue
+                    x0, y0, x1, y1 = (float(value) for value in char["bbox"])
+                    baseline = float((char.get("origin") or (x0, y1))[1])
+                    glyphs.append((x0, x1, baseline, size, y0, text, len(glyphs)))
+    rows: List[List[Tuple[float, float, float, float, float, str, int]]] = []
+    for glyph in sorted(glyphs, key=lambda item: item[2]):
+        if rows and abs(glyph[2] - rows[-1][-1][2]) <= 0.35 * glyph[3]:
+            rows[-1].append(glyph)
+        else:
+            rows.append([glyph])
+    runs: List[Tuple[str, List[float]]] = []
+    for row in rows:
+        row.sort(key=lambda item: item[0])
+        clusters: List[List[Tuple[float, float, float, float, float, str, int]]] = []
+        for glyph in row:
+            if clusters and glyph[0] - clusters[-1][-1][1] <= _GLYPH_RUN_GAP * glyph[3]:
+                clusters[-1].append(glyph)
+            else:
+                clusters.append([glyph])
+        for index, cluster in enumerate(clusters):
+            # Circled note markers (①) are not decimal digits and never qualify.
+            if not all(_is_digit_glyph(g[5]) or g[5] in _FOLIO_DECORATIONS for g in cluster):
+                continue
+            digit_glyphs = [g for g in cluster if _is_digit_glyph(g[5])]
+            if not 2 <= len(digit_glyphs) <= 4:
+                continue
+            stream = [g[6] for g in digit_glyphs]
+            if stream == sorted(stream):
+                continue  # block text already reads this run correctly
+            sizes = [g[3] for g in digit_glyphs]
+            if max(sizes) > 1.1 * min(sizes) or any(
+                right[0] - left[0] < 0.25 * min(left[3], right[3])
+                for left, right in zip(digit_glyphs, digit_glyphs[1:])
+            ):
+                continue  # stacked copies: an OCR layer laid over the text
+            digits = "".join(str(unicodedata.decimal(g[5])) for g in digit_glyphs)
+            size = max(g[3] for g in cluster)
+            before = clusters[index - 1][-1][1] if index > 0 else None
+            after = clusters[index + 1][0][0] if index + 1 < len(clusters) else None
+            if before is not None and cluster[0][0] - before < _GLYPH_RUN_CLEARANCE * size:
+                continue
+            if after is not None and after - cluster[-1][1] < _GLYPH_RUN_CLEARANCE * size:
+                continue
+            box = [
+                min(g[0] for g in cluster),
+                min(g[4] for g in cluster),
+                max(g[1] for g in cluster),
+                max(g[2] for g in cluster),
+            ]
+            runs.append((digits, box))
+    return runs
+
+
 def extract_mineru_page_number_candidates(
     segments: Sequence[Dict[str, object]],
     *,

@@ -151,6 +151,12 @@ def main() -> None:
     refresh.add_argument("--apply", action="store_true", help="write the refresh; without it only report the plan")
     refresh.add_argument("--skip", action="append", default=[], help="source_file_id to leave untouched (repeatable)")
     refresh.add_argument("--only", action="append", default=None, help="limit to this source_file_id (repeatable)")
+    refresh.add_argument(
+        "--renumber",
+        action="append",
+        default=[],
+        help="source_file_id whose citation pages may change to the current import's (repeatable)",
+    )
     refresh.add_argument("--report", default=None, help="write the full JSON report to this path")
 
     args = parser.parse_args()
@@ -181,6 +187,7 @@ def main() -> None:
             apply=args.apply,
             skip=set(args.skip),
             only=set(args.only) if args.only else None,
+            renumber=set(args.renumber),
             on_event=lambda item: print(json.dumps(item, ensure_ascii=False), flush=True),
         )
         if args.report:

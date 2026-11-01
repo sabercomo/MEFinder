@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -11,10 +12,12 @@ from src.me_finder.pdf.auto_page_mapping import (
     infer_auto_page_mapping,
     extract_pdf_numeric_bookmark_candidates,
     extract_native_pdf_edge_candidates,
+    extract_native_pdf_glyph_run_candidates,
     normalize_page_candidate,
     normalize_numeric_bookmark_title,
 )
 from src.me_finder.page_mapping_service import PageMappingService
+from src.me_finder.pdf.native import extract_pages_with_pymupdf, load_pymupdf
 from src.me_finder.pdf.page_mapping import int_to_roman
 
 
@@ -532,6 +535,111 @@ class AutoPageMappingTests(unittest.TestCase):
         result = infer([cand(70, 1), cand(71, 2)])
         self.assertEqual(result["applied_segments"], [])
         self.assertEqual(result["selected_segments"][0]["confidence_level"], "low")
+
+
+FITZ = load_pymupdf()
+
+
+@unittest.skipUnless(FITZ, "PyMuPDF is required to build glyph-order fixtures")
+class GlyphOrderFolioTests(unittest.TestCase):
+    """Journal PDFs that draw each folio digit as its own object, right to left."""
+
+    def _pdf(self, draw) -> Path:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "article.pdf"
+        document = FITZ.open()
+        for page_idx in range(6):
+            page = document.new_page(width=595, height=842)
+            page.insert_text((72, 300), "Body text line for this page.", fontsize=10)
+            draw(page, page_idx)
+        document.save(str(path))
+        document.close()
+        return path
+
+    @staticmethod
+    def _reversed_digits(page, text: str, x: float, y: float, advance: float, fontname: str = "helv") -> None:
+        for position, character in reversed(list(enumerate(text))):
+            page.insert_text((x + position * advance, y), character, fontsize=9, fontname=fontname)
+
+    def test_reversed_folio_digits_are_read_in_visual_order(self) -> None:
+        def draw(page, page_idx):
+            self._reversed_digits(page, str(16 + page_idx), 290, 815, 5.5)
+            page.insert_text((72, 790), "1 Note text follows the marker.", fontsize=8)
+
+        path = self._pdf(draw)
+        pages = [
+            {
+                "pdf_page_index": item.pdf_page_index,
+                "page_width": item.page_width,
+                "page_height": item.page_height,
+                "blocks": item.blocks,
+                "text_raw": item.raw_text,
+            }
+            for item in extract_pages_with_pymupdf(path, FITZ)
+        ]
+        # Stream order splits page 16 into "6" and "1"; no sequence can fit.
+        self.assertNotIn(16, [item.number for item in extract_native_pdf_edge_candidates(pages)])
+
+        candidates = extract_native_pdf_glyph_run_candidates(path)
+        self.assertEqual([(item.page_idx, item.number) for item in candidates], [(i, 16 + i) for i in range(6)])
+
+        result = PageMappingService().infer(path, pages, page_count=6, dry_run=True)
+        segment = result["applied_segments"][0]
+        self.assertEqual(result["mapping_status"], "auto_mapped_high")
+        self.assertEqual((segment["pdf_page_start"], segment["pdf_page_end"]), (0, 5))
+        self.assertEqual((segment["citation_page_start"], segment["citation_page_end"]), ("16", "21"))
+        self.assertEqual(segment["method"], "native_pdf_edge_sequence")
+
+    def test_fullwidth_folio_between_dots_is_read(self) -> None:
+        def draw(page, page_idx):
+            page.insert_text((280, 815), "·", fontsize=9, fontname="china-s")
+            folio = str(25 + page_idx).translate(str.maketrans("0123456789", "０１２３４５６７８９"))
+            self._reversed_digits(page, folio, 290, 815, 5.2, "china-s")
+            page.insert_text((304, 815), "·", fontsize=9, fontname="china-s")
+
+        candidates = extract_native_pdf_glyph_run_candidates(self._pdf(draw))
+
+        self.assertEqual([(item.page_idx, item.number) for item in candidates], [(i, 25 + i) for i in range(6)])
+
+    def test_note_markers_issue_numbers_and_years_are_not_folios(self) -> None:
+        def draw(page, page_idx):
+            page.insert_text((72, 40), "Journal of Studies 2016 No. 12 issue", fontsize=9)
+            page.insert_text((72, 800), "1 Note text follows the marker.", fontsize=8)
+            page.insert_text((72, 815), "\u2460 Circled marker note.", fontsize=8, fontname="china-s")
+            page.insert_text((290, 830), "2016", fontsize=9)
+
+        self.assertEqual(extract_native_pdf_glyph_run_candidates(self._pdf(draw)), [])
+
+    def test_folio_drawn_in_reading_order_is_left_to_block_text(self) -> None:
+        def draw(page, page_idx):
+            for position, character in enumerate(str(16 + page_idx)):
+                page.insert_text((290 + position * 5.5, 815), character, fontsize=9)
+
+        self.assertEqual(extract_native_pdf_glyph_run_candidates(self._pdf(draw)), [])
+
+    def test_doubled_text_layers_are_not_read_as_reversed_folios(self) -> None:
+        def draw(page, page_idx):
+            # An OCR layer repeats each digit almost on top of the original.
+            for position, character in enumerate(str(10 + page_idx)):
+                page.insert_text((290 + position * 5.5, 815), character, fontsize=9)
+            for position, character in enumerate(str(10 + page_idx)):
+                page.insert_text((290.4 + position * 5.5, 815), character, fontsize=9)
+
+        self.assertEqual(extract_native_pdf_glyph_run_candidates(self._pdf(draw)), [])
+
+    def test_digits_from_two_layers_of_different_size_are_not_joined(self) -> None:
+        def draw(page, page_idx):
+            # Each layer carries its own "4"; joined they would read "44".
+            # Distinct fonts, as in the scanned volumes (PyMuPDF folds an
+            # identical glyph of the same font drawn on top of another).
+            page.insert_text((290.4, 815), "4", fontsize=12, fontname="tiro")
+            page.insert_text((286.4, 815), "4", fontsize=22, fontname="china-s")
+
+        self.assertEqual(extract_native_pdf_glyph_run_candidates(self._pdf(draw)), [])
+
+    def test_missing_file_yields_no_glyph_candidates(self) -> None:
+        self.assertEqual(extract_native_pdf_glyph_run_candidates(Path("missing.pdf")), [])
 
 
 if __name__ == "__main__":

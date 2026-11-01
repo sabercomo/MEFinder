@@ -10,6 +10,7 @@ from .pdf.auto_page_mapping import (
     detect_pdf_page_layout,
     extract_mineru_page_number_candidates,
     extract_native_pdf_edge_candidates,
+    extract_native_pdf_glyph_run_candidates,
     extract_pdf_numeric_bookmark_candidates,
     extract_pdf_page_label_candidates,
     infer_auto_page_mapping,
@@ -33,6 +34,7 @@ class PageMappingService:
         bookmark_candidates = extract_pdf_numeric_bookmark_candidates(Path(path))
         mineru_candidates = extract_mineru_page_number_candidates(mineru_segments or [])
         edge_candidates = extract_native_pdf_edge_candidates(pages)
+        edge_candidates.extend(extract_native_pdf_glyph_run_candidates(Path(path)))
         candidates: List[PageNumberCandidate] = []
         candidates.extend(label_candidates)
         candidates.extend(bookmark_candidates)
