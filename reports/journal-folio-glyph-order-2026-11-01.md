@@ -44,3 +44,21 @@
 ## 剩余
 
 仍未校准的 47 本未逐本归因。已知类型：文字层是私有区乱码字形（如蓝江 2018），读不出数字，需 OCR/MinerU；单页文章；支持页数不足 4 页的短文；两本书《存在主义咖啡馆》《新物语消费论》。
+
+## macOS arm64 重打包
+
+2026-11-01 20:25：用户要求“重新打包0.6.1”；以 `64898b8968247bbb862a0989de0b603e174b445d` 为产品源码边界，运行官方 `build_macos.sh`，重新生成本地 DMG 与 ZIP。未安装、未上传、未发布。
+
+- 构建内全量 unittest：2,870 项通过（39 条件跳过，188.466 秒）；Ruff（src/tests/scripts/tools）、`git diff --check` 通过。该源码提交 CI [41298348850](https://github.com/sabercomo/MEFinder/actions/runs/41298348850) 为 success。
+- 脚本内逐文件 JavaScript 语法检查、五阶段 MCP STDIO 冒烟（构建后、签名后、ZIP 解包、DMG 挂载、拖出副本）、严格签名、隐私文件与 AppleDouble 检查、DMG 校验及 `/Applications` 捷径检查、SHA-256 sidecar 复核全部通过。
+- 独立解 ZIP：323 个产品文件与构建前清单逐一 SHA-256 相同；主程序与 MCP 侧车均为 arm64，版本 0.6.1、最低 macOS 14.0，无 `data_root.txt`、`*.local.json`、偏好或日志等隐私残留。
+- 读取主程序 CArchive → PYZ，确认 `extract_native_pdf_glyph_run_candidates` 与 `_standalone_digit_runs` 的字节码、常量、符号名均与当前源码一致，`page_mapping_service` 引用新函数；安装器共用模块存在、旧 JSON 检索模块不在、SQLite 检索模块仍在。
+- 包内主程序运行 `alignment-compute-worker --probe` 返回 hello；主包计算栈能力均为 false，与独立运行时架构一致。
+- 未验收：GUI 人工交互、组件真实网络安装与取消/关停、Windows/Intel 包；本轮不改用户文献库。
+
+| 文件 | 字节数 | SHA-256 |
+|---|---:|---|
+| `MEFinder-v0.6.1-macos-arm64.dmg` | 103,455,532 | `44786f4fbf06a56292d900a74eb9bbc5d1a823fc7702cbcd36ead02afe9746df` |
+| `MEFinder-v0.6.1-macos-arm64.zip` | 96,310,609 | `9ce922101715dff52de35efc5a161336377eb36b81ac8a8b273fb3a73ea814e2` |
+
+本机证据：`.codex-tmp/repack-0.6.1-20261101/` 的 `build.log`、`source-manifest.json`、`verification.json`（临时证据不入库）；制品位于 `release/`，同名旧测试包已替换。
