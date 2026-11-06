@@ -89,6 +89,12 @@ class MCPPackagingTests(unittest.TestCase):
         self.assertIn("移动绿色版目录", self.codex_guide)
         self.assertIn("command not found", self.codex_guide)
 
+    def test_windows_release_job_enables_utf8_for_chinese_fixtures(self) -> None:
+        self.assertRegex(
+            self.windows_workflow,
+            r'(?m)^    env:\n      PYTHONUTF8: "1"$',
+        )
+
     def test_windows_hosted_release_gate_covers_distribution_lifecycle(self) -> None:
         self.assertIn("windows-2022", self.windows_workflow)
         self.assertIn("build_windows_installer.ps1", self.windows_workflow)
