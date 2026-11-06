@@ -1,3 +1,20 @@
+2026-11-06：**v0.6.1 正式发布。** Windows 安装版、便携版及两份 SHA-256 已补齐，与 macOS 双架构共 12 个附件均已上传并核对远端 digest。下载见 [GitHub Release v0.6.1](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.1)。
+
+本版修复期刊 PDF 页脚数字反序存储造成的刊印页码识别错误，并显示 MinerU 失败页段、Token 无效等具体原因；永久失败不再误报可续传，终态历史分片不再阻挡删除空闲账号。内部模块整理保持数据库与接口兼容。
+
+Windows 构建源码 `7cd470fadf87a47ee8bd177ce9e10177d85210d6`；与 Mac 构建源码 `55f6def` 的 `src/` 逐文件相同，后续差异只有工作流、测试和发布文档。installer-build：2,875 项通过（52 跳过，221.724 秒）；portable-build：2,875 项通过（52 跳过，219.422 秒）；browser-tests：16 项通过（0 跳过，52.218 秒）。Ruff(F)、JavaScript 语法、前端守卫、冻结代码与源码比对、空库 / FTS5、MCP STDIO、隐私与许可证检查均通过。Mac 官方构建与冒烟详见 [Mac 报告](../reports/macos-release-2026-11-06.md)。
+
+| 文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.6.1-macos-arm64.dmg` | 103,456,572 | `c2a31f55ae59dd0896f4a18a6d9883426817caa8b10c3e440eccd0976538c6d9` |
+| `MEFinder-v0.6.1-macos-arm64.zip` | 96,310,860 | `271af67cd9c60f749fec468fe8829df2986f2616a855a95db24c4422eb413dff` |
+| `MEFinder-v0.6.1-macos-x86_64.dmg` | 108,843,061 | `9ff2033d02cf6996d034d667e50fb8e1458dd2a3e48f440062c7a152f6b01087` |
+| `MEFinder-v0.6.1-macos-x86_64.zip` | 102,845,652 | `902a7777bcc7f8557705d5a1bcbec11a5ce017121796f30f347e8f2f39d9b4a4` |
+| `MEFinder-v0.6.1-windows-portable.zip` | 98,300,339 | `273718be1785bb2f50fe05edd39d96cc570b028a40f0a6867169e1e5a530d8c5` |
+| `MEFinder-v0.6.1-windows-setup.exe` | 82,506,344 | `93e9b40a3d1a54bb0cc217b0253b9e136f7d03ef85c1273ecc2ddff10ee42574` |
+
+各文件均附同名 `.sha256.txt`。Windows 两个程序均为 x64 / 0.6.1，ZIP CRC、81 个界面资源、241 份交付 Python 源码及主程序 / MCP 的全部冻结应用模块与构建源码一致。macOS 为 ad-hoc 签名、未公证；Intel 经 Rosetta 构建，未在 Intel 真机验证。Windows 安装 / 升级 / 卸载及冻结 GUI 人工验收本轮未执行。本机运行中的旧程序与文献库未替换。
+
 2026-10-23：**v0.6.0 正式发布。** GitHub Release [`v0.6.0`](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.0) 已转为发布，tag 指向 `49241fc`（产品源码 `2371f60`）。12 个附件状态均为 uploaded，六个二进制的远端 digest 与本地 SHA-256 一致。本版修复 MinerU 跨页合并造成的部分 PDF 原句定位页码错位，并完成「关于与更新」设置页美化；已有文献需按下方升级说明从缓存刷新后应用页码修复。
 
 发布门禁：Windows 安装版与便携版各通过全量 2,825 项 unittest（52 项环境跳过）；macOS arm64 通过 2,825 项（39 项跳过），macOS x86_64 通过 2,825 项（44 项跳过）。Windows Chrome 回归 16 项、about 页 3 项，Ruff(F)、JavaScript 语法、MCP STDIO、签名和制品核验通过。Windows 安装 / 升级 / 卸载冒烟与两平台冻结 GUI 人工验收仍未执行；x86_64 包通过 Rosetta 构建，未在 Intel 真机验证。详细验证见 [v0.6.0 版本记录](release-notes-0.6.0.md)。

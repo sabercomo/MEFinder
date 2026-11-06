@@ -1,3 +1,20 @@
+2026-11-06：**v0.6.1 正式发布。** Windows 安装版、便携版及两份 SHA-256 已补齐，与 macOS 双架构共 12 个附件均已上传并核对远端 digest。下载见 [GitHub Release v0.6.1](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.1)。
+
+本版修复期刊 PDF 页脚数字反序存储造成的刊印页码识别错误，并显示 MinerU 失败页段、Token 无效等具体原因；永久失败不再误报可续传，终态历史分片不再阻挡删除空闲账号。内部模块整理保持数据库与接口兼容。
+
+Windows 构建源码 `7cd470fadf87a47ee8bd177ce9e10177d85210d6`；与 Mac 构建源码 `55f6def` 的 `src/` 逐文件相同，后续差异只有工作流、测试和发布文档。installer-build：2,875 项通过（52 跳过，221.724 秒）；portable-build：2,875 项通过（52 跳过，219.422 秒）；browser-tests：16 项通过（0 跳过，52.218 秒）。Ruff(F)、JavaScript 语法、前端守卫、冻结代码与源码比对、空库 / FTS5、MCP STDIO、隐私与许可证检查均通过。Mac 官方构建与冒烟详见 [Mac 报告](../reports/macos-release-2026-11-06.md)。
+
+| 文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.6.1-macos-arm64.dmg` | 103,456,572 | `c2a31f55ae59dd0896f4a18a6d9883426817caa8b10c3e440eccd0976538c6d9` |
+| `MEFinder-v0.6.1-macos-arm64.zip` | 96,310,860 | `271af67cd9c60f749fec468fe8829df2986f2616a855a95db24c4422eb413dff` |
+| `MEFinder-v0.6.1-macos-x86_64.dmg` | 108,843,061 | `9ff2033d02cf6996d034d667e50fb8e1458dd2a3e48f440062c7a152f6b01087` |
+| `MEFinder-v0.6.1-macos-x86_64.zip` | 102,845,652 | `902a7777bcc7f8557705d5a1bcbec11a5ce017121796f30f347e8f2f39d9b4a4` |
+| `MEFinder-v0.6.1-windows-portable.zip` | 98,300,339 | `273718be1785bb2f50fe05edd39d96cc570b028a40f0a6867169e1e5a530d8c5` |
+| `MEFinder-v0.6.1-windows-setup.exe` | 82,506,344 | `93e9b40a3d1a54bb0cc217b0253b9e136f7d03ef85c1273ecc2ddff10ee42574` |
+
+各文件均附同名 `.sha256.txt`。Windows 两个程序均为 x64 / 0.6.1，ZIP CRC、81 个界面资源、241 份交付 Python 源码及主程序 / MCP 的全部冻结应用模块与构建源码一致。macOS 为 ad-hoc 签名、未公证；Intel 经 Rosetta 构建，未在 Intel 真机验证。Windows 安装 / 升级 / 卸载及冻结 GUI 人工验收本轮未执行。本机运行中的旧程序与文献库未替换。
+
 2026-11-06：macOS 双架构已更新并安装，八个附件已上传 0.6.1 草稿并核对 SHA-256；按用户要求停止 Windows 云端打包，由 Win 电脑后续补包。保持草稿，未正式发布。详见 [发布准备报告](../reports/macos-release-2026-11-06.md)。
 
 2026-11-06：修复 MinerU 导入失败提示与账号删除：401 现在直接显示“Token 无效或已过期”、设置入口及失败页段，永久失败不再误报可续传；整书已失败的历史分片不再阻止删除空闲账号。全量 2874 项、Ruff 与本机 0.5.9 官方补丁构建通过，原程序路径已更新，正常重启后生效。验证及交付范围见[核验报告](../reports/mineru-error-diagnostics-2026-11-06.md)。
@@ -8,7 +25,7 @@
 
 2026-11-01：期刊论文页码识别修复——页脚数字被反序存储的 PDF（常见于知网导出）现在能自动识别刊印页码；本机库未校准 PDF 由 121 本降为 47 本，另更正 11 本被误标为“1、2、3”页的文章；其余 PDF 识别结果逐页不变。源码全量通过，尚未重新打包或发布。
 
-# MEFinder 0.6.1（开发中）
+# MEFinder 0.6.1
 
 ## 页码识别
 
