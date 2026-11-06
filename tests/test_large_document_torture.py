@@ -281,7 +281,8 @@ class LargeDocumentTortureTests(unittest.TestCase):
         slices = engine.ledger.list_slice_jobs(job.id)
         self.assertEqual(slices[16].status, "retryable_failure")
         self.assertEqual(slices[22].status, "permanent_failure")
-        self.assertIn("permanently", failed.error_summary)
+        self.assertIn("23–23", failed.error_summary)
+        self.assertIn("injected permanent failure", failed.error_summary)
 
         engine.ledger.update_slice(slices[22].id, status="queued", last_error=None)
         recovered = engine.run_once(job.id)

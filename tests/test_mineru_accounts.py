@@ -10,7 +10,7 @@ from src.me_finder.large_document.mineru_accounts import (
     MinerUAccountConfigError,
     MinerUAccountService,
 )
-from src.me_finder.large_document.slicing import PhysicalPDFSlicer
+from src.me_finder.large_document.slicing import PhysicalPDFSlicer, SliceDescriptor
 from src.me_finder.parsers.provider import (
     NormalizedPage,
     NormalizedParseResult,
@@ -191,6 +191,46 @@ class MinerUMultiAccountTests(unittest.TestCase):
             "private-token",
         )
         self.assertEqual(len(self.service.list_accounts()), 1)
+
+    def test_delete_account_only_blocks_remote_slices_in_active_documents(self):
+        source = self.root / "book.pdf"
+        source.write_bytes(b"source")
+        for status in ("running", "permanent_failure", "cancelled"):
+            with self.subTest(document_status=status):
+                account_id = f"account-{status}"
+                self.service.save_account(
+                    account_id=account_id, display_name="Expired account", token="expired-token"
+                )
+                self.ledger.update_credential_health(
+                    account_id, enabled=False, health_status="unauthorized"
+                )
+                job = self.ledger.create_document_job(
+                    source_file_id="pdf-one", document_id="PDF_ONE", source_path=source,
+                    source_sha256="source-sha", provider_id="mineru-cloud", parser_model="vlm",
+                    options_fingerprint="options", total_pages=2,
+                )
+                item = self.ledger.add_slices(
+                    job.id, [SliceDescriptor(1, 2, 0, source, "slice-sha", 6, True)], "mineru-cloud"
+                )[0]
+                self.ledger.update_slice(
+                    item.id, status="waiting", remote_task_id="old-remote", credential_id=account_id
+                )
+                self.ledger.update_document(job.id, status=status)
+
+                if status == "running":
+                    with self.assertRaises(MinerUAccountConfigError):
+                        self.service.delete_account(account_id)
+                    self.assertEqual(
+                        self.service.resolve_secret("mineru-account:" + account_id), "expired-token"
+                    )
+                else:
+                    self.service.delete_account(account_id)
+                    with self.assertRaises(KeyError):
+                        self.ledger.get_credential(account_id)
+                    with self.assertRaises(MinerUAccountConfigError):
+                        self.service.resolve_secret("mineru-account:" + account_id)
+                    self.assertEqual(self.ledger.get_slice_job(item.id).remote_task_id, "old-remote")
+                    self.assertEqual(self.ledger.get_document_job(job.id).status, status)
 
     def test_reserving_a_credential_does_not_count_as_successful_parsing(self):
         self.service.save_account(

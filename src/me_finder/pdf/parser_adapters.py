@@ -372,7 +372,7 @@ def _parse_pdf_with_mineru_accounts(
     if job.status != "validated":
         raise MinerUError(
             job.error_summary or f"MinerU 大文档任务未完成：{job.status}",
-            allow_parser_fallback=False,
+            allow_parser_fallback=job.status == "permanent_failure",
         )
     return publish_mineru_engine_results(
         root,

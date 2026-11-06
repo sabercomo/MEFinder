@@ -392,6 +392,7 @@ class ImportParserExecutor:
                 status="failed",
                 phase="failed",
                 message=message,
+                can_resume=False,
                 mineru_failed=True,
                 can_retry_with_provider=bool(fallback),
                 retry_provider_id=(fallback.get("id") if fallback else None),

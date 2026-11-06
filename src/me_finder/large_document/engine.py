@@ -206,11 +206,16 @@ class LargeDocumentJobEngine:
             if self.credential_pool is not None:
                 self.credential_pool.reconcile_in_flight()
             return job
-        if any(item.status == "permanent_failure" for item in slices):
+        failed_slices = [item for item in slices if item.status == "permanent_failure"]
+        if failed_slices:
             job = self.ledger.update_document(
                 job.id,
                 status="permanent_failure",
-                error_summary="one or more slices failed permanently",
+                error_summary="；".join(
+                    f"PDF 第 {item.page_start}–{item.page_end} 页："
+                    f"{item.last_error or '解析服务未提供失败原因'}"
+                    for item in failed_slices
+                ),
             )
             if self.credential_pool is not None:
                 self.credential_pool.reconcile_in_flight()

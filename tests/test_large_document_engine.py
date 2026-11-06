@@ -397,6 +397,61 @@ class LargeDocumentCoreTests(unittest.TestCase):
         self.assertEqual(engine.run_once(job.id).status, "validated")
         self.assertEqual(engine.ledger.list_slice_jobs(job.id)[0].attempt_count, 3)
 
+    def test_permanent_failure_summary_preserves_slice_ranges_and_reasons(self) -> None:
+        source = self.root / "source.pdf"
+        source.write_bytes(b"source")
+        provider = SyntheticProvider(max_pages=2)
+        engine = LargeDocumentJobEngine(
+            ledger=JobLedger(self.root / "jobs.sqlite3"),
+            provider=provider,
+            work_dir=self.root / "work",
+            slicer=PhysicalPDFSlicer(synthetic_slice_writer),
+            page_counter=lambda path: 4,
+        )
+        job = engine.prepare(source_path=source, source_file_id="pdf-1", document_id="doc")
+        auth_error = "MinerU 鉴权失败（HTTP 401）：Token 无效或已过期。请在设置 → MinerU API 更新 Token。"
+        with mock.patch.object(
+            provider,
+            "submit",
+            side_effect=[
+                ParserProviderError(auth_error, provider_id=provider.provider_id),
+                ParserProviderError("parsing failed, please try again later", provider_id=provider.provider_id),
+            ],
+        ):
+            failed = engine.run_once(job.id)
+
+        self.assertEqual(failed.status, "permanent_failure")
+        self.assertIn("1–2", failed.error_summary)
+        self.assertIn(auth_error, failed.error_summary)
+        self.assertIn("3–4", failed.error_summary)
+        self.assertIn("parsing failed, please try again later", failed.error_summary)
+
+    def test_upstream_failure_summary_uses_poll_reason_or_reports_missing_reason(self) -> None:
+        for reason in ("parsing failed, please try again later", None):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                source = root / "source.pdf"
+                source.write_bytes(b"source")
+                provider = SyntheticProvider(max_pages=4, asynchronous=True)
+                engine = LargeDocumentJobEngine(
+                    ledger=JobLedger(root / "jobs.sqlite3"),
+                    provider=provider,
+                    work_dir=root / "work",
+                    page_counter=lambda path: 4,
+                )
+                job = engine.prepare(source_path=source, source_file_id="pdf-1", document_id="doc")
+                engine.run_once(job.id)
+                with mock.patch.object(
+                    provider,
+                    "poll",
+                    return_value=ParserPollResult(ParserTaskStatus.PERMANENT_FAILURE, message=reason),
+                ):
+                    failed = engine.run_once(job.id)
+
+                self.assertEqual(failed.status, "permanent_failure")
+                self.assertIn("1–4", failed.error_summary)
+                self.assertIn(reason or "解析服务未提供失败原因", failed.error_summary)
+
     def test_streaming_hash_uses_bounded_reads_for_2gb_metadata(self) -> None:
         class FakeLargeStream(io.BytesIO):
             logical_size = 2 * 1024 * 1024 * 1024

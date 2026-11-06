@@ -5,8 +5,13 @@ import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
+from io import BytesIO
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from urllib.error import HTTPError
+
+from src.me_finder.application.import_parser_executor import ImportParserExecutor
+from tests.test_import_parser_executor import _FakeJobs
 
 from src.me_finder.database import build_database, replace_source_in_database
 from src.me_finder.large_document.job_ledger import JobLedger
@@ -28,6 +33,53 @@ from src.me_finder.pdf.extractors import extract_pdf_source
 
 
 class MinerUEngineImportBridgeTests(unittest.TestCase):
+    def test_expired_token_reaches_import_message_without_resume_promise(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "book.pdf"
+            source.write_bytes(b"synthetic PDF")
+            service = MinerUAccountService(
+                ledger=JobLedger(root / "data" / "parser_jobs.sqlite3"),
+                config_path=root / "config" / "mineru_accounts.local.json",
+            )
+            service.save_account(
+                account_id="expired-account", display_name="账号 2", token="private-token"
+            )
+            jobs = _FakeJobs()
+            provider = Mock()
+            executor = ImportParserExecutor(
+                root, parse_with_mineru=parse_pdf_with_mineru, parse_with_provider=provider
+            )
+            auth_error = HTTPError(
+                "https://mineru.net/api/v4/file-urls/batch", 401, "Unauthorized", None,
+                BytesIO(b'{"msgCode":"A0211","msg":"Token expired","traceId":"private-trace"}'),
+            )
+            with (
+                patch("fitz.open") as open_pdf,
+                patch("urllib.request.OpenerDirector.open", side_effect=auth_error),
+                patch("src.me_finder.application.import_parser_executor.vision_config_summary", return_value={"providers": []}),
+            ):
+                open_pdf.return_value.__len__.return_value = 2
+                succeeded = executor.execute(
+                    "import-one", source, "pdf-one", {"detected_pdf_type": "scanned"},
+                    True, force_mineru=True, jobs=jobs,
+                )
+
+            self.assertFalse(succeeded)
+            self.assertIn("HTTP 401", jobs.job["message"])
+            self.assertIn("Token 无效或已过期", jobs.job["message"])
+            self.assertIn("设置 → MinerU API", jobs.job["message"])
+            self.assertIn("1–2", jobs.job["message"])
+            self.assertNotIn("暂时中断", jobs.job["message"])
+            self.assertNotIn("复用断点", jobs.job["message"])
+            self.assertIn("Token 无效或已过期", jobs.job["original_error"])
+            self.assertNotIn("private-trace", jobs.job["message"])
+            self.assertNotIn("private-token", jobs.job["message"])
+            self.assertTrue(jobs.job["mineru_failed"])
+            self.assertFalse(jobs.job["mineru_interrupted"])
+            self.assertFalse(jobs.job["can_resume"])
+            provider.assert_not_called()
+
     def test_validated_slices_are_published_into_existing_indexer_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

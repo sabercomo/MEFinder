@@ -555,11 +555,15 @@ class JobLedger:
                 raise KeyError(credential_id)
             active_slice = connection.execute(
                 """
-                SELECT 1 FROM slice_jobs
-                WHERE credential_id = ?
-                  AND remote_task_id IS NOT NULL
-                  AND status IN (
+                SELECT 1 FROM slice_jobs AS sj
+                JOIN document_jobs AS dj ON dj.id = sj.document_job_id
+                WHERE sj.credential_id = ?
+                  AND sj.remote_task_id IS NOT NULL
+                  AND sj.status IN (
                     'running', 'submitted', 'waiting', 'retryable_failure'
+                  )
+                  AND dj.status NOT IN (
+                    'cancelled', 'permanent_failure', 'validated', 'published'
                   )
                 LIMIT 1
                 """,
