@@ -752,6 +752,17 @@ class DesktopPortableTests(unittest.TestCase):
             desktop_source,
         )
         self.assertIn("*/certifi/cacert.pem", build_source)
+        # Build interpreters such as the Codex runtime patch ssl.py to load a
+        # rejection bundle beside it; frozen HTTPS breaks unless the spec carries
+        # that file too. It stays conditional so clean Python builds are unchanged.
+        for spec_name in (
+            "packaging/desktop.spec",
+            "packaging/mcp_sidecar.spec",
+            "packaging/desktop_macos.spec",
+        ):
+            spec_source = Path(spec_name).read_text(encoding="utf-8")
+            self.assertIn("codex-rejected-cas.pem", spec_source)
+            self.assertIn(".is_file()", spec_source)
 
     def test_portable_marker_keeps_frozen_runtime_beside_executable(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
