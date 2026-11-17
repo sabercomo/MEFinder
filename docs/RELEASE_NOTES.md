@@ -1,3 +1,20 @@
+2026-11-17：**v0.6.2 正式发布。** Windows 安装版、便携版与 macOS 双架构共六个二进制及各自 SHA-256 已上传，12 个附件状态与远端 digest 核对通过。下载见 [GitHub Release v0.6.2](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.2)。
+
+本版让 MinerU 检索结果在本机排版化学式、上下标和角度（已有文献无需重解析，框选单段仍复制原始公式文本）；测试 MinerU 在线账号时显示对端断开、连接重置或响应截断的具体网络错误；冻结包按构建解释器实际情况携带 SSL 证书拒绝列表，避免 HTTPS 调用因缺少运行时文件失败。
+
+构建源码 `9f3705b41e2fae00f6964489304cd3d100423bd2`（Windows 检出 `1f8b5d1`，差异仅在发布文档）。门禁：macOS arm64 2,878 项通过（40 跳过，245 秒内），macOS x86_64 2,878 项通过（45 跳过），Windows 安装版与便携版各 2,878 项通过（53 跳过）；公式浏览器回归、Ruff(F)、JavaScript 语法、冻结 MCP 侧车、签名与安装镜像验证通过。Windows 安装 / 升级 / 卸载与两平台冻结 GUI 人工验收未执行；Intel 包经 Rosetta 构建，未在 Intel 真机验收。
+
+| 文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.6.2-macos-arm64.dmg` | 104,291,268 | `7dd7e868f4e2c8073fe46fdf3e32908698e935f748474cb059d53cfb3ea2ec20` |
+| `MEFinder-v0.6.2-macos-arm64.zip` | 96,390,388 | `f31899024dafe7e297c7c930a2d834278efc8eeaafbae5eafdb5a3b3dbc2aa5f` |
+| `MEFinder-v0.6.2-macos-x86_64.dmg` | 108,834,536 | `e589290f8caf6cb566a10eee5fd621de2d7e3907d6f15095a607edd85d363d72` |
+| `MEFinder-v0.6.2-macos-x86_64.zip` | 102,926,757 | `72579bc836864e74e90748e884ca02d6bb846988387d69edabb7be87ccda0efa` |
+| `MEFinder-v0.6.2-windows-setup.exe` | 82,317,088 | `f95a127c95bdd20a08ebc4171499bd01b4be8afcfa99d5e5a8c0b8510a0783e4` |
+| `MEFinder-v0.6.2-windows-portable.zip` | 98,143,299 | `4d5f1e46ea4302e97786a473c04455fbb2df4b2bafa0d198adf48c7d866cd247` |
+
+每个二进制文件均附同名 `.sha256.txt`。
+
 2026-11-06：**v0.6.1 正式发布。** Windows 安装版、便携版及两份 SHA-256 已补齐，与 macOS 双架构共 12 个附件均已上传并核对远端 digest。下载见 [GitHub Release v0.6.1](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.1)。
 
 本版修复期刊 PDF 页脚数字反序存储造成的刊印页码识别错误，并显示 MinerU 失败页段、Token 无效等具体原因；永久失败不再误报可续传，终态历史分片不再阻挡删除空闲账号。内部模块整理保持数据库与接口兼容。
