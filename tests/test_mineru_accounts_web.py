@@ -5,7 +5,7 @@ import tempfile
 import threading
 import unittest
 from contextlib import contextmanager
-from http.client import HTTPConnection
+from http.client import HTTPConnection, IncompleteRead, RemoteDisconnected
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
@@ -281,6 +281,38 @@ class MinerUAccountsWebTests(unittest.TestCase):
             test_credential.assert_called_once_with(
                 "selected-private-token", api_base="https://example.test"
             )
+
+    def test_connection_test_returns_json_when_upstream_connection_breaks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self._runtime(Path(temp_dir)) as (server, _handler):
+                status, _ = self._request(
+                    server,
+                    "POST",
+                    "/api/mineru-accounts",
+                    {
+                        "account_id": "selected",
+                        "display_name": "Selected",
+                        "token": "selected-private-token",
+                    },
+                )
+                self.assertEqual(status, 200)
+
+                for error in (
+                    RemoteDisconnected("Remote end closed connection without response"),
+                    ConnectionResetError(10054, "Connection reset by peer"),
+                    IncompleteRead(b"", 8),
+                ):
+                    with self.subTest(error=type(error).__name__), patch(
+                        "urllib.request.OpenerDirector.open", side_effect=error
+                    ):
+                        status, payload = self._request(
+                            server,
+                            "POST",
+                            "/api/mineru-accounts/test",
+                            {"account_id": "selected"},
+                        )
+                        self.assertEqual(status, 400)
+                        self.assertIn(str(error), payload["error"])
 
     def test_account_can_be_deleted_without_returning_its_token(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

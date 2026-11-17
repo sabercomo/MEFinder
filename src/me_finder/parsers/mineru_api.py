@@ -6,6 +6,7 @@ the same local Python environment as the rest of the MVP.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -474,9 +475,10 @@ class MinerUClient:
                 ),
                 allow_parser_fallback=allow_parser_fallback,
             ) from exc
-        except urllib.error.URLError as exc:
+        except (OSError, http.client.HTTPException) as exc:
+            reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
             raise MinerUError(
-                f"MinerU network error: {exc.reason}",
+                f"MinerU network error: {reason}",
                 allow_parser_fallback=False,
             ) from exc
         try:
