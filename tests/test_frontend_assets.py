@@ -26,6 +26,7 @@ PLACEHOLDERS = (
     "//__APP_JS__",
     "//__READER_JS__",
     "//__VUE_JS__",
+    "//__KATEX_JS__",
     "__APP_VERSION__",
 )
 
@@ -64,7 +65,7 @@ CSS_ASSETS = _split_css_assets() + ("static/reader.css",)
 JS_ASSETS = _split_js_assets() + _reader_js_assets()
 
 # 第三方随包文件：压缩代码不走自有 JS 的逐行守卫，单独钉版本与哈希。
-VENDOR_JS_ASSETS = ("static/vendor/vue.global.prod.js",)
+VENDOR_JS_ASSETS = ("static/vendor/vue.global.prod.js", "static/vendor/katex.min.js")
 
 
 def _read(relative):
@@ -243,8 +244,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """资源内联进 <style>/<script>，不引入额外的外部请求。"""
 
         self.assertEqual(HTML.count("<style>"), 2)
-        # 首屏侧栏折叠探测 / Vue（试点）/ 应用脚本 / 阅读器脚本。
-        self.assertEqual(HTML.count("<script>"), 4)
+        # 首屏侧栏折叠探测 / Vue / KaTeX / 应用脚本 / 阅读器脚本。
+        self.assertEqual(HTML.count("<script>"), 5)
         self.assertNotIn('src="/static/app.js', HTML)
         self.assertNotIn('href="/static/app.css', HTML)
         self.assertNotIn("<script src=", HTML)
@@ -702,11 +703,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 译本对齐组件：模型下载显示速度与预计剩余，运行时安装显示第几步与已用时间。
     # 0.6.0 版本号落库：仅摘要变化。
     # 关于与更新美化：项目链接并入标题行，更新状态与标题同行，Star 区改中性底。
-    # 0.6.1、0.6.2 开发线：版本号更新，装配字节数不变。
+    # 0.6.1 开发线：版本号更新，装配字节数不变。
+    # 检索界面用随包的 KaTeX 以 MathML 排版公式。
+    # 0.6.2：保留公式排版资源，按版本文字重算指纹。
     BASELINE_SHA256 = (
-        "2535baeba46594b534df094f6c044f44b7f82a5abc6ec276d698779be575303d"
+        "c4d562fd987803ac12b5f9e1c4965164734fd1f2fc5f43794f7b8ca6b9fc832b"
     )
-    BASELINE_BYTES = 1533323
+    BASELINE_BYTES = 1810114
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
@@ -739,6 +742,17 @@ class VendorAssetTests(unittest.TestCase):
         self.assertLess(HTML.rindex("<script>", 0, vue_at), vue_at)
         self.assertLess(vue_at, HTML.index("// module: 64-settings-model-view.js"))
         self.assertIn("</script>", HTML[vue_at:HTML.index("(function (global) {  // module: 05-theme-engine.js")])
+
+    def test_katex_bytes_and_assembly_match_pinned_release(self):
+        path = PACKAGE_DIR / VENDOR_JS_ASSETS[1]
+        payload = path.read_bytes()
+        self.assertEqual(
+            hashlib.sha256(payload).hexdigest(),
+            "fa140498b8cfc8302cbe5e7cb1bdbc1f952bc38b3fa258ede09e73edbf9a74bc",
+        )
+        self.assertTrue(path.with_name("katex.LICENSE.txt").is_file())
+        self.assertIn("<script>\n" + payload.decode("utf-8") + "</script>", HTML)
+        self.assertLess(HTML.index(payload.decode("utf-8")), HTML.index("// module: 20-search.js"))
 
     def test_reader_window_does_not_load_vue(self):
         from src.me_finder.web_assets import READER_WINDOW_HTML

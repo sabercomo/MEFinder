@@ -4,6 +4,7 @@
 # UPX 不要开：压缩 WebView2/.NET DLL 会导致加载失败和杀软误报。
 
 import sys
+import ssl as build_ssl
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
 
@@ -23,6 +24,13 @@ from tools.slim_main_package import (
 
 version_info_path = write_windows_version_info(ROOT / 'build' / 'windows_version_info.txt')
 
+# Some build interpreters (the Codex runtime on this machine) patch ssl.py to
+# load a rejection bundle beside ssl.py when an SSLContext is created.  PyInstaller
+# freezes ssl.py into the PYZ but not that data file, so every frozen HTTPS call
+# would fail at ssl.create_default_context.  Carry it only when the build
+# interpreter actually has the patched file; clean Python builds omit it.
+build_ssl_rejection_bundle = Path(build_ssl.__file__).with_name('codex-rejected-cas.pem')
+
 a = Analysis(
     [str(ROOT / 'desktop.py')],
     pathex=[str(ROOT)],
@@ -32,6 +40,11 @@ a = Analysis(
         (str(ROOT / 'src' / 'me_finder' / 'templates'), 'src/me_finder/templates'),
         (str(ROOT / 'src' / 'me_finder' / 'static'), 'src/me_finder/static'),
         (str(ROOT / 'src' / 'me_finder' / 'local_ocr_manifest.json'), 'src/me_finder'),
+        *(
+            [(str(build_ssl_rejection_bundle), '.')]
+            if build_ssl_rejection_bundle.is_file()
+            else []
+        ),
         # Phase 2C: ship the pure-Python me_finder source so the independent
         # alignment runtime's interpreter can run the compute worker without the
         # main package carrying the numeric stack. Shipped as data (never

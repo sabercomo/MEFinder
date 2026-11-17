@@ -142,6 +142,53 @@ class BrowserRegressionTests(unittest.TestCase):
         self.navigate("文献库")
         self.page.locator("#library-list .library-entry").first.wait_for()
 
+    def test_search_renders_mineru_formulas_without_losing_hit_highlights(self) -> None:
+        text = (
+            r"🔎 Bi/SnO $_{2}$ 的表征用 XRD，衍射角为 $27.16^{\circ}$。"
+            r"成本为 $10 至 $20。转义符 \$5。未知公式 $\unknown_{2}$。"
+        )
+        cut = "上" * 175 + r"$636\ cm^{-1}$"
+        late_formula = "文" * 96 + r"$SnO_{2}$，高亮公式"
+        xrd = text.index("XRD")
+        start = late_formula.index(r"_{2}")
+        result = {
+            "document_title": "MinerU 解析样例", "source_type": "pdf", "citation_page_start": "12",
+            "match_type": "exact", "match_score": 1, "highlighted_html": "present",
+            "paragraph_text": text, "match_start": xrd, "match_end": xrd + 3,
+            "context_before": [{"text": r"上文 $2\theta$"}], "context_after": [{"text": cut}],
+        }
+        self.page.route("**/api/search", lambda route: route.fulfill(json={
+            "total": 2,
+            "results": [result, {
+                **result, "paragraph_text": late_formula, "match_start": start, "match_end": start + 4,
+            }],
+        }))
+        query = self.page.locator("#query")
+        query.fill("XRD")
+        query.press("Enter")
+        hit = self.page.locator(".detail-hit")
+        hit.wait_for()
+        self.assertEqual(hit.locator("math").count(), 2)
+        self.assertEqual(hit.locator("mark").inner_text(), "XRD")
+        self.assertIn(r"$10 至 $20。转义符 \$5。未知公式 $\unknown_{2}$。", hit.inner_text())
+        copied = hit.evaluate("""node => {
+          const selection = getSelection();
+          selection.selectAllChildren(node);
+          const clipboardData = new DataTransfer();
+          node.dispatchEvent(new ClipboardEvent('copy', {bubbles: true, cancelable: true, clipboardData}));
+          selection.removeAllRanges();
+          return clipboardData.getData('text/plain');
+        }""")
+        self.assertEqual(copied, text)
+        self.assertIn("12", self.page.locator(".detail-pills").inner_text())
+        self.assertEqual(self.page.locator(".detail-context-before .detail-context-preview math").count(), 1)
+        self.assertEqual(self.page.locator(".detail-context-after .detail-context-preview math").count(), 1)
+        self.page.get_by_role("button", name="展开下文").click()
+        self.assertTrue(self.page.locator(".detail-context-after .detail-context-full math").is_visible())
+        self.assertEqual(self.page.locator(".result-snippet").nth(1).locator("mark math").count(), 1)
+        self.page.locator(".result-row").nth(1).click()
+        self.assertEqual(hit.locator("mark math").count(), 1)
+
     def test_about_links_homebrew_and_platform_visibility(self) -> None:
         self.page.add_init_script("""localStorage.removeItem('meFinderSidebarCollapsed');
         Object.defineProperty(navigator, 'clipboard', {value: {

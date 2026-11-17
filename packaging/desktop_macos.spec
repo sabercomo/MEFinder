@@ -2,6 +2,7 @@
 """PyInstaller configuration for the native macOS .app bundle."""
 
 import os
+import ssl as build_ssl
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
@@ -20,6 +21,7 @@ app_version = os.environ.get("MEFINDER_APP_VERSION") or __version__
 minimum_system_version = "12.0" if target_arch == "x86_64" else "14.0"
 pdfkit_hiddenimports = collect_submodules("Quartz.PDFKit")
 third_party_license_data = ("THIRD_PARTY_LICENSES", "THIRD_PARTY_LICENSES")
+build_ssl_rejection_bundle = Path(build_ssl.__file__).with_name("codex-rejected-cas.pem")
 
 required_stage_files = (
     stage_root / "data" / "index.sqlite3",
@@ -52,6 +54,11 @@ a = Analysis(
         (
             str(project_root / "src" / "me_finder" / "local_ocr_manifest.json"),
             "src/me_finder",
+        ),
+        *(
+            [(str(build_ssl_rejection_bundle), ".")]
+            if build_ssl_rejection_bundle.is_file()
+            else []
         ),
         (str(stage_root / "data"), "data"),
         (str(stage_root / "config"), "config"),

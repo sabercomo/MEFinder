@@ -2,6 +2,7 @@
 """Build the standalone STDIO MCP sidecar as a single executable."""
 
 import os
+import ssl as build_ssl
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from tools.slim_main_package import ALIGNMENT_COMPUTE_STACK
 
 
 project_root = ROOT
+build_ssl_rejection_bundle = Path(build_ssl.__file__).with_name("codex-rejected-cas.pem")
 target_arch = os.environ.get("MEFINDER_TARGET_ARCH") or None
 codesign_identity = os.environ.get("MEFINDER_CODESIGN_IDENTITY") or None
 if codesign_identity == "-":
@@ -42,6 +44,14 @@ a = Analysis(
         (
             str(ROOT / "docs" / "contracts" / "v0.5.1-mcp-v1-tools.json"),
             "docs/contracts",
+        ),
+        # Same build-interpreter SSL bundle as packaging/desktop.spec.  This
+        # runtime patches ssl.py to load a rejection file beside it; carry that
+        # file only when it exists so frozen HTTPS callers keep working.
+        *(
+            [(str(build_ssl_rejection_bundle), ".")]
+            if build_ssl_rejection_bundle.is_file()
+            else []
         ),
         # Marker consumed by src/me_finder/onefile_cleanup.py to recognize our
         # own leaked _MEI extraction directories in the system temp location.
