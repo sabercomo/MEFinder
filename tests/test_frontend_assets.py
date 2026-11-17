@@ -702,9 +702,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 译本对齐组件：模型下载显示速度与预计剩余，运行时安装显示第几步与已用时间。
     # 0.6.0 版本号落库：仅摘要变化。
     # 关于与更新美化：项目链接并入标题行，更新状态与标题同行，Star 区改中性底。
-    # 0.6.1 开发线：版本号更新，装配字节数不变。
+    # 0.6.2：版本号更新，装配字节数不变。
     BASELINE_SHA256 = (
-        "12f6f39c446e764f602281bb6db3a4785a41adcc58d435a1b5de967986262c63"
+        "2535baeba46594b534df094f6c044f44b7f82a5abc6ec276d698779be575303d"
     )
     BASELINE_BYTES = 1533323
 
