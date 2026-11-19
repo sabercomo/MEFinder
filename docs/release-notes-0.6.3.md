@@ -1,3 +1,5 @@
+2026-11-20：**0.6.3 三平台草稿已齐。** Apple Silicon、Intel 与 Windows 安装版、便携版均已写入 GitHub 草稿；尚未正式发布。
+
 2026-11-19：**0.6.3 macOS arm64 本地试用包可试用。** 已纳入贴合文字的跨行选区、已有标签搜索和一步创建并收录。DMG 和 ZIP 沿用原文件名。
 
 2026-11-19：**0.6.3 macOS arm64 本地试用包已更新。** 可在检索结果里划选并复制原句，或收录到三级标签。安装包与 ZIP 沿用上次试用的文件名。
@@ -26,7 +28,25 @@
 
 HTTP 路由、MCP 工具、数据库及文献库格式沿用 0.6.2，版本契约快照与前端版本指纹同步为 0.6.3。新增地址回归已在 0.6.2 修复源码中先失败后通过。
 
-本轮按项目约定仅构建 macOS arm64 的 DMG、ZIP 及 SHA-256 校验文件，最低 macOS 14，使用 ad-hoc 签名。Windows、Intel 包及报告者现场 API/模型连接尚未验收。
+macOS arm64 与 x86_64 包均带 DMG、ZIP 及 SHA-256 校验文件，使用 ad-hoc 签名，最低系统分别为 macOS 14 与 macOS 12。Windows 由云端工作流构建并按 draft 校验后直传；全平台验收以草稿附件核验和云端检查结果为准。报告者现场 API/模型连接尚未验收。
+
+## 跨平台草稿（2026-11-20）
+
+Mac 包构建源码 `9fffa1b24abcef7fc9cc37722192523f49907f64`；Windows 云构建使用 `9719cfc7acbb16b4b3b1f7ab5e655d2c08ee39ca`，两个提交的产品源码相同，后者只修复发布工作流并补守卫测试。GitHub 草稿 release id `451571461`，目标提交为 `9fffa1b`；未创建正式 tag，未发布。
+
+| 草稿附件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.6.3-macos-arm64.dmg` | 104,347,400 | `dce0676029256317fedcbaba47f7bc745b29a854c9398ba35e26557885c96c01` |
+| `MEFinder-v0.6.3-macos-arm64.zip` | 96,479,965 | `4446806e4bb2464da7f849e014e4606dbf6b040ffa998c7331aab646eb8f9b7d` |
+| `MEFinder-v0.6.3-macos-x86_64.dmg` | 109,207,851 | `a80603b5495399ea39131df22d6d5c7b55c7ad77acd6104dce80db60bb3139e6` |
+| `MEFinder-v0.6.3-macos-x86_64.zip` | 103,016,250 | `9ac464a947f4de17a4bac2b867746fe5e57818788b855deafc04e7db09731155` |
+| `MEFinder-v0.6.3-windows-setup.exe` | 82,222,320 | `ce4b959cacca366df0b5d54b08b62be96920b5974b18926cb8b205aa2100d4ae` |
+| `MEFinder-v0.6.3-windows-portable.zip` | 96,648,854 | `1191275545f3c1e3ae495e2440d023172052ff9bf37bd3070e2a5ffdbb732e25` |
+
+- Apple Silicon 沿用本机已验收包，构建内全量 unittest 2,902 项（44 项条件跳过）、Chrome 21 项、Ruff、JS 和冻结 MCP 通过；重新解包核对跨行高亮、带换行复制、已有标签搜索和一步创建三级标签。
+- Intel 包由 `arch -x86_64` 的 `.venv-macos12-x86_64` 执行官方 `build_macos.sh` 构建，全量 unittest 2,902 项（49 项条件跳过）通过。独立解包核验主程序与 MCP 侧车均为纯 x86_64，版本 0.6.3，最低 macOS 12.0，ZIP、DMG、严格签名和 SHA-256 均通过。
+- Windows 由 [Windows release smoke 44569616437](https://github.com/sabercomo/MEFinder/actions/runs/44569616437) 云构建，安装版和便携版各自运行全量 unittest 2,903 项（58 项条件跳过）。安装、从 v0.4.9 升级、桌面关闭与开启时的 MCP 会话、卸载保留用户数据、便携版移动和进程回收均通过。
+- 云端构建后直接将四个 Windows 文件和校验文件写入草稿；GitHub 返回的 asset digest 与 sidecar 中的 SHA-256 逐项一致。首次云运行卡在安装器后的应用进程等待，已在 `9719cfc` 改为只等待安装器本身并限时 120 秒。
 
 ## 导航、编号公式与检索划选试用包
 
