@@ -706,8 +706,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.6.1 开发线：版本号更新，装配字节数不变。
     # 检索界面用随包的 KaTeX 以 MathML 排版公式。
     # 0.6.2：保留公式排版资源，按版本文字重算指纹。
+    # 0.6.3：MinerU 地址修复，界面仅版本文字变化。
     BASELINE_SHA256 = (
-        "c4d562fd987803ac12b5f9e1c4965164734fd1f2fc5f43794f7b8ca6b9fc832b"
+        "a23356f150ef16188381f376e997766867ff26cf2e5c236c378064cfec26d2f6"
     )
     BASELINE_BYTES = 1810114
 
