@@ -140,6 +140,11 @@ def export_indexed_pdf(
             if source_pdf is not None
             else _source_digest(source, Path(runtime_root))
         )
+        if (
+            source_pdf is not None and source.get("zotero_attachment_key")
+            and source_digest != source["sha256"]
+        ):
+            raise UnsupportedDocumentExport("Zotero 原件已变动，请同步后再导出。")
         parser_provider = str(
             profile.get("provider_id")
             or first_page.get("parser")

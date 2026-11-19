@@ -39,6 +39,7 @@ from .native_document_open import (  # noqa: F401 - re-exported for compatibilit
     open_pdf_in_adobe,  # noqa: F401
     open_pdf_with_platform,
 )
+from .document_file_store import open_indexed_document
 from .http_route_table import RouteTable
 from .upload_import_controller import UploadImportController, assemble_upload_import_routes
 from .search_controller import SearchController, assemble_search_routes
@@ -176,6 +177,7 @@ def make_handler(
         WebHTTPContext(
             root=runtime.root,
             index_runtime=runtime.index_runtime,
+            open_source=lambda record: open_indexed_document(runtime.root, record),
             data_root_admission=runtime.data_root_admission,
             routes=RouteTable.from_maps(
                 get_maps=[runtime.controller_get_routes, calibration_get_routes],

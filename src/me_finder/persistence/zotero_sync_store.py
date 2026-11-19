@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Mapping, Optional
 
+from .bibliographic_metadata_store import metadata_write_transaction
 from .connection import open_writable_index
 from .schema_installers import install_zotero_sync_schema
 
@@ -244,4 +245,25 @@ def restore_zotero_sync_snapshot(
                 f"INSERT OR REPLACE INTO {table}({', '.join(columns)}) "
                 f"VALUES ({', '.join('?' for _ in columns)})",
                 [row[column] for column in columns],
+            )
+
+
+def update_zotero_pdf_paths(
+    database_path: Path, updates: Iterable[tuple[str, str, str, tuple[int, int, int, int]]]
+) -> None:
+    """Change only the source catalog fields for byte-identical attachments."""
+    with metadata_write_transaction(database_path) as connection:
+        for source_id, key, path, stamp in updates:
+            row = connection.execute(
+                "SELECT payload_json FROM source_files WHERE source_file_id = ?",
+                (source_id,),
+            ).fetchone()
+            payload = json.loads(row[0])
+            payload.update(
+                relative_path=path, zotero_attachment_key=key,
+                zotero_file_stamp=stamp,
+            )
+            connection.execute(
+                "UPDATE source_files SET relative_path = ?, payload_json = ? WHERE source_file_id = ?",
+                (path, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), source_id),
             )

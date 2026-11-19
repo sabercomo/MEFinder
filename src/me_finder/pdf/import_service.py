@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 from ..document_file_store import (
     INTERNAL_DOCUMENT_NAME_MAX_BYTES,
@@ -23,6 +23,7 @@ from ..import_config_store import (
     locked_import_config,
     save_import_config,
 )
+from ..errors import UserFacingError
 from ..index_publisher import indexed_word_source_count, rebuild_local_index
 from .extractors import detect_pdf_type, file_sha256
 from .parser_adapters import (
@@ -221,6 +222,7 @@ def register_pdf(
     *,
     original_file_name: Optional[str] = None,
     existing_source_file_id: Optional[str] = None,
+    zotero_pdf: Optional[Tuple[str, str]] = None,
 ) -> Dict[str, object]:
     """Add or update one PDF in the configured corpus without overwriting originals."""
 
@@ -231,6 +233,9 @@ def register_pdf(
         display_file_name = pdf_path.name
     config_path = Path(config_path or root / "config" / "pdf_imports.json")
     content_sha256 = file_sha256(pdf_path)
+    if zotero_pdf and zotero_pdf[1] != content_sha256:
+        raise UserFacingError("Zotero 原件内容已变化，请重新同步后再解析。")
+    stored_name = str(pdf_path.resolve()) if zotero_pdf else pdf_path.name
     source_file_id = existing_source_file_id or f"pdf-import-{content_sha256[:16]}"
     with import_config_lock():
         data = load_import_config(config_path)
@@ -243,7 +248,7 @@ def register_pdf(
             ),
             None,
         )
-        if existing is None:
+        if existing is None and not zotero_pdf:
             # Older indexes did not always use the content-derived source ID.
             # A disabled removal marker may still carry the full hash, which
             # lets the preserved copy be recovered without storing a duplicate.
@@ -260,8 +265,15 @@ def register_pdf(
         if existing is not None:
             old_source_file_id = str(existing.get("source_file_id") or "")
             configured_path = _configured_pdf_path(config_path, existing)
-            if configured_path is None or not configured_path.is_file():
-                existing["file_name"] = pdf_path.name
+            if zotero_pdf:
+                existing.update(
+                    file_name=stored_name, zotero_attachment_key=zotero_pdf[0],
+                    zotero_sha256=zotero_pdf[1],
+                )
+            elif configured_path is None or not configured_path.is_file():
+                existing["file_name"] = stored_name
+                existing.pop("zotero_attachment_key", None)
+                existing.pop("zotero_sha256", None)
             existing.setdefault("original_file_name", display_file_name)
             if not existing.get("title"):
                 existing["title"] = Path(display_file_name).stem
@@ -282,7 +294,7 @@ def register_pdf(
             return existing
 
         existing = next(
-            (item for item in documents if item.get("file_name") == pdf_path.name),
+            (item for item in documents if not zotero_pdf and item.get("file_name") == stored_name),
             None,
         )
         if existing is None:
@@ -290,12 +302,14 @@ def register_pdf(
                 "enabled": True,
                 "source_file_id": source_file_id,
                 "document_id": source_file_id.upper().replace("-", "_"),
-                "file_name": pdf_path.name,
+                "file_name": stored_name,
                 "original_file_name": display_file_name,
                 "title": Path(display_file_name).stem,
                 "author": None,
                 "page_mapping": {"validated_by": None, "segments": []},
             }
+            if zotero_pdf:
+                existing.update(zotero_attachment_key=zotero_pdf[0], zotero_sha256=zotero_pdf[1])
             documents.append(existing)
         else:
             old_source_file_id = str(existing.get("source_file_id") or "")

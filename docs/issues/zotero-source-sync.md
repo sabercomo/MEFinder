@@ -96,3 +96,20 @@
 **事实**：用户确认交互原型后要求实施，并追加要求同步替换原型里的设置目录图标。源码现采用顶部同步摘要、分类/设置分栏、规则与明细按需展开的结构；保留现有分类半选、折叠、去重、移除预览、三档同步频率及导入页解析设置入口。常显移除说明明确区分同步导入的文献和同步前已在库中的文献。
 
 **验证**：新增执行真实 JS 的摘要、关闭/恢复、保存失败回退、断连控件与进度测试；全量 unittest、Ruff 及前端守卫结果见 [设置页验证记录](../../reports/zotero-settings-ui-2026-09-27.md)。浏览器权限检查无法核验授权，未完成真实渲染与主题/窗口尺寸视觉验收。现有安装包及 dist 尚未包含这些 UI 改动。
+
+
+## 2026-11-19 — Zotero PDF 原位读取
+
+新同步的 PDF 使用 Local API 返回的本机原件路径。MEFinder 仍按现有解析设置建立文本索引、页码映射和字符锚点。MinerU、其他视觉 API 和本地 OCR 接收原件路径。EPUB 使用现有导入流程。
+
+已由 Zotero 同步导入的 PDF 在同步时比对原件与索引中的 SHA-256。匹配后只修改来源路径，保留文献 ID、解析产物、索引和页码校准。磁盘上的旧副本保留，便于核对。原件暂时不可用或内容不同的旧记录继续用已有副本。以前手动导入的同内容文献继续使用原有来源。
+
+原位读取的 PDF 改名或移动后，同步重新获取路径并比对文件内容。同内容只更新路径。待继续的解析任务可按附件 key 找回移动的原件，并复用同内容的断点。内容替换后的原件进入新解析任务，旧索引在新结果建好后移除。Zotero 已确认移出所选范围时清理对应索引，原件仍由 Zotero 管理。暂时找不到文件时保留已建索引。
+
+隔离测试使用真实 MEFinder HTTP、导入队列和 SQLite 索引，配合模拟 Zotero Local API。覆盖新增 PDF 无副本、搜索及原文流式读取、附件改名、暂时不可用、内容替换、移除、旧索引及人工页码复用，以及移动后继续 MinerU 任务。本机 Zotero 接口实测仍待补充。
+
+### 开源实现对照
+
+- Zotero Research MCP（AGPL-3.0）同样通过 Local API 获取附件路径。其同步先核对文件状态，随后用内容哈希判断是否复用索引，并在原件不可读时保留上次结果。它以自己的页文本和分块模型建立 SQLite 索引。MEFinder 已有同类路径与增量检查，继续沿用现有页码映射和解析任务。 [同步源码](https://github.com/tomozzz/Zotero-Research-MCP/blob/main/src/zotero_research_mcp/index/sync.py)
+- Zotero Keeper（Apache-2.0）也从官方接口获得本机附件路径。MEFinder 已支持该端点及 Windows 文件 URL。 [附件接口说明](https://github.com/u9401066/zotero-keeper/blob/main/docs/tools-reference.md)
+- Mktero（MIT）在 Zotero 插件内按 PDF 内容与解析配置缓存转换结果，可参考其避免重复提交 MinerU 的做法。MEFinder 的续跑已有内容哈希与解析参数校验。 [Mktero 文档](https://github.com/tenglvjun/mktero/blob/main/README.zh-CN.md)

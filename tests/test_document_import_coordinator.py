@@ -30,7 +30,7 @@ class FakeImportJobs:
         self.referenced_targets = set()
         self.next_job_number = 0
 
-    def register_pdf_for_import(self, target, *, original_file_name=None):
+    def register_pdf_for_import(self, target, *, original_file_name=None, zotero_pdf=None):
         source_file_id = f"pdf-import-{sha256_file(Path(target))[:16]}"
         return ({"source_file_id": source_file_id}, source_file_id, Path(target))
 

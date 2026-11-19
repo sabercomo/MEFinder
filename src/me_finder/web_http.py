@@ -10,11 +10,12 @@ Every ``/api`` handler lives behind the route table; none is special-cased here.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, BinaryIO, Callable, Mapping, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .http_range import InvalidByteRange, parse_byte_range
@@ -31,6 +32,7 @@ class WebHTTPContext:
 
     root: Path
     index_runtime: Any
+    open_source: Callable[[Mapping[str, object]], BinaryIO]
     data_root_admission: Any
     # http_route_table.RouteTable: the single (method, path) -> Route registry.
     routes: Any
@@ -329,58 +331,58 @@ def make_http_handler(context: WebHTTPContext):
             if not record:
                 self._send(404, b"Unknown source", "text/plain; charset=utf-8")
                 return
-            relative_path = str(record.get("relative_path") or "")
-            target = (root / relative_path).resolve()
-            if target != root and root not in target.parents:
-                self._send(403, b"Forbidden", "text/plain; charset=utf-8")
-                return
-            if target.suffix.lower() not in {".pdf", ".doc", ".docx", ".epub"} or not target.exists():
-                self._send(404, b"Source not found", "text/plain; charset=utf-8")
-                return
-            content_type = {
-                ".pdf": "application/pdf",
-                ".doc": "application/msword",
-                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ".epub": "application/epub+zip",
-            }.get(target.suffix.lower(), "application/octet-stream")
-            file_size = target.stat().st_size
             try:
-                requested_range = parse_byte_range(
-                    self.headers.get("Range"),
-                    file_size,
-                )
-            except InvalidByteRange:
-                self.send_response(416)
-                self.send_header("Content-Range", f"bytes */{file_size}")
+                stream = context.open_source(record)
+            except PermissionError:
+                self._send(403, b"Forbidden", "text/plain; charset=utf-8", send_body=send_body)
+                return
+            except OSError:
+                self._send(404, b"Source not found", "text/plain; charset=utf-8", send_body=send_body)
+                return
+            with stream:
+                content_type = {
+                    ".pdf": "application/pdf",
+                    ".doc": "application/msword",
+                    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    ".epub": "application/epub+zip",
+                }[Path(stream.name).suffix.lower()]
+                file_size = os.fstat(stream.fileno()).st_size
+                try:
+                    requested_range = parse_byte_range(
+                        self.headers.get("Range"),
+                        file_size,
+                    )
+                except InvalidByteRange:
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{file_size}")
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+
+                if requested_range is None:
+                    status = 200
+                    start = 0
+                    content_length = file_size
+                else:
+                    status = 206
+                    start = requested_range.start
+                    content_length = requested_range.length
+
+                self.send_response(status)
+                self.send_header("Content-Type", content_type)
                 self.send_header("Accept-Ranges", "bytes")
-                self.send_header("Content-Length", "0")
+                self.send_header("Content-Length", str(content_length))
+                if requested_range is not None:
+                    self.send_header(
+                        "Content-Range",
+                        f"bytes {requested_range.start}-{requested_range.end}/{file_size}",
+                    )
                 self.end_headers()
-                return
+                if not send_body or content_length == 0:
+                    return
 
-            if requested_range is None:
-                status = 200
-                start = 0
-                content_length = file_size
-            else:
-                status = 206
-                start = requested_range.start
-                content_length = requested_range.length
-
-            self.send_response(status)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Accept-Ranges", "bytes")
-            self.send_header("Content-Length", str(content_length))
-            if requested_range is not None:
-                self.send_header(
-                    "Content-Range",
-                    f"bytes {requested_range.start}-{requested_range.end}/{file_size}",
-                )
-            self.end_headers()
-            if not send_body or content_length == 0:
-                return
-
-            try:
-                with target.open("rb") as stream:
+                try:
                     stream.seek(start)
                     remaining = content_length
                     while remaining:
@@ -389,10 +391,9 @@ def make_http_handler(context: WebHTTPContext):
                             break
                         self.wfile.write(chunk)
                         remaining -= len(chunk)
-            except (BrokenPipeError, ConnectionResetError):
-                # Closing a PDF tab while a range is streaming is normal and
-                # should not produce a server traceback.
-                return
+                except (BrokenPipeError, ConnectionResetError):
+                    # Closing a PDF tab during a range request is normal.
+                    return
 
         def log_message(self, format: str, *args) -> None:
             return

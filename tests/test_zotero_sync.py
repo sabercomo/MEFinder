@@ -56,7 +56,7 @@ class FakeLibrary:
         self.sources[source_id] = {"source_file_id": source_id, "sha256": _sha(path), "metadata_source": metadata_source}
         return source_id
 
-    def import_files(self, paths):
+    def import_files(self, paths, _zotero_pdfs):
         jobs = []
         for path in paths:
             self._counter += 1

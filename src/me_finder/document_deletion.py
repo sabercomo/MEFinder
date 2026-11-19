@@ -55,7 +55,7 @@ class DocumentDeletionService:
             "paragraph_count": batch["paragraph_count"],
             "eligible_paragraph_count": batch["eligible_paragraph_count"],
             "removed_from_config": source_file_id in batch["removed_from_config"],
-            "original_pdf_preserved": source_type == "pdf" and not delete_internal_copy,
+            "original_pdf_preserved": source_type == "pdf" and not internal_copy_deleted,
             "internal_copy_deleted": internal_copy_deleted,
             "generated_artifacts_requested": delete_generated_artifacts,
             "staged_artifact_count": batch["staged_artifact_count"],
@@ -137,7 +137,12 @@ class DocumentDeletionService:
                         )
                     if source_path.exists():
                         internal_paths[source_file_id] = source_path
-                elif source_type == "pdf" and source_file_id in internal_requested:
+                elif (
+                    source_type == "pdf"
+                    and source_file_id in internal_requested
+                    and not source.get("zotero_attachment_key")
+                    and not (document_by_id.get(source_file_id) or {}).get("zotero_attachment_key")
+                ):
                     if (
                         source_path is None
                         or not self._is_within(
@@ -174,6 +179,8 @@ class DocumentDeletionService:
             for source_file_id in targets
             if source_types.get(source_file_id) == "pdf"
             and source_file_id not in internal_requested
+            and not source_records[source_file_id].get("zotero_attachment_key")
+            and not (document_by_id.get(source_file_id) or {}).get("zotero_attachment_key")
         ]
         original_config = json.loads(json.dumps(config, ensure_ascii=False))
         staged: List[Tuple[Path, Path]] = []

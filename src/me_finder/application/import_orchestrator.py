@@ -20,6 +20,7 @@ from typing import (
 
 from ..app_context import AppPaths
 from ..bibliographic.metadata import metadata_missing_fields
+from ..document_file_store import pdf_file_stamp
 from ..extractors import extract_source
 from ..import_job_journal import ImportJobJournal
 from ..import_queue import (
@@ -37,6 +38,7 @@ from ..import_config_store import (
     import_config_lock,
     load_import_config,
     locked_import_config,
+    save_import_config,
 )
 from ..pdf.import_service import (
     register_pdf,
@@ -47,6 +49,7 @@ from ..parsers.vision_api import (
     resolve_vision_config_path,
     vision_config_summary,
 )
+from ..zotero_local_api import ZoteroLocalClient, ZoteroUnavailable
 from .import_batch_executor import ImportBatchExecutor
 from .import_job_store import (
     ImportJobCancelled,
@@ -335,15 +338,43 @@ class ImportOrchestrator:
         job_id: str,
         context: Mapping[str, object],
     ) -> Path:
-        return self._job_lifecycle.validated_target(
-            job_id,
-            context,
-            self.update_import_job,
-        )
+        profile = context["profile"]
+        attachment_key = profile.get("zotero_attachment_key")
+        if not attachment_key:
+            return self._job_lifecycle.validated_target(
+                job_id, context, self.update_import_job,
+            )
+
+        target = Path(context["target"])
+        digest = profile["zotero_sha256"]
+        try:
+            if target.is_file() and sha256_file(target) == digest:
+                return target
+            path = ZoteroLocalClient().attachment_file_path(str(attachment_key))
+            if path is None or not path.is_file():
+                raise UserFacingError("Zotero 原件暂时不可用，请恢复附件后继续。")
+            path = path.resolve()
+            if path.suffix.lower() != ".pdf" or sha256_file(path) != digest:
+                raise UserFacingError("Zotero 原件内容已变化，请重新同步后再解析。")
+        except (OSError, ZoteroUnavailable) as exc:
+            raise UserFacingError(f"暂时无法读取 Zotero 原件：{exc}") from exc
+
+        if path != target:
+            info = path.stat()
+            with self._job_store.atomic():
+                record = self._job_journal.get_job(job_id)
+                self._job_journal.update_job(
+                    job_id, context={**record["context"], "target": str(path)},
+                    file_size=info.st_size, file_mtime_ns=info.st_mtime_ns,
+                )
+                self._job_store.update_context(job_id, {"target": path})
+        return path
 
     def configured_pdf_for_index(
         self,
         source_file_id: str,
+        *,
+        original_path: Optional[Path] = None,
     ) -> Tuple[Path, Dict[str, object]]:
         config_path = self._root / "config" / "pdf_imports.json"
         config = load_import_config(config_path)
@@ -361,7 +392,7 @@ class ImportOrchestrator:
         file_name = str(document.get("file_name") or "").strip()
         if not file_name:
             raise UserFacingError("PDF 配置缺少文件名。")
-        path = Path(file_name)
+        path = original_path or Path(file_name)
         if not path.is_absolute():
             path = self._root / "corpus" / "raw_pdf" / path
         if not path.is_file():
@@ -396,15 +427,26 @@ class ImportOrchestrator:
                 phase="text_parsing",
                 message="正在读取 PDF 文本并写入本地索引…",
             )
-            path, document = self.configured_pdf_for_index(source_file_id)
+            saved_job = self._job_store.job_and_context_snapshot(job_id)
+            context = saved_job[1] if saved_job else None
+            original_path = None
+            if context and context["profile"].get("zotero_attachment_key"):
+                original_path = self.validated_import_target(job_id, context)
+            path, document = self.configured_pdf_for_index(
+                source_file_id, original_path=original_path,
+            )
             display_name = str(document.get("original_file_name") or path.name)
             try:
+                original_stamp = path.stat() if original_path is not None else None
                 extracted = self._extract_pdf(
                     path,
                     self._root,
                     document,
                     parsed_dir=self._root / "corpus" / "parsed" / "pdf",
                 )
+                if original_stamp is not None:
+                    if pdf_file_stamp(path.stat()) != pdf_file_stamp(original_stamp):
+                        raise UserFacingError("Zotero 原件在建立索引时发生变化，请重新同步。")
             except Exception as exc:
                 raise UserFacingError(
                     f"{display_name} 未能进入索引：{type(exc).__name__}: {exc}"
@@ -423,6 +465,14 @@ class ImportOrchestrator:
                     f"{display_name} 未能进入索引："
                     "解析结果缺少对应的文献记录。"
                 )
+            if document.get("zotero_attachment_key") and original_path is not None and str(original_path) != document["file_name"]:
+                config_path = self._root / "config" / "pdf_imports.json"
+                with locked_import_config(config_path) as config:
+                    for item in config["documents"]:
+                        if item["source_file_id"] == source_file_id:
+                            item["file_name"] = str(original_path)
+                            break
+                    save_import_config(config_path, config)
             self.update_import_job(
                 job_id,
                 phase="rebuilding_index",
@@ -537,7 +587,19 @@ class ImportOrchestrator:
         force_mineru: bool = False,
         vision_provider_id: Optional[str] = None,
     ) -> bool:
-        return self._parser_executor.execute(
+        before = None
+        if profile.get("zotero_attachment_key"):
+            _job, context = self._job_store.job_and_context_snapshot(job_id)
+            try:
+                target = self.validated_import_target(job_id, context)
+                before = target.stat()
+            except (UserFacingError, OSError) as exc:
+                self.update_import_job(
+                    job_id, status="failed", phase="failed", can_resume=True,
+                    message=str(exc),
+                )
+                return False
+        succeeded = self._parser_executor.execute(
             job_id,
             target,
             source_file_id,
@@ -547,6 +609,21 @@ class ImportOrchestrator:
             vision_provider_id,
             jobs=self,
         )
+        if succeeded and before is not None:
+            try:
+                after = target.stat()
+                if pdf_file_stamp(before) == pdf_file_stamp(after):
+                    return True
+            except OSError:
+                after = None
+            if after is not None:
+                self.update_import_job(
+                    job_id, status="failed", phase="failed", can_resume=False,
+                    message="Zotero 原件在解析中发生变化，请重新同步。",
+                )
+                return False
+            # A rename or move can safely continue when the same bytes are located.
+        return succeeded
 
     def run_import_job(
         self,
@@ -713,18 +790,26 @@ class ImportOrchestrator:
         target: Path,
         *,
         original_file_name: Optional[str] = None,
+        zotero_pdf: Optional[Tuple[str, str]] = None,
     ) -> Tuple[Dict[str, object], str, Path]:
         content_sha256 = sha256_file(target)
+        if zotero_pdf and zotero_pdf[1] != content_sha256:
+            raise UserFacingError("Zotero 原件内容已变化，请重新同步后再解析。")
         predicted_source_id = f"pdf-import-{content_sha256[:16]}"
         with self._index_runtime.mutation(), import_config_lock():
             # A different parser is still the same document, including books
             # indexed before source IDs were derived from the file hash.
-            matching_ids = [
-                str(source["source_file_id"])
+            matching_sources = [
+                source
                 for source in self._index_runtime.catalog()["source_files"]
                 if source.get("source_type") == "pdf"
                 and source.get("sha256") == content_sha256
             ]
+            if zotero_pdf and matching_sources:
+                # A manual import can finish between Zotero's snapshot and
+                # admission. Let sync link it without rewriting its config.
+                raise UserFacingError("文库中已有相同 PDF，复用已索引的文献。")
+            matching_ids = [str(source["source_file_id"]) for source in matching_sources]
             if matching_ids and predicted_source_id not in matching_ids:
                 if len(matching_ids) != 1:
                     raise UserFacingError("书库中已有多条相同 PDF 的记录，请先确认要保留的文献。")
@@ -737,6 +822,7 @@ class ImportOrchestrator:
                         target,
                         original_file_name=original_file_name,
                         existing_source_file_id=predicted_source_id if matching_ids else None,
+                        zotero_pdf=zotero_pdf,
                     )
                     source_file_id = str(document["source_file_id"])
                     if source_file_id != predicted_source_id:
@@ -747,7 +833,8 @@ class ImportOrchestrator:
                 except Exception:
                     self._job_store.release_reservation(predicted_source_id)
                     raise
-        target = reuse_registered_pdf_copy(self._root, target, document)
+        if not zotero_pdf:
+            target = reuse_registered_pdf_copy(self._root, target, document)
         return document, source_file_id, target
 
     def release_import_reservation(self, source_file_id: str) -> None:

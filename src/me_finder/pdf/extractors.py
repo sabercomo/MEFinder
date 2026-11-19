@@ -20,6 +20,7 @@ from .auto_page_mapping import (
     apply_auto_mapping_to_pages,
     has_manual_mapping,
 )
+from ..document_file_store import pdf_file_stamp
 from ..bibliographic.metadata import METADATA_FIELDS
 from ..document_heading import enrich_pdf_headings
 from ..import_resume import resume_summary
@@ -196,6 +197,12 @@ def extract_pdf_source(
         profile,
         original_file_name=original_file_name,
     )
+    if config.get("zotero_attachment_key"):
+        if source_file["sha256"] != config["zotero_sha256"]:
+            raise ValueError("Zotero 原件内容已变化，请先同步。")
+        source_file["relative_path"] = str(path.resolve())
+        source_file["zotero_attachment_key"] = config["zotero_attachment_key"]
+        source_file["zotero_file_stamp"] = list(pdf_file_stamp(path.stat()))
     bibliographic = config.get("bibliographic_metadata") or config
     if isinstance(bibliographic, dict):
         _attach_bibliographic_metadata(source_file, bibliographic)

@@ -27,6 +27,7 @@ from ..calibration_library import (
     build_library_detail,
     summarize_library,
 )
+from ..document_file_store import indexed_document_path, zotero_pdf_is_current
 from ..import_config_store import load_import_config
 from .document_read_port import DocumentReadPort
 
@@ -186,17 +187,16 @@ class DocumentQueryService:
         record = self._index.source(source_file_id)
         if not record:
             raise DocumentQueryError("文献未找到。")
-        target = (
-            self.paths.runtime_root / str(record.get("relative_path") or "")
-        ).resolve()
-        root = self.paths.runtime_root
-        if target != root and root not in target.parents:
+        target = indexed_document_path(self.paths.runtime_root, record)
+        if target is None:
             raise DocumentQueryError("拒绝打开应用目录外的文件。")
         if (
             target.suffix.lower() not in {".pdf", ".doc", ".docx", ".epub"}
             or not target.exists()
         ):
             raise DocumentQueryError("原始文件不存在。")
+        if record.get("zotero_attachment_key") and not zotero_pdf_is_current(target, record):
+            raise DocumentQueryError("Zotero 原件已变动，请同步后打开。")
         return target
 
     def configured_document(

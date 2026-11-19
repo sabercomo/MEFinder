@@ -52,7 +52,7 @@ class PackageJobs:
     def replace_imported_source(self, job_id, extracted, source_file_id):
         self.replacements.append((job_id, extracted, source_file_id))
 
-    def register_pdf_for_import(self, target, *, original_file_name=None):
+    def register_pdf_for_import(self, target, *, original_file_name=None, zotero_pdf=None):
         source_id = f"pdf-import-{sha256_file(Path(target))[:16]}"
         return (
             {
