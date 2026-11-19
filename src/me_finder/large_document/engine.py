@@ -107,6 +107,8 @@ class LargeDocumentJobEngine:
             options_fingerprint=fingerprint,
         )
         if resumable is not None:
+            if resumable.source_path != str(source):
+                resumable = self.ledger.relocate_source(resumable, source)
             self._repair_local_artifacts(resumable)
             return self.ledger.get_document_job(resumable.id)
 

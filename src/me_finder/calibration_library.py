@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 
+from .document_file_store import indexed_document_path, zotero_pdf_is_current
 from .pdf.auto_page_mapping import has_manual_mapping
 from .bibliographic.metadata import METADATA_FIELDS, is_valid_bibliographic_value, metadata_missing_fields
 from .bibliographic.collection_metadata import infer_collection_metadata
@@ -443,6 +444,7 @@ def build_calibration_library(
         )
         internal_copy = bool(
             source_path
+            and not source.get("zotero_attachment_key")
             and _is_within(source_path, root / "corpus" / "raw_pdf")
         )
         items.append(
@@ -592,8 +594,10 @@ def _source_path(root: Path, source: Mapping[str, object]) -> Optional[Path]:
     relative = str(source.get("relative_path") or "").strip()
     if not relative:
         return None
-    path = (root / relative).resolve()
-    return path if path == root or root in path.parents else None
+    path = indexed_document_path(root, source)
+    if path is not None and source.get("zotero_attachment_key"):
+        return path if zotero_pdf_is_current(path, source) else None
+    return path
 
 
 def _is_within(path: Path, parent: Path) -> bool:

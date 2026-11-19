@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence
 
+from .errors import UserFacingError
 from .import_resume import (
     ResumeManifestError,
     atomic_write_json,
@@ -82,6 +83,9 @@ class ImportJobJournal:
         if not target_path.is_file():
             raise FileNotFoundError(target_path)
         target_stat = target_path.stat()
+        file_hash = sha256_file(target_path)
+        if profile.get("zotero_attachment_key") and file_hash != profile["zotero_sha256"]:
+            raise UserFacingError("Zotero 原件内容已变化，请重新同步后再解析。")
         status = str(job.get("status") or "queued").strip().lower()
         record: Dict[str, object] = {
             "job_log_spec_version": JOB_LOG_SPEC_VERSION,
@@ -98,7 +102,7 @@ class ImportJobJournal:
                 "force_mineru": bool(force_mineru),
                 "provider_id": str(provider_id) if provider_id else None,
             },
-            "file_hash": sha256_file(target_path),
+            "file_hash": file_hash,
             "file_size": int(target_stat.st_size),
             "file_mtime_ns": int(target_stat.st_mtime_ns),
             "total_pages": max(0, int(total_pages or 0)),
@@ -263,7 +267,8 @@ class ImportJobJournal:
         """Restore display state without submitting jobs or performing I/O.
 
         Jobs interrupted while queued or processing become ``paused``.  A
-        missing target becomes a terminal failure.  This method deliberately
+        missing managed file becomes a terminal failure. A moved Zotero file
+        is resolved when the job is resumed. This method deliberately
         has no reference to :class:`ImportTaskQueue`, so loading state can
         never trigger an upload by accident.
 
@@ -284,7 +289,11 @@ class ImportJobJournal:
                 )
                 target = Path(target_text).expanduser() if target_text else None
                 updates: Dict[str, object] = {}
-                if target is None or not target.is_file():
+                if context["profile"].get("zotero_attachment_key"):
+                    # Zotero paths are transient. The resume path validates the
+                    # attachment identity and digest before a worker uses it.
+                    pass
+                elif target is None or not target.is_file():
                     updates = {
                         "status": "failed",
                         "phase": "failed",

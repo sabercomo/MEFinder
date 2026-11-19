@@ -74,6 +74,7 @@ class ImportJobsPort(Protocol):
         target: Path,
         *,
         original_file_name: Optional[str] = None,
+        zotero_pdf: Optional[Tuple[str, str]] = None,
     ) -> Tuple[Dict[str, object], str, Path]:
         ...
 
@@ -644,6 +645,7 @@ class DocumentImportCoordinator:
         *,
         pdf_parse_mode: object = "auto",
         vision_provider_id: object = "",
+        zotero_pdfs: Optional[Mapping[str, Tuple[str, str]]] = None,
     ) -> Dict[str, object]:
         with self._admission():
             return self._import_local(
@@ -651,6 +653,7 @@ class DocumentImportCoordinator:
                 allowed_bases,
                 pdf_parse_mode=pdf_parse_mode,
                 vision_provider_id=vision_provider_id,
+                zotero_pdfs=zotero_pdfs or {},
             )
 
     def active_session_count(self) -> int:
@@ -922,6 +925,7 @@ class DocumentImportCoordinator:
         *,
         pdf_parse_mode: object,
         vision_provider_id: object,
+        zotero_pdfs: Mapping[str, Tuple[str, str]],
     ) -> Dict[str, object]:
         mode, provider_id = self._validated_parse_options(
             pdf_parse_mode,
@@ -943,14 +947,22 @@ class DocumentImportCoordinator:
                     raise UserFacingError("不在已配置的文献目录内。")
                 if not source_path.is_file():
                     raise UserFacingError("文件不存在。")
-                target = self._copy_local(
-                    self._paths.runtime_root,
-                    source_path,
-                )
-                owned_target = target
+                zotero_pdf = zotero_pdfs.get(str(raw))
+                if zotero_pdf:
+                    if source_path.suffix.lower() != ".pdf":
+                        raise UserFacingError("Zotero 原位读取只支持 PDF。")
+                    target = source_path
+                else:
+                    target = self._copy_local(self._paths.runtime_root, source_path)
+                    owned_target = target
                 is_pdf = target.suffix.lower() == ".pdf"
                 if is_pdf:
                     profile = self._detect_pdf(target)
+                    if zotero_pdf:
+                        profile = {
+                            **profile, "zotero_attachment_key": zotero_pdf[0],
+                            "zotero_sha256": zotero_pdf[1],
+                        }
                     predicted_source_id = (
                         f"pdf-import-{self._hash_file(target)[:16]}"
                     )
@@ -963,6 +975,7 @@ class DocumentImportCoordinator:
                     ) = self._jobs.register_pdf_for_import(
                         target,
                         original_file_name=source_path.name,
+                        zotero_pdf=zotero_pdf,
                     )
                     item_reserved_source_id = source_file_id
                 else:

@@ -323,6 +323,28 @@ class LargeDocumentCoreTests(unittest.TestCase):
         self.assertEqual(engine.run_once(job.id).status, "validated")
         self.assertEqual(provider.submit_count, 1)
 
+    def test_existing_remote_task_is_polled_after_same_file_is_moved(self) -> None:
+        source = self.root / "source.pdf"
+        source.write_bytes(b"source")
+        provider = SyntheticProvider(max_pages=4, asynchronous=True)
+        ledger = JobLedger(self.root / "jobs.sqlite3")
+        engine = LargeDocumentJobEngine(
+            ledger=ledger,
+            provider=provider,
+            work_dir=self.root / "work",
+            page_counter=lambda path: 4,
+        )
+        job = engine.prepare(source_path=source, source_file_id="pdf-1", document_id="doc")
+        self.assertEqual(engine.run_once(job.id).status, "waiting")
+        self.assertEqual(provider.submit_count, 1)
+        moved = self.root / "moved.pdf"
+        source.rename(moved)
+        resumed = engine.prepare(source_path=moved, source_file_id="pdf-1", document_id="doc")
+        self.assertEqual(resumed.id, job.id)
+        self.assertEqual(Path(ledger.list_slice_jobs(job.id)[0].slice_path), moved.resolve())
+        self.assertEqual(engine.run_once(resumed.id).status, "validated")
+        self.assertEqual(provider.submit_count, 1)
+
     def test_changed_source_hash_never_reuses_old_job(self) -> None:
         source = self.root / "source.pdf"
         source.write_bytes(b"first")

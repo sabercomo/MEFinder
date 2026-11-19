@@ -11,6 +11,7 @@ bibliographic metadata coordinator.
 
 from __future__ import annotations
 
+import copy
 import logging
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Sequence, Tuple
@@ -18,8 +19,10 @@ from typing import Callable, Mapping, Optional, Sequence, Tuple
 from .application.bibliographic_metadata_coordinator import BibliographicMetadataError
 from .app_context import AppPaths
 from .bibliographic.metadata import update_metadata_in_database
+from .document_file_store import pdf_file_stamp
+from .import_config_store import locked_import_config, save_import_config
 from .import_resume import sha256_file
-from .persistence.zotero_sync_store import ZoteroSyncStore
+from .persistence.zotero_sync_store import ZoteroSyncStore, update_zotero_pdf_paths
 from .preferences import read_preferences, resolve_preferences_path
 from .parsers.vision_api import resolve_vision_config_path, vision_config_summary
 from .zotero_sync import ZoteroSyncPorts, ZoteroSyncService
@@ -83,7 +86,9 @@ def assemble_zotero_sync(
     def parse_mode() -> str:
         return str(preferences().get("pdf_parse_mode") or "auto")
 
-    def import_files(files: Sequence[Path]) -> Mapping[str, object]:
+    def import_files(
+        files: Sequence[Path], zotero_pdfs: Mapping[str, Tuple[str, str]]
+    ) -> Mapping[str, object]:
         mode = parse_mode()
         provider: Optional[str] = ""
         if mode == "vision":
@@ -95,7 +100,53 @@ def assemble_zotero_sync(
             [Path(path).parent for path in files],
             pdf_parse_mode=mode,
             vision_provider_id=provider or "",
+            zotero_pdfs=zotero_pdfs,
         )
+
+    def bind_pdfs(bindings: Mapping[str, Tuple[str, Path, str]]) -> Sequence[str]:
+        config_path = paths.config_root / "pdf_imports.json"
+        with durable_operations.operation(), index_runtime.mutation(), locked_import_config(config_path) as config:
+            active = import_orchestrator.active_source_ids()
+            original = copy.deepcopy(config)
+            updates = []
+            for document in config["documents"]:
+                source_id = str(document.get("source_file_id") or "")
+                if source_id not in bindings or source_id in active:
+                    continue
+                key, path, digest = bindings[source_id]
+                source = index_runtime.source(source_id)
+                if source is None or source["sha256"] != digest:
+                    continue
+                resolved = path.resolve()
+                if resolved.suffix.lower() != ".pdf":
+                    continue
+                try:
+                    info = resolved.stat()
+                    actual_digest = sha256_file(resolved)
+                    current = resolved.stat()
+                    if actual_digest != digest or pdf_file_stamp(current) != pdf_file_stamp(info):
+                        continue
+                except OSError:
+                    # The file went away after discovery. Keep the old path.
+                    continue
+                document.update(
+                    file_name=str(resolved), zotero_attachment_key=key, zotero_sha256=digest,
+                )
+                updates.append((source_id, key, str(resolved), pdf_file_stamp(info)))
+            if not updates:
+                return []
+            index_runtime.suspend()
+            try:
+                save_import_config(config_path, config)
+                try:
+                    update_zotero_pdf_paths(paths.index_path, updates)
+                except Exception:
+                    save_import_config(config_path, original)
+                    raise
+            finally:
+                if not index_runtime.reopen():
+                    raise RuntimeError("切换 Zotero 路径后未能重新打开索引。")
+        return [row[0] for row in updates]
 
     def remove_documents(source_ids: Sequence[str]) -> Mapping[str, object]:
         return deletion_coordinator.remove_many(
@@ -131,6 +182,7 @@ def assemble_zotero_sync(
             parse_mode_label=lambda: PARSE_MODE_LABELS.get(parse_mode(), ""),
             import_capacity=import_capacity,
             resume_job=import_orchestrator.resume_import_job,
+            bind_pdfs=bind_pdfs,
         ),
     )
     return service, ZoteroSyncController(service, parse_mode)

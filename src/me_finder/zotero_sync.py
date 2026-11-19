@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple
 
 from .bibliographic.metadata import metadata_missing_fields
+from .document_file_store import zotero_pdf_is_current
 from .persistence.zotero_sync_store import StoredZoteroState, ZoteroSyncStore
 from .tasks.background_tasks import BackgroundTasks
 from .zotero_local_api import (
@@ -502,7 +503,7 @@ class ZoteroSyncPorts:
 
     read_preferences: Callable[[], Mapping[str, object]]
     sources: Callable[[], Sequence[Mapping[str, object]]]
-    import_files: Callable[[Sequence[Path]], Mapping[str, object]]
+    import_files: Callable[[Sequence[Path], Mapping[str, Tuple[str, str]]], Mapping[str, object]]
     job_status: Callable[[str], Optional[Mapping[str, object]]]
     remove_documents: Callable[[Sequence[str]], Mapping[str, object]]
     apply_metadata: Callable[[str, Mapping[str, object]], object]
@@ -514,6 +515,7 @@ class ZoteroSyncPorts:
     # Re-enters an existing import job into the queue ("继续导入"); ``None``
     # means queue rejections are re-imported by the next sync instead.
     resume_job: Optional[Callable[[str], object]] = None
+    bind_pdfs: Optional[Callable[[Mapping[str, Tuple[str, Path, str]]], Sequence[str]]] = None
 
 
 ClientFactory = Callable[[Optional[str]], ZoteroLocalClient]
@@ -807,21 +809,43 @@ class ZoteroSyncService:
         imports: List[Tuple[str, Path]] = []
         queued: Set[str] = set()
         retire: List[str] = []
-        for key in [*plan.new_attachments, *plan.retry_attachments, *plan.changed_attachments]:
+        bindings: Dict[str, Tuple[str, Path, str]] = {}
+        candidates = dict.fromkeys([
+            *plan.new_attachments, *plan.retry_attachments, *plan.changed_attachments,
+        ])
+        if self._ports.bind_pdfs is not None:
+            for key, record in snapshot.attachments.items():
+                row = rows.get(key, {})
+                source = sources.get(str(row.get("source_file_id") or ""))
+                if (
+                    record["format"] != "pdf" or row.get("status") != "linked"
+                    or row.get("origin") != "imported" or source is None
+                ):
+                    continue
+                bound_key = source.get("zotero_attachment_key")
+                if not bound_key or bound_key not in snapshot.attachments or not zotero_pdf_is_current(
+                    Path(str(source["relative_path"])), source
+                ):
+                    candidates[key] = None
+        for key in candidates:
             record = snapshot.attachments[key]
             previous = rows.get(key) or {}
             job_id = str(previous.get("import_job_id") or "")
+            recovery_job = None
             if previous.get("status") == "failed" and job_id:
-                job = self._ports.job_status(job_id)
+                recovery_job = self._ports.job_status(job_id)
                 # A job that is still in the queue has finished pages and MinerU
                 # quota worth resuming from the import page. A job rejected at
                 # the queue parsed nothing, so there is nothing to preserve and
                 # skipping it would strand the row on "没有变化".
-                if job is not None and (
-                    str(job.get("failure_stage") or "") != "queue"
+                if recovery_job is not None and (
+                    str(recovery_job.get("failure_stage") or "") != "queue"
                     or self._ports.resume_job is not None
                 ):
-                    continue
+                    if self._ports.bind_pdfs is None or record["format"] != "pdf":
+                        continue
+                else:
+                    recovery_job = None
             row: Dict[str, object] = {**previous}
             for name in ("attachment_key", "parent_item_key", "attachment_version", "link_mode", "content_type", "file_name", "file_signature"):
                 row[name] = record.get(name)
@@ -837,7 +861,14 @@ class ZoteroSyncService:
                 if was_linked:
                     row["file_signature"] = previous.get("file_signature")
                 continue
-            if path is None or not path.is_file():
+            try:
+                digest = self._ports.hash_file(path).lower() if path is not None else None
+            except OSError:
+                digest = None
+            if recovery_job is not None and digest in {None, previous.get("file_sha256")}:
+                rows[key] = previous
+                continue
+            if digest is None:
                 # A missing file is never a deletion; a linked document stays.
                 row["status_message"] = "附件不可用"
                 if was_linked:
@@ -847,9 +878,28 @@ class ZoteroSyncService:
                 result["unavailable"] += 1
                 self._row(action="不可用", title=title, meta=meta_of(record, "Zotero 里找不到文件"), status_text="附件不可用", tone="warn")
                 continue
-            digest = self._ports.hash_file(path).lower()
-            if was_linked and digest == str(previous.get("file_sha256") or "").lower():
+            old_record = sources.get(old_source, {})
+            if was_linked and digest == str(old_record.get("sha256") or "").lower():
                 row.update(status="linked", status_message=None)
+                bound_key = old_record.get("zotero_attachment_key")
+                if (
+                    self._ports.bind_pdfs is not None
+                    and record["format"] == "pdf"
+                    and previous.get("origin") == "imported"
+                    and (not bound_key or bound_key == key or bound_key not in snapshot.attachments
+                         or not zotero_pdf_is_current(Path(str(old_record["relative_path"])), old_record))
+                ):
+                    if old_source not in bindings or bound_key == key:
+                        bindings[old_source] = (key, path, digest)
+                continue
+            if (
+                self._ports.bind_pdfs is not None and was_linked
+                and record["format"] == "pdf" and previous.get("origin") == "imported"
+                and not old_record.get("zotero_attachment_key")
+            ):
+                message = "原件与既有索引的文件内容不同，已保留现有副本"
+                row.update(status_message=message)
+                self._row(action="保留副本", title=title, meta=meta_of(record, ""), status_text=message, tone="warn")
                 continue
             existing = by_hash.get(digest)
             if existing:
@@ -872,7 +922,11 @@ class ZoteroSyncService:
                 file_sha256=digest,
                 origin="imported",
                 status_message=None,
-                replaces_source_file_id=old_source if was_linked else None,
+                import_job_id=None,
+                replaces_source_file_id=(
+                    old_source if was_linked and previous.get("origin") == "imported"
+                    else previous.get("replaces_source_file_id")
+                ),
                 reparse=was_linked,
             )
             if digest not in queued:  # the same file attached twice imports once
@@ -890,7 +944,13 @@ class ZoteroSyncService:
             batch = imports[cursor:cursor + limit]
             cursor += len(batch)
             try:
-                response = self._ports.import_files([path for _key, path in batch])
+                response = self._ports.import_files(
+                    [path for _key, path in batch],
+                    {
+                        str(path): (key, str(rows[key]["file_sha256"]))
+                        for key, path in batch if snapshot.attachments[key]["format"] == "pdf"
+                    },
+                )
             except Exception as exc:  # noqa: BLE001 - one failed batch must not stop the rest
                 logging.exception("zotero import batch failed")
                 response = {"jobs": [], "errors": [{"path": str(path), "error": str(exc)} for _key, path in batch]}
@@ -930,6 +990,16 @@ class ZoteroSyncService:
         for row in rows.values():
             row.pop("reparse", None)
 
+        if bindings and self._ports.bind_pdfs is not None:
+            for source_id in self._ports.bind_pdfs(bindings):
+                key, _path, _digest = bindings[source_id]
+                record = snapshot.attachments[key]
+                result["linked"] += 1
+                self._row(
+                    action="关联原件", title=title_of(str(record["parent_item_key"])),
+                    meta=meta_of(record, ""), status_text="已复用现有索引", tone="ok",
+                )
+
         # 2. removals: attachments gone from Zotero or out of the selection,
         #    plus documents replaced by an already-present copy.
         removed_rows = set(plan.removed_attachments)
@@ -941,7 +1011,7 @@ class ZoteroSyncService:
         if delete:
             try:
                 outcome = self._ports.remove_documents(delete)
-                removed_ids = set(outcome.get("removed_source_ids") or delete)
+                removed_ids = set(outcome["removed_source_ids"])
             except Exception as exc:  # noqa: BLE001 - keep the rows, retry next sync
                 logging.exception("zotero sync removal failed")
                 removed_ids = set()
@@ -1080,6 +1150,13 @@ class ZoteroSyncService:
                 updated.append({**row, "status": "failed", "import_job_id": None, "status_message": "导入任务记录已不存在，可手动同步重试"})
                 continue
             if job_state == "paused":
+                if self._ports.bind_pdfs is not None and row.get("content_type") == "application/pdf":
+                    if row.get("status") != "failed":
+                        updated.append({
+                            **row, "status": "failed",
+                            "status_message": "上次导入被中断，可在导入页继续",
+                        })
+                    continue
                 # Interrupted by a restart: nothing polls a paused job, and
                 # plan_sync leaves a pending row with a job id alone forever.
                 updated.append({**row, "status": "failed", "import_job_id": None, "status_message": "上次导入被中断，可手动同步重试"})
@@ -1089,7 +1166,19 @@ class ZoteroSyncService:
             source_id = by_hash.get(str(row.get("file_sha256") or "").lower())
             if source_id:
                 old = str(row.get("replaces_source_file_id") or "")
-                updated.append({**row, "status": "linked", "source_file_id": source_id, "import_job_id": None, "replaces_source_file_id": None, "status_message": None})
+                origin = row["origin"]
+                if (
+                    self._ports.bind_pdfs is not None
+                    and sources[source_id].get("source_type") == "pdf"
+                    and not sources[source_id].get("zotero_attachment_key")
+                    and not job_id
+                    and not any(
+                        other.get("source_file_id") == source_id and other.get("origin") == "imported"
+                        for other in stored.attachments.values()
+                    )
+                ):
+                    origin = "linked_existing"
+                updated.append({**row, "origin": origin, "status": "linked", "source_file_id": source_id, "import_job_id": None, "replaces_source_file_id": None, "status_message": None})
                 if old and old != source_id:
                     replaced.append(old)
             elif job_state in _JOB_FAILED and row.get("status") != "failed":

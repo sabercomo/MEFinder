@@ -43,6 +43,8 @@ def _merge_missing_config_values(
             "enabled",
             "mineru",
             "parser_results",
+            "zotero_attachment_key",
+            "zotero_sha256",
         }:
             continue
         current = target.get(key)
@@ -234,6 +236,10 @@ def _merge_duplicate_document(
         and duplicate_path.is_file()
     ):
         canonical["file_name"] = duplicate.get("file_name")
+        for key in ("zotero_attachment_key", "zotero_sha256"):
+            canonical.pop(key, None)
+            if key in duplicate:
+                canonical[key] = duplicate[key]
     canonical["enabled"] = bool(canonical.get("enabled", True)) or bool(
         duplicate.get("enabled", True)
     )

@@ -7,11 +7,12 @@ import hashlib
 import logging
 import os
 import shutil
+import stat
 import time
 import unicodedata
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import BinaryIO, List, Mapping, Optional
 
 from .errors import UserFacingError
 
@@ -250,3 +251,58 @@ def reuse_registered_pdf_copy(
         return configured_path
     incoming_path.unlink(missing_ok=True)
     return configured_path
+
+
+def indexed_document_path(root: Path, source: Mapping[str, object]) -> Optional[Path]:
+    """Resolve a catalog path, granting external access to Zotero PDFs only."""
+    stored_path = Path(str(source.get("relative_path") or ""))
+    target = (root / stored_path).resolve()
+    if source.get("zotero_attachment_key"):
+        if (
+            source.get("source_type") == "pdf"
+            and stored_path.is_absolute()
+            and stored_path == target
+            and target.suffix.lower() == ".pdf"
+        ):
+            return target
+        return None
+    return target if target == root or root in target.parents else None
+
+
+def zotero_pdf_is_current(path: Path, source: Mapping[str, object]) -> bool:
+    """Check that an attached PDF still matches the file version in the index."""
+    try:
+        file = path.stat()
+    except OSError:
+        return False
+    return zotero_pdf_stat_is_current(file, source)
+
+
+def zotero_pdf_stat_is_current(file: os.stat_result, source: Mapping[str, object]) -> bool:
+    """Compare a Zotero source record to the metadata of an opened PDF."""
+    return stat.S_ISREG(file.st_mode) and list(pdf_file_stamp(file)) == source["zotero_file_stamp"]
+
+
+def pdf_file_stamp(file: os.stat_result) -> tuple[int, int, int, int]:
+    """Identify a PDF's on-disk version without rehashing on each range read."""
+    return file.st_dev, file.st_ino, file.st_size, file.st_mtime_ns
+
+
+def open_indexed_document(root: Path, source: Mapping[str, object]) -> BinaryIO:
+    """Open the indexed source, checking the actual file before serving it."""
+    target = indexed_document_path(root, source)
+    if target is None:
+        raise PermissionError("Source is outside the library")
+    if target.suffix.lower() not in {".pdf", ".doc", ".docx", ".epub"}:
+        raise FileNotFoundError(target)
+    stream = target.open("rb")
+    try:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or (
+            source.get("zotero_attachment_key") and not zotero_pdf_stat_is_current(info, source)
+        ):
+            raise FileNotFoundError(target)
+    except BaseException:
+        stream.close()
+        raise
+    return stream

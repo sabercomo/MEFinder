@@ -234,6 +234,7 @@ _DOCUMENT_UPDATE_FIELDS = frozenset(
     {
         "status",
         "total_slices",
+        "source_path",
         "completed_pages",
         "completed_slices",
         "publish_status",
@@ -421,6 +422,14 @@ class JobLedger:
                 (job_id,),
             ).fetchall()
         return [_slice_from_row(row) for row in rows]
+
+    def relocate_source(self, job: DocumentJob, source: Path) -> DocumentJob:
+        """Repoint a verified same-content job and any unsplit source slice."""
+        for item in self.list_slice_jobs(job.id):
+            if item.slice_sha256 == job.source_sha256 and item.slice_path != str(source):
+                self.update_slice(item.id, slice_path=str(source))
+        # Write the document path last so a retry can finish interrupted moves.
+        return self.update_document(job.id, source_path=str(source))
 
     def update_document(self, job_id: str, **updates: object) -> DocumentJob:
         invalid = set(updates) - _DOCUMENT_UPDATE_FIELDS
