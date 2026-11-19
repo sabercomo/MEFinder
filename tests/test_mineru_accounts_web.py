@@ -7,6 +7,7 @@ import unittest
 from contextlib import contextmanager
 from http.client import HTTPConnection, IncompleteRead, RemoteDisconnected
 from http.server import ThreadingHTTPServer
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -313,6 +314,49 @@ class MinerUAccountsWebTests(unittest.TestCase):
                         )
                         self.assertEqual(status, 400)
                         self.assertIn(str(error), payload["error"])
+
+    def test_connection_uses_service_root_for_pasted_task_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with self._runtime(root) as (server, _handler):
+                status, _ = self._request(
+                    server, "POST", "/api/mineru-accounts",
+                    {
+                        "account_id": "selected",
+                        "display_name": "Selected",
+                        "token": "fixture-token",
+                    },
+                )
+                self.assertEqual(status, 200)
+                config_path = root / "config" / "mineru_api.local.json"
+                for existing in (True, False):
+                    with self.subTest(existing_config=existing):
+                        config = {"api_base": "https://mineru.net/api/v4/extract/task"}
+                        if existing:
+                            config_path.write_text(json.dumps(config), encoding="utf-8")
+                        else:
+                            status, saved = self._request(
+                                server, "POST", "/api/mineru-accounts/service", config
+                            )
+                            self.assertEqual(status, 200)
+                            self.assertEqual(saved["api_base"], "https://mineru.net")
+                        response = BytesIO(
+                            b'{"code":0,"data":{"file_urls":["https://upload.example/put"]}}'
+                        )
+                        with patch(
+                            "urllib.request.OpenerDirector.open", return_value=response
+                        ) as upstream:
+                            status, payload = self._request(
+                                server, "POST", "/api/mineru-accounts/test",
+                                {"account_id": "selected"},
+                            )
+                        self.assertEqual(status, 200)
+                        self.assertTrue(payload["ok"])
+                        self.assertEqual(payload["api_base"], "https://mineru.net")
+                        self.assertEqual(
+                            upstream.call_args.args[0].full_url,
+                            "https://mineru.net/api/v4/file-urls/batch",
+                        )
 
     def test_account_can_be_deleted_without_returning_its_token(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -1,5 +1,7 @@
 2026-11-17：**v0.6.2 正式发布。** Windows 安装版、便携版与 macOS Apple Silicon 共四个二进制及各自 SHA-256 已上传，八个附件状态与远端 digest 核对通过。下载见 [GitHub Release v0.6.2](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.2)。
 
+2026-11-19 核查补充：#24 截图中的完整 MinerU 接口地址仍会在 0.6.2 中重复拼接请求路径。源码已补修，尚未重打包；范围及复现证据见 [连接核查报告](../reports/issue-24-connection-validation-2026-11-19.md)。
+
 macOS Intel 包已完成构建与核验（2,878 项通过、45 跳过；桌面程序与 MCP 侧车均为纯 x86_64、最低 macOS 12.0），因本机上行带宽不足暂未上传，补传后更新本页与 Release。
 
 本版修复 [#24](https://github.com/sabercomo/MEFinder/issues/24)：打包版对 MinerU 与在线 API 的 HTTPS 请求因冻结包缺少构建机解释器要求的 SSL 证书拒绝列表而全部失败。同时让 MinerU 检索结果在本机排版化学式、上下标和角度（已有文献无需重解析，框选单段仍复制原始公式文本），并在测试在线账号时显示对端断开、连接重置或响应截断的具体网络错误。

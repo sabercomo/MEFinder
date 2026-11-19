@@ -62,6 +62,16 @@ def resolve_mineru_config_path(root: Optional[Path] = None) -> Path:
     return DEFAULT_MINERU_CONFIG_PATH
 
 
+def _normalize_api_base(api_base: str) -> str:
+    base = api_base.strip().rstrip("/")
+    parsed = urlparse(base)
+    # The documentation shows full endpoints; callers append their own v4 path.
+    path = re.sub(
+        r"/api/v4(?:/(?:extract/task|file-urls/batch))?$", "", parsed.path
+    )
+    return parsed._replace(path=path).geturl()
+
+
 class MinerUError(UserFacingError):
     def __init__(
         self,
@@ -151,6 +161,8 @@ def read_mineru_config_data(path: Path = DEFAULT_MINERU_CONFIG_PATH) -> Dict[str
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict):
         raise MinerUError("MinerU config must contain a JSON object.")
+    if data.get("api_base"):
+        data["api_base"] = _normalize_api_base(str(data["api_base"]))
     return data
 
 
@@ -248,7 +260,7 @@ def save_mineru_config(updates: Dict[str, object], path: Path = DEFAULT_MINERU_C
                 raise MinerUError(f"{field} is too long.")
             data[field] = value
 
-    api_base = str(updates.get("api_base") or "").strip().rstrip("/")
+    api_base = _normalize_api_base(str(updates.get("api_base") or ""))
     if api_base:
         parsed = urlparse(api_base)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -636,7 +648,7 @@ def test_mineru_credential(
     """Test one resolved account Token without writing it to a temp config."""
 
     normalized_token = normalize_mineru_token(token)
-    base = str(api_base or DEFAULT_MINERU_API_BASE).strip().rstrip("/")
+    base = _normalize_api_base(str(api_base or DEFAULT_MINERU_API_BASE))
     parsed = urlparse(base)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise MinerUError("API 地址必须是以 http:// 或 https:// 开头的网址。")

@@ -42,6 +42,46 @@ class _FakeResponse:
 
 
 class MinerUConfigTests(unittest.TestCase):
+    def test_service_address_accepts_documented_mineru_endpoints(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mineru.json"
+            for base in ("https://mineru.net", "https://relay.example/mineru"):
+                for suffix in (
+                    "",
+                    "/api/v4",
+                    "/api/v4/extract/task",
+                    "/api/v4/file-urls/batch",
+                ):
+                    with self.subTest(base=base, suffix=suffix):
+                        summary = save_mineru_config(
+                            {"api_base": f"  {base}{suffix}/  "}, path
+                        )
+                        self.assertEqual(summary["api_base"], base)
+                        self.assertEqual(
+                            read_mineru_config_data(path)["api_base"], base
+                        )
+                        self.assertEqual(
+                            json.loads(path.read_text(encoding="utf-8"))["api_base"],
+                            base,
+                        )
+
+    def test_existing_task_endpoint_is_normalized_without_rewriting_config(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mineru.json"
+            original = json.dumps(
+                {
+                    "token": "fixture-token",
+                    "api_base": "https://mineru.net/api/v4/extract/task",
+                    "note": "keep",
+                }
+            )
+            path.write_text(original, encoding="utf-8")
+
+            self.assertEqual(load_mineru_config(path).api_base, "https://mineru.net")
+            self.assertEqual(mineru_config_summary(path)["api_base"], "https://mineru.net")
+            self.assertEqual(read_mineru_config_data(path)["note"], "keep")
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
+
     def test_clear_legacy_token_preserves_shared_service_settings(self) -> None:
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "mineru.json"
