@@ -189,6 +189,53 @@ class BrowserRegressionTests(unittest.TestCase):
         self.page.locator(".result-row").nth(1).click()
         self.assertEqual(hit.locator("mark math").count(), 1)
 
+    def test_search_renders_numbered_display_formulas_from_mineru(self) -> None:
+        formulas = (
+            r"\eta = (1 - C_{t} / C_{0}) \times 100 \%\tag{1}",
+            r"(a h v)^{1/n} = A\left(h v - E_{g}\right)\tag{3}",
+        )
+        texts = [
+            "光催化降解效率的计算如公式所示：\n$$\n" + formula + "\n$$\n式中各量的含义见正文"
+            for formula in formulas
+        ]
+        self.page.route("**/api/search", lambda route: route.fulfill(json={
+            "total": 2,
+            "results": [{
+                "document_title": "MinerU 独立公式反馈", "source_type": "pdf",
+                "citation_page_start": "12", "match_type": "exact", "match_score": 1,
+                "highlighted_html": "present", "paragraph_text": text,
+                "match_start": text.index(r"\tag"), "match_end": text.index(r"\tag") + 7,
+                "context_before": [{"text": texts[1 - index]}],
+                "context_after": [{"text": r"行内 $E_{g}$、角度 $27.16^{\circ}$"}],
+            } for index, text in enumerate(texts)],
+        }))
+        self.page.locator("#query").fill("公式")
+        self.page.locator("#query").press("Enter")
+        hit = self.page.locator(".detail-hit")
+        hit.wait_for()
+        for index, number in enumerate(("1", "3")):
+            self.page.locator(".result-row").nth(index).click()
+            self.assertEqual(hit.locator('math[display="block"]').count(), 1)
+            self.assertIn(f"({number})", hit.locator("mtext").all_text_contents())
+            self.assertEqual(hit.locator('mark math[display="block"]').count(), 1)
+            self.assertNotIn("$$", hit.inner_text())
+            self.assertNotIn(r"\tag", hit.inner_text())
+            self.assertEqual(
+                self.page.locator(".detail-context-before .detail-context-preview math[display=block]").count(),
+                1,
+            )
+            self.assertEqual(self.page.locator(".detail-context-after .detail-context-preview math").count(), 2)
+            self.assertEqual(self.page.locator(".detail-context-after math[display=block]").count(), 0)
+            copied = hit.evaluate("""node => {
+              const selection = getSelection();
+              selection.selectAllChildren(node);
+              const clipboardData = new DataTransfer();
+              node.dispatchEvent(new ClipboardEvent('copy', {bubbles: true, cancelable: true, clipboardData}));
+              selection.removeAllRanges();
+              return clipboardData.getData('text/plain');
+            }""")
+            self.assertEqual(copied, texts[index])
+
     def test_about_links_homebrew_and_platform_visibility(self) -> None:
         self.page.add_init_script("""localStorage.removeItem('meFinderSidebarCollapsed');
         Object.defineProperty(navigator, 'clipboard', {value: {

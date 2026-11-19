@@ -478,7 +478,10 @@
       if (!tex || (!/[\\_^=+*/<>-]/.test(tex) && !/^[\w.,()]+$/.test(tex))) continue;
       const formula = document.createElement('span');
       try {
-        global.katex.render(tex, formula, {output: 'mathml', trust: false, maxSize: 10});
+        // 与 KaTeX auto-render 一样，按分隔符选择独立公式模式，以支持 \tag。
+        global.katex.render(tex, formula, {
+          output: 'mathml', displayMode: match[1] !== undefined, trust: false, maxSize: 10
+        });
       } catch (error) {
         if (!(error instanceof global.katex.ParseError)) throw error;
         continue;  // 无法排版的公式按解析文本显示。
