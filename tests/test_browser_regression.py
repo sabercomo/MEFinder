@@ -189,6 +189,53 @@ class BrowserRegressionTests(unittest.TestCase):
         self.page.locator(".result-row").nth(1).click()
         self.assertEqual(hit.locator("mark math").count(), 1)
 
+    def test_search_renders_numbered_display_formulas_from_mineru(self) -> None:
+        formulas = (
+            r"\eta = (1 - C_{t} / C_{0}) \times 100 \%\tag{1}",
+            r"(a h v)^{1/n} = A\left(h v - E_{g}\right)\tag{3}",
+        )
+        texts = [
+            "光催化降解效率的计算如公式所示：\n$$\n" + formula + "\n$$\n式中各量的含义见正文"
+            for formula in formulas
+        ]
+        self.page.route("**/api/search", lambda route: route.fulfill(json={
+            "total": 2,
+            "results": [{
+                "document_title": "MinerU 独立公式反馈", "source_type": "pdf",
+                "citation_page_start": "12", "match_type": "exact", "match_score": 1,
+                "highlighted_html": "present", "paragraph_text": text,
+                "match_start": text.index(r"\tag"), "match_end": text.index(r"\tag") + 7,
+                "context_before": [{"text": texts[1 - index]}],
+                "context_after": [{"text": r"行内 $E_{g}$、角度 $27.16^{\circ}$"}],
+            } for index, text in enumerate(texts)],
+        }))
+        self.page.locator("#query").fill("公式")
+        self.page.locator("#query").press("Enter")
+        hit = self.page.locator(".detail-hit")
+        hit.wait_for()
+        for index, number in enumerate(("1", "3")):
+            self.page.locator(".result-row").nth(index).click()
+            self.assertEqual(hit.locator('math[display="block"]').count(), 1)
+            self.assertIn(f"({number})", hit.locator("mtext").all_text_contents())
+            self.assertEqual(hit.locator('mark math[display="block"]').count(), 1)
+            self.assertNotIn("$$", hit.inner_text())
+            self.assertNotIn(r"\tag", hit.inner_text())
+            self.assertEqual(
+                self.page.locator(".detail-context-before .detail-context-preview math[display=block]").count(),
+                1,
+            )
+            self.assertEqual(self.page.locator(".detail-context-after .detail-context-preview math").count(), 2)
+            self.assertEqual(self.page.locator(".detail-context-after math[display=block]").count(), 0)
+            copied = hit.evaluate("""node => {
+              const selection = getSelection();
+              selection.selectAllChildren(node);
+              const clipboardData = new DataTransfer();
+              node.dispatchEvent(new ClipboardEvent('copy', {bubbles: true, cancelable: true, clipboardData}));
+              selection.removeAllRanges();
+              return clipboardData.getData('text/plain');
+            }""")
+            self.assertEqual(copied, texts[index])
+
     def test_about_links_homebrew_and_platform_visibility(self) -> None:
         self.page.add_init_script("""localStorage.removeItem('meFinderSidebarCollapsed');
         Object.defineProperty(navigator, 'clipboard', {value: {
@@ -231,8 +278,8 @@ class BrowserRegressionTests(unittest.TestCase):
                                      "brew update && brew upgrade --cask mefinder")
                     self.assertTrue(panel.get_by_role("button", name="已复制").is_visible())
                 self.page.get_by_role("button", name="收起侧边栏").click()
-                self.wait_until(lambda: self.page.locator(".sidebar").bounding_box()["width"] == 64,
-                                "sidebar collapse must finish before measuring the panel")
+                self.page.locator(".app-top-nav .sidebar-nav").wait_for()
+                self.page.locator("html.nav-morph").wait_for(state="detached")
                 for width in (320, 375, 414, 768, 1280):
                     self.page.set_viewport_size({"width": width, "height": 900})
                     overflow = panel.evaluate("""node => [...node.querySelectorAll('*')]
@@ -244,6 +291,54 @@ class BrowserRegressionTests(unittest.TestCase):
                         "node => node.getBoundingClientRect().right <= innerWidth"))
                 self.assert_hidden_really_hidden("about/" + shell)
                 self.page.get_by_role("button", name="展开侧边栏").click()
+
+    def test_navigation_moves_to_titlebar_and_preserves_page_and_choice(self) -> None:
+        self.page.emulate_media(reduced_motion="reduce")
+        self.page.locator("#query").fill("社会关系")
+        self.page.evaluate("window.savedNavigation = document.querySelector('.sidebar-nav')")
+        self.page.get_by_role("button", name="收起侧边栏").click()
+        top = self.page.locator(".app-top-nav .sidebar-nav")
+        self.assertTrue(top.is_visible())
+        self.assertTrue(top.evaluate("nav => nav === window.savedNavigation"))
+        self.assertFalse(self.page.locator(".sidebar").is_visible())
+        self.assertEqual(self.page.locator("#query").input_value(), "社会关系")
+        self.assertEqual(top.get_by_role("button", name="文献检索").get_attribute("aria-current"), "page")
+        self.page.locator(".app-title-actions").get_by_role("button", name="设置").click()
+        self.assertTrue(self.page.locator("#page-settings").is_visible())
+        self.page.reload()
+        self.assertTrue(top.is_visible())
+        self.page.get_by_role("button", name="展开侧边栏").click()
+        self.assertTrue(self.page.locator(".sidebar .sidebar-nav").is_visible())
+        self.assertEqual(self.page.locator(".app-title-page").inner_text(), "文献检索")
+        self.page.set_viewport_size({"width": 320, "height": 800})
+        self.wait_until(top.is_visible, "narrow windows should use the top navigation")
+        self.assertTrue(top.get_by_role("button", name="文献导入").is_visible())
+        self.page.set_viewport_size({"width": 1280, "height": 800})
+        self.wait_until(self.page.locator(".sidebar .sidebar-nav").is_visible,
+                        "widening should restore the user's sidebar choice")
+
+    def test_titlebar_stays_in_one_row_and_keeps_the_sidebar_button_in_a_narrow_window(self) -> None:
+        self.page.emulate_media(reduced_motion="reduce")
+        self.page.set_viewport_size({"width": 531, "height": 800})
+        bar = self.page.locator(".app-titlebar")
+        nav = bar.locator(".app-top-nav")
+        toggle = bar.get_by_role("button", name="展开侧边栏")
+        self.assertTrue(toggle.is_visible())
+        self.page.locator('[data-page="works"]').evaluate("node => { node.hidden = false; }")
+        self.assertEqual(nav.get_by_role("button").count(), 5)
+        self.assertEqual(bar.bounding_box()["height"], 50)
+        self.assertTrue(nav.evaluate("""node => {
+            const style = getComputedStyle(node);
+            return node.scrollWidth === node.clientWidth && parseFloat(style.borderTopRightRadius) > 0;
+        }"""))
+        self.assertTrue(nav.get_by_text("文献导入", exact=True).is_visible())
+        brand = bar.get_by_text("MEFinder", exact=True)
+        self.assertEqual(brand.bounding_box()["x"], 12)
+        self.assertGreater(toggle.bounding_box()["x"], brand.bounding_box()["x"] + brand.bounding_box()["width"])
+        toggle.click()
+        self.assertTrue(self.page.locator(".sidebar #app-nav").is_visible())
+        self.assertEqual(brand.bounding_box()["x"], 12)
+        self.assertTrue(bar.get_by_role("button", name="收起侧边栏").is_visible())
 
     def test_about_macos_update_failure_and_retry(self) -> None:
         responses = [
@@ -741,6 +836,7 @@ class BrowserRegressionTests(unittest.TestCase):
         self.wait_until(lambda: any("Der Geist" in text for text in self.reader_texts()), "German text missing")
         self.assertEqual(self.page.locator("#mef-reader-title").inner_text(), "Phänomenologie des Geistes")
         self.assertEqual(self.reader_page_labels(), german_pages)
+        self.assertEqual(self.page.locator(".sidebar").evaluate("node => node.offsetWidth"), 64)
         self.assert_hidden_really_hidden("reader: German")
 
         self.page.get_by_role("button", name="左栏版本").click()
@@ -761,6 +857,7 @@ class BrowserRegressionTests(unittest.TestCase):
         self.page.wait_for_url(re.compile(r"/$"))
         self.page.locator(".tw-work-title").wait_for()
         self.assertEqual(self.page.locator(".mef-reader-source-pane:visible").count(), 0)
+        self.assertGreater(self.page.locator(".sidebar").evaluate("node => node.offsetWidth"), 64)
 
         versions.nth(1).click()  # Chinese translation, reopened from the works page
         self.page.wait_for_url(re.compile(r"/reader\?source=pdf-zh"))

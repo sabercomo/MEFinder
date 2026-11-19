@@ -623,24 +623,17 @@ class CalibrationLibraryProjectionTests(unittest.TestCase):
         self.assertIn("currentPage === 'library' ? global.MEFinder.library.load() : ensureSearchDocuments()", HTML)
         self.assertIn("refreshAfterChange: refreshLibraryData,", HTML)
 
-    def test_sidebar_can_collapse_to_an_icon_rail_and_persists(self) -> None:
-        # Toggle control, handler, and persisted state.
+    def test_sidebar_and_titlebar_share_the_main_navigation(self) -> None:
         self.assertIn('class="sidebar-collapse-btn"', HTML)
         self.assertIn('data-action="templateClick005"', HTML)
-        self.assertIn('function toggleSidebar(force)', HTML)
+        self.assertIn('function toggleSidebar()', HTML)
         self.assertIn("localStorage.setItem('meFinderSidebarCollapsed'", HTML)
-        # Early head script applies the class before paint to avoid a flash.
-        self.assertIn(
-            "localStorage.getItem('meFinderSidebarCollapsed') === '1'",
-            HTML,
-        )
-        # Collapsed width is driven through the shared variable so the desktop
-        # titlebar gradient (which reads --sidebar-width) stays in sync.
-        self.assertIn('html.sidebar-collapsed { --sidebar-width: 64px; }', HTML)
-        self.assertIn(
-            '.sidebar-collapsed .sidebar-item > span:not(.sidebar-icon) { display: none; }',
-            HTML,
-        )
+        self.assertIn("localStorage.getItem('meFinderSidebarCollapsed')", HTML)
+        self.assertEqual(HTML.count('id="app-nav"'), 1)
+        self.assertIn('aria-controls="app-nav"', HTML)
+        self.assertIn('<div class="app-top-nav"></div>', HTML)
+        self.assertIn('navSlot.prepend(nav);', HTML)
+        self.assertIn('.mef-reader-open .sidebar { width: 64px;', HTML)
 
     def test_library_drawer_actions_wrap_without_compressing_labels(self) -> None:
         drawer_rule = HTML.split('.drawer-actions {', 1)[1].split('}', 1)[0]

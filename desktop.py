@@ -57,7 +57,8 @@ APP_TITLE = "文献原句定位器"
 PORTABLE_MARKER = runtime_location.PORTABLE_MARKER
 INSTALLED_MARKER = runtime_location.INSTALLED_MARKER
 DESKTOP_SHELL_ENV = "ME_FINDER_DESKTOP_SHELL"
-MACOS_TITLEBAR_HEIGHT = 28.0
+# Keep the AppKit drag target above the main toolbar's clickable controls.
+MACOS_DRAG_STRIP_HEIGHT = 8.0
 MACOS_TRAFFIC_LIGHT_SAFE_WIDTH = 82.0
 
 _macos_drag_strip_class = None
@@ -386,7 +387,8 @@ def _install_macos_native_drag_strip(window, native_window, appkit) -> None:
     content_view = native_window.contentView()
     if content_view is None or not hasattr(appkit, "NSView"):
         return
-    if getattr(window, "_mefinder_native_drag_strip", None) is not None:
+    previous = getattr(window, "_mefinder_native_drag_strip", None)
+    if previous is not None and previous.superview() is content_view:
         return
 
     if _macos_drag_strip_class is None:
@@ -406,36 +408,24 @@ def _install_macos_native_drag_strip(window, native_window, appkit) -> None:
 
         _macos_drag_strip_class = MEFinderNativeDragStrip
 
-    drag_strip = _macos_drag_strip_class.alloc().initWithFrame_(
+    drag_strip = _macos_drag_strip_class.alloc().initWithFrame_(appkit.NSZeroRect)
+    content_view.addSubview_(drag_strip)
+    bounds = content_view.bounds()
+    flipped = content_view.isFlipped()
+    drag_strip.setFrame_(
         appkit.NSMakeRect(
             MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
-            0.0,
+            0.0 if flipped else bounds.size.height - MACOS_DRAG_STRIP_HEIGHT,
             max(
                 0.0,
-                float(content_view.bounds().size.width)
-                - MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
+                bounds.size.width - MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
             ),
-            MACOS_TITLEBAR_HEIGHT,
+            MACOS_DRAG_STRIP_HEIGHT,
         )
     )
-    drag_strip.setTranslatesAutoresizingMaskIntoConstraints_(False)
-    content_view.addSubview_(drag_strip)
-    constraints = [
-        drag_strip.leadingAnchor().constraintEqualToAnchor_constant_(
-            content_view.leadingAnchor(),
-            MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
-        ),
-        drag_strip.trailingAnchor().constraintEqualToAnchor_(
-            content_view.trailingAnchor()
-        ),
-        drag_strip.topAnchor().constraintEqualToAnchor_(content_view.topAnchor()),
-        drag_strip.heightAnchor().constraintEqualToConstant_(MACOS_TITLEBAR_HEIGHT),
-    ]
-    appkit.NSLayoutConstraint.activateConstraints_(constraints)
-    # Native views retain their children, while these Python references also
-    # keep the PyObjC subclass and its constraints alive for the window lifetime.
+    vertical_margin = appkit.NSViewMaxYMargin if flipped else appkit.NSViewMinYMargin
+    drag_strip.setAutoresizingMask_(appkit.NSViewWidthSizable | vertical_margin)
     window._mefinder_native_drag_strip = drag_strip
-    window._mefinder_native_drag_constraints = constraints
 
 
 def configure_macos_titlebar(window) -> None:
@@ -460,6 +450,13 @@ def configure_macos_titlebar(window) -> None:
                 getattr(AppKit, "NSTitlebarSeparatorStyleNone", 0)
             )
         _install_macos_native_drag_strip(window, native_window, AppKit)
+        if getattr(window, "_mefinder_native_drag_strip", None) is not None:
+            from PyObjCTools.AppHelper import callAfter
+
+            # pywebview installs its WKWebView as the content view on first navigation.
+            window.events.loaded += functools.partial(
+                callAfter, _install_macos_native_drag_strip, window, native_window, AppKit
+            )
         try:
             titlebar_view = (
                 native_window.contentView().superview().subviews().lastObject()

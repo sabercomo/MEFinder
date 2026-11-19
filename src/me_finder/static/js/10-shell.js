@@ -201,11 +201,16 @@
     if (global.MEFinder.works) global.MEFinder.works.closeOverlays();
     currentPage = page;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.sidebar-item').forEach(a => a.classList.remove('active'));
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+      const active = item.dataset.page === page;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
     const target = document.getElementById('page-' + page);
     if (target) target.classList.add('active');
     const link = document.querySelector('.sidebar-item[data-page="' + page + '"]');
-    if (link) link.classList.add('active');
+    if (link) document.querySelector('.app-title-page').textContent = link.title;
     if (page === 'library' && !libraryStore.loaded) global.MEFinder.library.load();
     if (page === 'works') global.MEFinder.works.load();
     if (page === 'materials') global.MEFinder.materials.refresh();
@@ -223,28 +228,63 @@
     }
   }
 
-  function toggleSidebar(force) {
-    var collapsed = typeof force === 'boolean'
-      ? force
-      : !document.documentElement.classList.contains('sidebar-collapsed');
-    document.documentElement.classList.toggle('sidebar-collapsed', collapsed);
-    var btn = document.querySelector('.sidebar-collapse-btn');
-    if (btn) {
-      var label = collapsed ? '展开侧边栏' : '收起侧边栏';
-      btn.setAttribute('aria-label', label);
-      btn.setAttribute('title', label);
+  // Adapted from Magpie v0.1.4512 layoutNav and navMorph (MIT, © 2026 yetone).
+  const root = document.documentElement;
+  const sidebarToggle = document.querySelector('.sidebar-collapse-btn');
+  let narrowNavigation, defaultTopNavigation, navPick, navTransition;
+
+  function layoutNavigation() {
+    const top = narrowNavigation.matches || (navPick === null ? defaultTopNavigation.matches : navPick === '1');
+    const nav = document.getElementById('app-nav');
+    const settings = document.querySelector('.sidebar-item[data-page="settings"]');
+    const focus = document.activeElement;
+    root.classList.toggle('top-navigation', top);
+    const navSlot = document.querySelector(top ? '.app-top-nav' : '.sidebar');
+    const settingsSlot = top ? document.querySelector('.app-title-actions') : nav;
+    if (nav.parentElement !== navSlot) {
+      navSlot.prepend(nav);
+      settingsSlot.append(settings);
+      if (nav.contains(focus) || focus === settings) focus.focus({preventScroll: true});
     }
-    try { localStorage.setItem('meFinderSidebarCollapsed', collapsed ? '1' : '0'); } catch (_) {}
+    const label = top ? '展开侧边栏' : '收起侧边栏';
+    sidebarToggle.setAttribute('aria-label', label);
+    sidebarToggle.setAttribute('aria-pressed', String(!top));
+    sidebarToggle.title = label;
   }
-  (function syncSidebarToggle() {
-    var collapsed = document.documentElement.classList.contains('sidebar-collapsed');
-    var btn = document.querySelector('.sidebar-collapse-btn');
-    if (btn) {
-      var label = collapsed ? '展开侧边栏' : '收起侧边栏';
-      btn.setAttribute('aria-label', label);
-      btn.setAttribute('title', label);
+
+  function toggleSidebar() {
+    navPick = root.classList.contains('top-navigation') ? '0' : '1';
+    try { localStorage.setItem('meFinderSidebarCollapsed', navPick); } catch (error) { console.warn(error); }
+    if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        || (window.pywebview && !desktopShell)) {
+      layoutNavigation();
+      return;
     }
-  })();
+    navTransition?.skipTransition();
+    root.classList.add('nav-morph');
+    const transition = document.startViewTransition(layoutNavigation);
+    navTransition = transition;
+    const timeout = setTimeout(() => transition.skipTransition(), 1500);
+    transition.finished.finally(() => {
+      clearTimeout(timeout);
+      if (navTransition === transition) {
+        navTransition = null;
+        root.classList.remove('nav-morph');
+      }
+    });
+  }
+
+  if (sidebarToggle) {
+    try { navPick = localStorage.getItem('meFinderSidebarCollapsed'); } catch (error) {
+      console.warn(error);
+      navPick = null;
+    }
+    narrowNavigation = window.matchMedia('(width < 480px)');
+    defaultTopNavigation = window.matchMedia('(max-width: 839px)');
+    narrowNavigation.addEventListener('change', layoutNavigation);
+    defaultTopNavigation.addEventListener('change', layoutNavigation);
+    layoutNavigation();
+  }
 
   // 浏览器公共面：仅这些符号可被其它 static/js 文件与 09-template-actions.js 的模板动作访问。
   global.minimizeWindowsWindow = minimizeWindowsWindow;

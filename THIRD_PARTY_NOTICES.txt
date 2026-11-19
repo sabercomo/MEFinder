@@ -255,6 +255,16 @@ The MIT-licensed provider SVG assets are distributed with MEFinder. Product
 names and logos may also be trademarks of their respective owners; the MIT
 license does not grant trademark rights.
 
+Magpie v0.1.4512
+----------------
+Copyright (c) 2026 yetone
+License: MIT
+Source: https://github.com/yetone/magpie/tree/v0.1.4512
+
+MEFinder's navigation relocation and view transition adapt code from
+Magpie's internal/gui/assets/app.js and app.css.
+The Common MIT License Text below applies.
+
 Common MIT License Text
 -----------------------
 The following text applies to the MIT-licensed components above except where

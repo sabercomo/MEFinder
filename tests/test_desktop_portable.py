@@ -514,23 +514,6 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertEqual(native_window.standard_button_requests, [])
 
     def test_macos_native_drag_strip_uses_cocoa_window_dragging(self) -> None:
-        class Anchor:
-            def __init__(self, name: str) -> None:
-                self.name = name
-
-            def constraintEqualToAnchor_(self, other: "Anchor") -> tuple:
-                return self.name, other.name, 0.0
-
-            def constraintEqualToAnchor_constant_(
-                self,
-                other: "Anchor",
-                constant: float,
-            ) -> tuple:
-                return self.name, other.name, constant
-
-            def constraintEqualToConstant_(self, constant: float) -> tuple:
-                return self.name, constant
-
         class FakeNSView:
             @classmethod
             def alloc(cls):
@@ -538,33 +521,31 @@ class DesktopPortableTests(unittest.TestCase):
 
             def __init__(self) -> None:
                 self.frame = None
-                self.translates_mask = True
+                self.autoresizing_mask = None
                 self.children = []
 
             def initWithFrame_(self, frame: tuple):
                 self.frame = frame
                 return self
 
-            def setTranslatesAutoresizingMaskIntoConstraints_(self, value: bool) -> None:
-                self.translates_mask = value
+            def setFrame_(self, frame: tuple) -> None:
+                self.frame = frame
+
+            def setAutoresizingMask_(self, mask: int) -> None:
+                self.autoresizing_mask = mask
 
             def addSubview_(self, child: "FakeNSView") -> None:
                 self.children.append(child)
+                child.parent = self
+
+            def superview(self):
+                return self.parent
 
             def bounds(self):
-                return types.SimpleNamespace(size=types.SimpleNamespace(width=1000.0))
+                return types.SimpleNamespace(size=types.SimpleNamespace(width=1000.0, height=800.0))
 
-            def leadingAnchor(self) -> Anchor:
-                return Anchor("leading")
-
-            def trailingAnchor(self) -> Anchor:
-                return Anchor("trailing")
-
-            def topAnchor(self) -> Anchor:
-                return Anchor("top")
-
-            def heightAnchor(self) -> Anchor:
-                return Anchor("height")
+            def isFlipped(self) -> bool:
+                return True
 
         class NativeWindow:
             def __init__(self) -> None:
@@ -577,29 +558,34 @@ class DesktopPortableTests(unittest.TestCase):
             def contentView(self) -> FakeNSView:
                 return self.content
 
-        activated = []
         appkit = types.SimpleNamespace(
             NSView=FakeNSView,
             NSMakeRect=lambda x, y, width, height: (x, y, width, height),
-            NSLayoutConstraint=types.SimpleNamespace(
-                activateConstraints_=lambda constraints: activated.extend(constraints)
-            ),
+            NSZeroRect=(0, 0, 0, 0),
+            NSViewWidthSizable=2,
+            NSViewMinYMargin=8,
+            NSViewMaxYMargin=32,
         )
         native_window = NativeWindow()
         window = types.SimpleNamespace()
 
         with mock.patch.object(desktop, "_macos_drag_strip_class", None):
             desktop._install_macos_native_drag_strip(window, native_window, appkit)
+            initial_view = native_window.content
+            initial_strip = window._mefinder_native_drag_strip
+            native_window.content = FakeNSView()
+            desktop._install_macos_native_drag_strip(window, native_window, appkit)
+            desktop._install_macos_native_drag_strip(window, native_window, appkit)
 
         strip = window._mefinder_native_drag_strip
         self.assertTrue(native_window.movable)
+        self.assertEqual(initial_view.children, [initial_strip])
+        self.assertIsNot(strip, initial_strip)
         self.assertEqual(native_window.content.children, [strip])
-        self.assertFalse(strip.translates_mask)
-        self.assertEqual(strip.frame, (82.0, 0.0, 918.0, 28.0))
+        self.assertEqual(strip.frame, (82.0, 0.0, 918.0, 8.0))
+        self.assertEqual(strip.autoresizing_mask, 2 | 32)
         self.assertTrue(strip.acceptsFirstMouse_(None))
         self.assertTrue(strip.mouseDownCanMoveWindow())
-        self.assertEqual(len(activated), 4)
-        self.assertEqual(window._mefinder_native_drag_constraints, activated)
 
     def test_macos_app_uses_bundle_resources(self) -> None:
         executable = "/Applications/MEFinder.app/Contents/MacOS/MEFinder"

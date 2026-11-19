@@ -616,11 +616,10 @@ class ThemeMarkupTests(unittest.TestCase):
             'class="macos-titlebar pywebview-drag-region"',
             rendered,
         )
-        self.assertIn('class="macos-titlebar-title">文献原句定位器</span>', rendered)
+        self.assertIn('<header class="app-titlebar">', rendered)
         self.assertIn('html[data-desktop-shell="macos"] .macos-titlebar', rendered)
-        self.assertIn("var(--sidebar-bg) var(--sidebar-width)", rendered)
-        self.assertIn("var(--app-bg) 100%", rendered)
-        self.assertIn("height: calc(100vh - var(--macos-titlebar-height));", rendered)
+        self.assertIn('html[data-desktop-shell="macos"] .app-title-lead { padding-left: 82px; }', rendered)
+        self.assertIn("inset: 0 0 0 82px;", rendered)
 
     def test_windows_desktop_shell_is_marked_before_first_paint(self) -> None:
         with mock.patch.dict(
@@ -657,13 +656,8 @@ class ThemeMarkupTests(unittest.TestCase):
             'html[data-desktop-shell="win32"] .windows-titlebar',
             rendered,
         )
-        self.assertIn("var(--sidebar-bg) var(--sidebar-width)", rendered)
-        self.assertIn("var(--app-bg) 100%", rendered)
-        self.assertIn(
-            "height: calc(100vh - var(--windows-titlebar-height));",
-            rendered,
-        )
-        self.assertIn("margin-top: var(--windows-titlebar-height);", rendered)
+        self.assertIn("margin-right: var(--windows-controls-width);", rendered)
+        self.assertIn("height: var(--titlebar-row-height);", rendered)
 
     def test_all_top_level_settings_sections_are_two_pane_panels(self) -> None:
         sections = {

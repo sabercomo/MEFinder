@@ -244,8 +244,8 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         """资源内联进 <style>/<script>，不引入额外的外部请求。"""
 
         self.assertEqual(HTML.count("<style>"), 2)
-        # 首屏侧栏折叠探测 / Vue / KaTeX / 应用脚本 / 阅读器脚本。
-        self.assertEqual(HTML.count("<script>"), 5)
+        # Vue / KaTeX / 应用脚本 / 阅读器脚本。
+        self.assertEqual(HTML.count("<script>"), 4)
         self.assertNotIn('src="/static/app.js', HTML)
         self.assertNotIn('href="/static/app.css', HTML)
         self.assertNotIn("<script src=", HTML)
@@ -706,11 +706,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.6.1 开发线：版本号更新，装配字节数不变。
     # 检索界面用随包的 KaTeX 以 MathML 排版公式。
     # 0.6.2：保留公式排版资源，按版本文字重算指纹。
-    # 0.6.3：MinerU 地址修复，界面仅版本文字变化。
+    # 0.6.3：主导航可在侧栏和顶栏之间切换，检索结果支持带编号的独立公式。
     BASELINE_SHA256 = (
-        "36414412230dfc0d04000e019a5237d2d1117b3b607161db461b7161c8b47987"
+        "f9324c0ca906def27ea692f8417672e54f65fe1178dd845dd1ef670bc015ef69"
     )
-    BASELINE_BYTES = 1848652
+    BASELINE_BYTES = 1852486
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

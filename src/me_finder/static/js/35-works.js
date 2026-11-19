@@ -1528,21 +1528,9 @@
     openAssignDialog(ids, {fromLibrary: true});
   }
 
-  // 阅读器（主窗口内）需要的宿主能力：侧栏收成图标栏、管理版本、安装入口、新窗口。
-  var sidebarBeforeReader = null;
+  // 阅读器关闭时把刚写出的位置一并交回。
   function onReaderOpenChange(open, savedPosition) {
-    var root = document.documentElement;
-    if (open) {
-      if (sidebarBeforeReader === null) sidebarBeforeReader = root.classList.contains('sidebar-collapsed');
-      root.classList.add('sidebar-collapsed');
-      return;
-    }
-    if (sidebarBeforeReader !== null) {
-      root.classList.toggle('sidebar-collapsed', sidebarBeforeReader);
-      sidebarBeforeReader = null;
-    }
-    // 阅读器关闭时把刚写出的位置一并交回：直接采用，不再清空后靠定时器
-    // 重新查询——那是在赌那一次写入已经落库。
+    if (open) return;
     if (savedPosition && savedPosition.document_group_id) {
       works.positions[savedPosition.document_group_id] = savedPosition.position || null;
     }
