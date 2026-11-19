@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: windows-release-smoke-${{ github.ref }}
@@ -56,6 +56,37 @@ jobs:
           .\build_windows_installer.ps1 -PythonExe python -PackagerPythonExe python
           .\build_portable_release.ps1 -PythonExe python -PackagerPythonExe python
 
+      - name: Upload unsigned Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEFinder-v0.6.3-windows-unsigned
+          if-no-files-found: error
+          path: |
+            release/MEFinder-v0.6.3-windows-setup.exe
+            release/MEFinder-v0.6.3-windows-setup.exe.sha256.txt
+            release/MEFinder-v0.6.3-windows-portable.zip
+            release/MEFinder-v0.6.3-windows-portable.zip.sha256.txt
+
+      - name: Publish unsigned Windows artifacts to draft
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $release = gh release view v0.6.3 `
+            --repo "${{ github.repository }}" `
+            --json isDraft | ConvertFrom-Json
+          if (-not $release.isDraft) {
+            throw "v0.6.3 is not a draft; refusing to overwrite published assets."
+          }
+          gh release upload v0.6.3 `
+            release/MEFinder-v0.6.3-windows-setup.exe `
+            release/MEFinder-v0.6.3-windows-setup.exe.sha256.txt `
+            release/MEFinder-v0.6.3-windows-portable.zip `
+            release/MEFinder-v0.6.3-windows-portable.zip.sha256.txt `
+            --clobber `
+            --repo "${{ github.repository }}"
+
       - name: Verify install, upgrade, MCP lifecycle, and uninstall
         shell: pwsh
         env:
@@ -81,8 +112,11 @@ jobs:
           $sidecar = Join-Path $installRoot "MEFinderMCP.exe"
           $desktop = Join-Path $installRoot "文献原句定位器.exe"
 
-          $oldProcess = Start-Process -FilePath $oldInstaller -Wait -PassThru `
+          $oldProcess = Start-Process -FilePath $oldInstaller -PassThru `
             -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
+          if (-not $oldProcess.WaitForExit(120000)) {
+            throw "v0.4.9 installer did not exit within 120 seconds."
+          }
           if ($oldProcess.ExitCode -ne 0) {
             throw "v0.4.9 installer exited with $($oldProcess.ExitCode)."
           }
@@ -102,8 +136,11 @@ jobs:
           Set-Content -LiteralPath (Join-Path $dataRoot "upgrade-sentinel.txt") `
             -Encoding UTF8 -Value "preserve across upgrade and uninstall"
 
-          $newProcess = Start-Process -FilePath $newInstaller -Wait -PassThru `
+          $newProcess = Start-Process -FilePath $newInstaller -PassThru `
             -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
+          if (-not $newProcess.WaitForExit(120000)) {
+            throw "v0.6.3 installer did not exit within 120 seconds."
+          }
           if ($newProcess.ExitCode -ne 0) {
             throw "v0.6.3 installer exited with $($newProcess.ExitCode)."
           }
@@ -136,8 +173,11 @@ jobs:
           if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
             throw "Inno Setup uninstaller was not installed."
           }
-          $uninstallProcess = Start-Process -FilePath $uninstaller -Wait -PassThru `
+          $uninstallProcess = Start-Process -FilePath $uninstaller -PassThru `
             -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
+          if (-not $uninstallProcess.WaitForExit(120000)) {
+            throw "Uninstaller did not exit within 120 seconds."
+          }
           if ($uninstallProcess.ExitCode -ne 0) {
             throw "Uninstaller exited with $($uninstallProcess.ExitCode)."
           }
@@ -169,14 +209,3 @@ jobs:
           if ($remaining.Count -ne 0) {
             throw "MCP process cleanup failed: $($remaining.ProcessId -join ', ')."
           }
-
-      - name: Upload unsigned Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: MEFinder-v0.6.3-windows-unsigned
-          if-no-files-found: error
-          path: |
-            release/MEFinder-v0.6.3-windows-setup.exe
-            release/MEFinder-v0.6.3-windows-setup.exe.sha256.txt
-            release/MEFinder-v0.6.3-windows-portable.zip
-            release/MEFinder-v0.6.3-windows-portable.zip.sha256.txt

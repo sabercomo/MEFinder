@@ -119,6 +119,22 @@ class MCPPackagingTests(unittest.TestCase):
         self.assertIn("portable-moved", self.windows_workflow)
         self.assertIn('nargs="?"', self.sidecar_smoke)
 
+    def test_windows_release_gate_publishes_before_bounded_install_verification(
+        self,
+    ) -> None:
+        self.assertIn("contents: write", self.windows_workflow)
+        self.assertIn("gh release upload v0.6.3", self.windows_workflow)
+        self.assertIn("$release.isDraft", self.windows_workflow)
+        self.assertLess(
+            self.windows_workflow.index("Publish unsigned Windows artifacts"),
+            self.windows_workflow.index("Verify install, upgrade"),
+        )
+        # Installers launch the installed app. PowerShell -Wait follows that
+        # child and deadlocks until the job timeout, so wait only on the
+        # installer process itself.
+        self.assertNotIn("-Wait -PassThru", self.windows_workflow)
+        self.assertGreaterEqual(self.windows_workflow.count("WaitForExit(120000)"), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
