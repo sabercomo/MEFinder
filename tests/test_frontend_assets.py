@@ -707,10 +707,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 检索界面用随包的 KaTeX 以 MathML 排版公式。
     # 0.6.2：保留公式排版资源，按版本文字重算指纹。
     # 0.6.3：主导航可在侧栏和顶栏之间切换，检索结果支持带编号的独立公式。
+    # 0.6.3：检索结果按原文选区复制和收藏，标签选择器就地展开。
     BASELINE_SHA256 = (
-        "f9324c0ca906def27ea692f8417672e54f65fe1178dd845dd1ef670bc015ef69"
+        "7a5162ae97b09a534535c1b3a013321bbd2e617fbe34e8cd8867d06d4f91abd2"
     )
-    BASELINE_BYTES = 1852486
+    BASELINE_BYTES = 1867623
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

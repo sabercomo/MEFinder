@@ -49,6 +49,145 @@
     return path.join('/');
   }
 
+  function createPicker(selection, onResize, onSaved) {
+    const picker = node('div', 'materials-picker');
+    picker.setAttribute('role', 'dialog');
+    picker.setAttribute('aria-label', '给选中文字加标签');
+    const input = node('input', 'materials-input');
+    input.placeholder = '搜索或新建标签';
+    input.maxLength = 100;
+    input.autocomplete = 'off';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-label', input.placeholder);
+    input.setAttribute('aria-controls', 'materials-picker-options');
+    input.setAttribute('aria-expanded', 'true');
+    input.setAttribute('aria-autocomplete', 'list');
+    const list = node('div', 'materials-picker-list');
+    list.id = 'materials-picker-options';
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-label', '标签');
+    const status = node('span', 'materials-picker-status materials-secondary', '正在读取标签…');
+    status.setAttribute('role', 'status');
+    picker.append(input, list, status);
+
+    const known = new Set();
+    let choices = [];
+    let active = -1;
+    let loaded = false;
+
+    function setStatus(message, error = false) {
+      status.hidden = !message;
+      status.textContent = message;
+      status.classList.toggle('materials-error', error);
+    }
+
+    function setActive(index) {
+      const previous = list.children[active];
+      if (previous) {
+        previous.setAttribute('aria-selected', 'false');
+        previous.lastElementChild.hidden = true;
+      }
+      active = index;
+      const option = list.children[active];
+      if (option) {
+        option.setAttribute('aria-selected', 'true');
+        option.lastElementChild.hidden = false;
+        input.setAttribute('aria-activedescendant', option.id);
+      } else {
+        input.removeAttribute('aria-activedescendant');
+      }
+    }
+
+    async function applyTag(path, keepOpen) {
+      if (picker.inert) return;
+      picker.inert = true;
+      try {
+        const result = await post({action: 'collect', selections: [selection], tags: [path]});
+        global.dispatchEvent(new Event('mefinder-materials-change'));
+        onSaved(result, keepOpen);
+        if (keepOpen && picker.isConnected) {
+          for (let tag = path; tag; tag = parentPath(tag)) known.add(tag);
+          input.value = '';
+          render();
+        }
+      } catch (failure) {
+        setStatus(failure.message, true);
+        onResize();
+      } finally {
+        picker.inert = false;
+        if (picker.isConnected && !picker.hidden) input.focus({preventScroll: true});
+      }
+    }
+
+    function render() {
+      if (!loaded) return;
+      const query = input.value.trim().replace(/^#/, '').split(/[/／]/).map(part => part.trim()).join('/');
+      const term = query.toLowerCase();
+      const paths = [...known].filter(path => path.toLowerCase().includes(term)).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      const exact = known.has(query);
+      if (exact) {
+        paths.splice(paths.indexOf(query), 1);
+        paths.unshift(query);
+      }
+      choices = paths.map(path => ({path, create: false}));
+      let hint = query ? '' : '用 / 建立多级标签';
+      let invalid = false;
+      if (query && !exact) {
+        try {
+          choices.splice(2, 0, {path: normalizePath(input.value, ''), create: true});
+        } catch (error) {
+          hint = error.message;
+          invalid = true;
+        }
+      }
+      active = -1;
+      list.replaceChildren(...choices.map(({path, create}, index) => {
+        const option = button('', 'app-select-option' + (create ? ' materials-picker-create' : ''));
+        option.id = 'materials-picker-option-' + index;
+        option.tabIndex = -1;
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', 'false');
+        const label = node('span', 'materials-picker-path', create ? '＋ 创建并收录「' + path + '」' : displayPath(path));
+        label.title = label.textContent;
+        const shortcut = node('kbd', 'materials-picker-shortcut', '↵');
+        shortcut.setAttribute('aria-hidden', 'true');
+        shortcut.hidden = true;
+        option.append(label, shortcut);
+        option.addEventListener('mousedown', event => event.preventDefault());
+        option.addEventListener('click', () => applyTag(path, false));
+        return option;
+      }));
+      list.scrollTop = 0;
+      setActive(query && choices.length ? 0 : -1);
+      setStatus(hint, invalid);
+      onResize();
+    }
+
+    input.addEventListener('input', render);
+    input.addEventListener('keydown', event => {
+      if (event.isComposing) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (active >= 0) applyTag(choices[active].path, event.ctrlKey || event.metaKey);
+      } else if (choices.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setActive(active < 0 && step < 0 ? choices.length - 1 : (active + step + choices.length) % choices.length);
+        list.children[active].scrollIntoView({block: 'nearest'});
+      }
+    });
+    load().then(snapshot => {
+      if (!picker.isConnected) return;
+      for (const {path} of snapshot.material_tags) known.add(path);
+      loaded = true;
+      render();
+    }).catch(failure => {
+      setStatus(failure.message, true);
+      onResize();
+    });
+    return picker;
+  }
+
   function openDialog({selections, excerpt, parent = '', onSaved, onError}) {
     if (document.querySelector('.materials-dialog')) return;
     const create = !selections && !excerpt;
@@ -207,6 +346,6 @@
   }
 
   global.MEFinderMaterials = Object.freeze({
-    load, post, openDialog, selectionKey, tagTree, tagsByExcerpt, displayPath, tagName, parentPath, node, button,
+    load, post, openDialog, createPicker, selectionKey, tagTree, tagsByExcerpt, displayPath, tagName, parentPath, node, button,
   });
 }(window));

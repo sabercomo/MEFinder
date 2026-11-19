@@ -325,25 +325,33 @@
   }
 
   /* ═══ Search ═══ */
-  const materialSelection = new Set();
-  let resultTags = new Map();
+  let resultExcerpts = new Map();
   let tagListRequest = 0;
-
-  function excerptForResult(item) {
-    if (!item.source_file_id || !item.paragraph_id || !item.paragraph_text?.trim()) return null;
-    return {
-      source_id: item.source_file_id, kind: 'paragraph',
-      start_anchor: item.paragraph_id, end_anchor: item.paragraph_id,
-      start_offset: 0, end_offset: Array.from(item.paragraph_text).length, text: item.paragraph_text
-    };
-  }
+  const paragraphKey = (source, paragraph) => JSON.stringify([source, paragraph]);
 
   function renderResultTags(host, item) {
-    const selection = excerptForResult(item);
-    const paths = selection && resultTags.get(global.MEFinderMaterials.selectionKey(selection));
+    const excerpts = resultExcerpts.get(paragraphKey(item.source_file_id, item.paragraph_id));
+    const paths = excerpts?.find(excerpt => excerpt.start_offset === 0 && excerpt.text === item.paragraph_text)?.paths;
     host.replaceChildren();
     host.hidden = !paths?.length;
     if (paths?.length) host.appendChild(global.MEFinder.materials.chips(paths));
+  }
+
+  function renderSavedSentences(host, item) {
+    const excerpts = resultExcerpts.get(paragraphKey(item.source_file_id, item.paragraph_id)) || [];
+    host.replaceChildren();
+    if (excerpts.length) {
+      const text = Array.from(item.paragraph_text);
+      for (const excerpt of excerpts) {
+        if (excerpt.text === item.paragraph_text || !excerpt.paths.length ||
+            text.slice(excerpt.start_offset, excerpt.end_offset).join('') !== excerpt.text) continue;
+        const row = searchNode('div', 'materials-saved-sentence');
+        row.append(searchNode('p', '', excerpt.text), global.MEFinder.materials.chips(excerpt.paths));
+        host.append(row);
+      }
+    }
+    host.hidden = !host.childElementCount;
+    if (!host.hidden) host.prepend(searchNode('h3', 'materials-secondary', '已收集句子'));
   }
 
   async function refreshResultTags() {
@@ -353,12 +361,19 @@
       const library = await global.MEFinderMaterials.load();
       if (request !== tagListRequest) return;
       const tags = global.MEFinderMaterials.tagsByExcerpt(library);
-      resultTags = new Map(library.material_excerpts.map(item =>
-        [global.MEFinderMaterials.selectionKey(item), tags.get(item.excerpt_id)]));
+      resultExcerpts = new Map();
+      for (const excerpt of library.material_excerpts) {
+        if (excerpt.kind !== 'paragraph' || excerpt.start_anchor !== excerpt.end_anchor) continue;
+        const key = paragraphKey(excerpt.source_id, excerpt.start_anchor);
+        if (!resultExcerpts.has(key)) resultExcerpts.set(key, []);
+        resultExcerpts.get(key).push({...excerpt, paths: tags.get(excerpt.excerpt_id)});
+      }
       document.querySelectorAll('#results-list .materials-result-tags').forEach(host =>
         renderResultTags(host, searchStore.results[Number(host.closest('.result-row').dataset.index)]));
       const detail = document.getElementById('detail-material-tags');
       if (detail) renderResultTags(detail, selectedResult());
+      const sentences = document.getElementById('detail-saved-sentences');
+      if (sentences) renderSavedSentences(sentences, selectedResult());
     } catch (failure) {
       if (currentPage === 'search' && request === tagListRequest) {
         showToast('标签读取失败：' + failure.message, 'danger');
@@ -366,33 +381,6 @@
     }
   }
 
-  function updateMaterialSelection() {
-    const toolbar = document.getElementById('material-search-selection');
-    toolbar.hidden = !materialSelection.size;
-    document.getElementById('material-search-count').textContent = '已选 ' + materialSelection.size + ' 条';
-  }
-
-  function clearMaterialSelection() {
-    materialSelection.clear();
-    document.querySelectorAll('.material-result-checkbox:checked').forEach(input => { input.checked = false; });
-    updateMaterialSelection();
-  }
-
-  function addResultTags(selections, bulk) {
-    global.MEFinderMaterials.openDialog({
-      selections,
-      onSaved: ({created}) => {
-        if (bulk) clearMaterialSelection();
-        showToast(created ? '已收集 ' + created + ' 条语料' : '已保存标签', 'success');
-      },
-      onError: message => showToast(message, 'danger')
-    });
-  }
-
-  MEFinderActions.register('clearMaterialSearchSelection', clearMaterialSelection);
-  MEFinderActions.register('collectMaterialSearchSelection', () => {
-    addResultTags(Array.from(materialSelection, index => excerptForResult(searchStore.results[index])), true);
-  });
   global.addEventListener('mefinder-materials-change', refreshResultTags);
   global.addEventListener('focus', refreshResultTags);
 
@@ -408,7 +396,6 @@
     searchStore.selectedIndex = -1;
     searchStore.results = [];
     tagListRequest++;
-    clearMaterialSelection();
     showEmptyDetail();
 
     try {
@@ -539,6 +526,202 @@
     event.preventDefault();
   });
 
+  let detailSelection;
+  let paintedHit;
+  let selectingDetail = false;
+
+  function clearDetailSelection() {
+    if (paintedHit) {
+      paintedHit.classList.remove('has-text-selection');
+      global.CSS.highlights.delete('material-sentence');
+      paintedHit = null;
+    }
+    if (!detailSelection) return;
+    detailSelection.picker?.remove();
+    detailSelection.tools.remove();
+    detailSelection = null;
+  }
+
+  function selectionFragments(hit, range) {
+    const fragments = [];
+    const walker = document.createTreeWalker(hit, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!range.intersectsNode(node)) continue;
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.length;
+      // Leaving newline characters out of the paint prevents WebKit from filling the rest of the line.
+      for (const chunk of node.data.slice(start, end).matchAll(/[^\r\n]+/g)) {
+        if (!chunk[0].trim()) continue;
+        const fragment = new Range();
+        fragment.setStart(node, start + chunk.index);
+        fragment.setEnd(node, start + chunk.index + chunk[0].trimEnd().length);
+        fragments.push(fragment);
+      }
+    }
+    return fragments;
+  }
+
+  function paintDetailSelection(hit, fragments) {
+    if (!global.CSS.highlights || !fragments.length) return;
+    paintedHit = hit;
+    hit.classList.add('has-text-selection');
+    global.CSS.highlights.set('material-sentence', new Highlight(...fragments));
+  }
+
+  function locateDetailSelection() {
+    if (!detailSelection) return;
+    const {hit, fragments, tools, picker} = detailSelection;
+    const pane = hit.closest('.detail-scroll').getBoundingClientRect();
+    const rects = fragments.flatMap(fragment => Array.from(fragment.getClientRects()))
+      .filter(rect => rect.width > 0 && rect.bottom > pane.top && rect.top < pane.bottom);
+    const overlay = picker || tools;
+    if (picker) tools.hidden = true;
+    overlay.hidden = !rects.length;
+    if (overlay.hidden) return;
+
+    const first = rects[0];
+    const last = rects.at(-1);
+    const gap = 6;
+    const edge = 8;
+    const top = Math.max(pane.top, first.top);
+    const bottom = Math.min(pane.bottom, last.bottom);
+    const below = global.innerHeight - bottom - edge - gap;
+    const above = top - edge - gap;
+    const list = picker?.querySelector('.materials-picker-list');
+    const ideal = list ? Math.min(230, overlay.offsetHeight + list.scrollHeight - list.clientHeight) : overlay.offsetHeight;
+    const placeBelow = below >= ideal || below >= above;
+    if (picker) picker.style.maxHeight = Math.min(230, Math.max(64, placeBelow ? below : above)) + 'px';
+    const x = (placeBelow ? last : first).left;
+    const y = placeBelow ? bottom + gap : top - overlay.offsetHeight - gap;
+    overlay.style.top = Math.max(edge, Math.min(y, global.innerHeight - overlay.offsetHeight - edge)) + 'px';
+    overlay.style.left = Math.max(edge, Math.min(x, global.innerWidth - overlay.offsetWidth - edge)) + 'px';
+  }
+
+  function rawPassageOffset(hit, container, offset) {
+    // Reconstruct the indexed prefix, where rendered formulae count as their full source.
+    const prefix = document.createRange();
+    prefix.selectNodeContents(hit);
+    prefix.setEnd(container, offset);
+    const content = prefix.cloneContents();
+    content.querySelectorAll('[data-formula-source]').forEach(formula => formula.replaceWith(formula.dataset.formulaSource));
+    return Array.from(content.textContent).length;
+  }
+
+  function closeDetailPicker() {
+    const {picker, range, trigger} = detailSelection;
+    picker.remove();
+    detailSelection.picker = null;
+    trigger.setAttribute('aria-expanded', 'false');
+    locateDetailSelection();
+    trigger.focus({preventScroll: true});
+    const selection = global.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function updateDetailSelection() {
+    if (currentPage !== 'search' || detailSelection?.picker) return;
+    const selection = global.getSelection();
+    const hit = document.querySelector('#detail-panel .detail-hit');
+    if (!hit || !hit.getClientRects().length || selection.isCollapsed || !selection.rangeCount) {
+      clearDetailSelection();
+      return;
+    }
+    const range = selection.getRangeAt(0).cloneRange();
+    if (!hit.contains(range.startContainer) || !hit.contains(range.endContainer)) {
+      clearDetailSelection();
+      return;
+    }
+    const formulaAt = node => (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement).closest('[data-formula-source]');
+    const firstFormula = formulaAt(range.startContainer);
+    const lastFormula = formulaAt(range.endContainer);
+    if (firstFormula) range.setStartBefore(firstFormula);
+    if (lastFormula) range.setEndAfter(lastFormula);
+    const previous = detailSelection?.range;
+    if (previous && !range.compareBoundaryPoints(Range.START_TO_START, previous) &&
+        !range.compareBoundaryPoints(Range.END_TO_END, previous)) return;
+    clearDetailSelection();
+    const fragments = selectionFragments(hit, range);
+    paintDetailSelection(hit, fragments);
+    if (selectingDetail) return;
+    const item = selectedResult();
+    const start = rawPassageOffset(hit, range.startContainer, range.startOffset);
+    const end = rawPassageOffset(hit, range.endContainer, range.endOffset);
+    const text = Array.from(item.paragraph_text).slice(start, end).join('');
+    if (!text.trim()) return;
+    const excerpt = {
+      source_id: item.source_file_id, kind: 'paragraph',
+      start_anchor: item.paragraph_id, end_anchor: item.paragraph_id,
+      start_offset: start, end_offset: end, text
+    };
+    const {node, button, createPicker} = global.MEFinderMaterials;
+    const tools = node('div', 'materials-sentence-tools');
+    tools.setAttribute('role', 'toolbar');
+    tools.setAttribute('aria-label', '选中文字操作');
+    const copy = button('复制');
+    copy.classList.add('materials-copy-selection');
+    copy.setAttribute('aria-live', 'polite');
+    const trigger = button('＋ 加标签');
+    trigger.hidden = !excerpt.source_id || !excerpt.start_anchor;
+    trigger.setAttribute('aria-haspopup', 'dialog');
+    trigger.setAttribute('aria-expanded', 'false');
+    tools.append(copy, trigger);
+    tools.addEventListener('mousedown', event => event.preventDefault());
+    let copyTimer;
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        copy.textContent = '已复制';
+        clearTimeout(copyTimer);
+        copyTimer = setTimeout(() => { copy.textContent = '复制'; }, 1400);
+      } catch (error) {
+        showToast('复制失败：' + error.message, 'danger');
+      }
+    });
+    trigger.addEventListener('click', () => {
+      const picker = createPicker(excerpt, locateDetailSelection, ({created}, keepOpen) => {
+        if (!keepOpen && detailSelection?.picker === picker) {
+          global.getSelection().removeAllRanges();
+          clearDetailSelection();
+        }
+        showToast(created ? '已收集划选的原句' : '已保存标签', 'success');
+      });
+      detailSelection.picker = picker;
+      trigger.setAttribute('aria-expanded', 'true');
+      if (paintedHit) global.getSelection().removeAllRanges();
+      tools.after(picker);
+      locateDetailSelection();
+      picker.querySelector('input').focus({preventScroll: true});
+    });
+    hit.closest('.detail-card').append(tools);
+    detailSelection = {hit, range, fragments: fragments.length ? fragments : [range], tools, trigger, picker: null};
+    locateDetailSelection();
+  }
+
+  document.addEventListener('pointerdown', event => {
+    if (detailSelection?.tools.contains(event.target) || detailSelection?.picker?.contains(event.target)) return;
+    clearDetailSelection();
+    selectingDetail = !!event.target.closest('#detail-panel .detail-hit');
+  });
+  document.addEventListener('pointerup', () => {
+    if (!selectingDetail) return;
+    selectingDetail = false;
+    requestAnimationFrame(updateDetailSelection);
+  });
+  document.addEventListener('pointercancel', () => {
+    if (!selectingDetail) return;
+    selectingDetail = false;
+    updateDetailSelection();
+  });
+  document.addEventListener('selectionchange', updateDetailSelection);
+  document.addEventListener('keydown', event => {
+    if (currentPage !== 'search' || !detailSelection?.picker || event.isComposing || event.key !== 'Escape') return;
+    event.preventDefault();
+    closeDetailPicker();
+  });
+  global.addEventListener('scroll', locateDetailSelection, true);
+  global.addEventListener('resize', locateDetailSelection);
+
   function resultRowNode(item, index) {
     const score = Math.round(item.match_score * 100);
     const typeLabel = matchTypeLabel(item.match_type);
@@ -547,19 +730,6 @@
     row.dataset.index = String(index);
     row.dataset.action = 'selectSearchResult';
     var head = searchNode('div', 'result-row-head');
-    if (excerptForResult(item)) {
-      const checkbox = searchNode('input', 'material-result-checkbox');
-      checkbox.type = 'checkbox';
-      checkbox.setAttribute('aria-label', '选择第 ' + (index + 1) + ' 条语料');
-      checkbox.checked = materialSelection.has(index);
-      checkbox.addEventListener('click', event => event.stopPropagation());
-      checkbox.addEventListener('change', () => {
-        if (checkbox.checked) materialSelection.add(index);
-        else materialSelection.delete(index);
-        updateMaterialSelection();
-      });
-      head.appendChild(checkbox);
-    }
     head.appendChild(searchNode('span', 'result-score', score + '%'));
     head.appendChild(searchNode('span', 'result-match-type', typeLabel));
     head.appendChild(searchNode('span', 'result-title', item.document_title || item.work_title || item.volume_display || ''));
@@ -585,6 +755,7 @@
   }
 
   function showSearchResultsList() {
+    clearDetailSelection();
     closeAppSelects();
     const area = searchResultsArea();
     if (area) area.classList.remove('is-detail-open');
@@ -722,6 +893,7 @@
   }
 
   function showDetail(item) {
+    clearDetailSelection();
     const panel = document.getElementById('detail-panel');
     const pageLabel = formatCitationPageLabel(item);
     const sourceLabel = sourceFormatLabel(item);
@@ -772,6 +944,10 @@
     body.appendChild(hit);
     var after = detailContextNode(item.context_after, 'after');
     if (after) body.appendChild(after);
+    const saved = searchNode('section', 'materials-saved-sentences');
+    saved.id = 'detail-saved-sentences';
+    renderSavedSentences(saved, item);
+    body.appendChild(saved);
     scroll.appendChild(body);
     card.appendChild(scroll);
     var actions = searchNode('div', 'detail-actions');
@@ -799,13 +975,6 @@
     format.appendChild(formatMenu);
     actions.appendChild(format);
     actions.appendChild(detailAction('复制出处', 'copySelectedCitation'));
-    const excerpt = excerptForResult(item);
-    if (excerpt) {
-      const collect = searchNode('button', 'action-btn', '加标签');
-      collect.type = 'button';
-      collect.addEventListener('click', () => addResultTags([excerpt], false));
-      actions.appendChild(collect);
-    }
     if (item.source_file_id) {
       actions.appendChild(detailAction('查看结构化文本', 'openSelectedStructuredReader'));
       var open = detailAction('打开原文', 'openSearchSource', true);

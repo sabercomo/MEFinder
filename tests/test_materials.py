@@ -251,7 +251,14 @@ class MaterialsBrowserTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name)
         db = root / "index.sqlite3"
-        build_database(document(TEXTS), db)
+        texts = [TEXTS[0].replace("红外光谱", "红外\n光谱"), r"先验证 $x_{2}$ 的值。" + TEXTS[1],
+                 "历史整段收录仍然可以查看。"]
+        build_database(document(texts), db)
+        mutate_materials(db, {
+            "action": "collect", "tags": ["历史归档"], "selections": [selection(texts[2], index=2)],
+        })
+        mutate_materials(db, {"action": "create_tag", "path": "实验/表征/FTIR记录"})
+        mutate_materials(db, {"action": "create_tag", "path": "测量/流程/FTIR"})
         environment = patch.dict(os.environ, {"ME_FINDER_PREFERENCES": str(root / "preferences.json")})
         environment.start()
         self.addCleanup(environment.stop)
@@ -271,42 +278,131 @@ class MaterialsBrowserTests(unittest.TestCase):
         self.addCleanup(stop)
         with sync_playwright() as pw:
             browser = pw.chromium.launch(channel="chrome")
-            page = browser.new_page(viewport={"width": 1420, "height": 900})
+            page = browser.new_page(viewport={"width": 1420, "height": 900},
+                                    permissions=["clipboard-read", "clipboard-write"])
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_address[1]}/")
+            page.locator("#query").fill("历史整段")
+            page.locator("#query").press("Enter")
+            expect(page.locator("#results-list .materials-chip")).to_have_text("历史归档")
             page.locator("#query").fill("薄膜")
             page.locator("#query").press("Enter")
-            options = page.locator(".material-result-checkbox")
-            expect(options).to_have_count(2)
-            options.nth(0).check()
-            options.nth(1).check()
-            expect(page.locator("#material-search-count")).to_have_text("已选 2 条")
-            page.locator("#material-search-add").click()
-            dialog = page.locator(".materials-dialog")
-            expect(dialog).to_be_visible()
-            dialog.locator("#material-tag-name").fill("#实验/表征/FTIR")
-            dialog.get_by_role("button", name="添加", exact=True).click()
-            expect(dialog.get_by_role("checkbox", name="实验 / 表征 / FTIR")).to_be_checked()
-            dialog.get_by_role("button", name="收集", exact=True).click()
-            expect(dialog).to_have_count(0)
-            expect(page.locator("#material-search-selection")).to_be_hidden()
-            chips = page.locator("#results-list .materials-chip")
-            expect(chips).to_have_count(2)
-            chips.first.click()
+            rows = page.locator("#results-list .result-row")
+            expect(rows).to_have_count(2)
+            expect(rows.get_by_role("checkbox")).to_have_count(0)
+            expect(page.locator("#material-search-selection")).to_have_count(0)
+            toolbar = page.get_by_role("toolbar", name="选中文字操作")
+            picker = page.get_by_role("dialog", name="给选中文字加标签")
+            hit = page.locator(".detail-hit")
+            selected = ["薄膜的红外\n光谱保留峰位。", "薄膜的制备过程"]
+            tag_button = toolbar.get_by_role("button", name="加标签")
+            expect(toolbar).to_have_count(0)
+
+            for index, excerpt in enumerate(selected):
+                if index == 1:
+                    page.set_viewport_size({"width": 640, "height": 600})
+                    page.get_by_role("button", name="返回结果列表").click()
+                rows.filter(has_text=excerpt.splitlines()[0]).click()
+                hit.scroll_into_view_if_needed()
+                # Drag across real DOM text, including the separate search-highlight node.
+                coords = hit.evaluate("""(element, excerpt) => {
+                    const start = element.textContent.indexOf(excerpt);
+                    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+                    const rects = [];
+                    for (let node = walker.nextNode(), pos = 0; node; node = walker.nextNode()) {
+                        for (const index of [start, start + excerpt.length - 1]) {
+                            if (index < pos || index >= pos + node.length) continue;
+                            const range = new Range();
+                            range.setStart(node, index - pos);
+                            range.setEnd(node, index - pos + 1);
+                            const rect = range.getBoundingClientRect();
+                            rects.push([index === start ? rect.left + .5 : rect.right - .5,
+                                        rect.top + rect.height / 2]);
+                        }
+                        pos += node.length;
+                    }
+                    return rects;
+                }""", excerpt)
+                page.mouse.move(*coords[0])
+                page.mouse.down()
+                page.mouse.move(*coords[1], steps=8)
+                page.mouse.up()
+                expect(toolbar).to_be_visible()
+                self.assertEqual(page.evaluate("getSelection().toString()"), excerpt)
+                if index == 0:
+                    self.assertEqual(hit.evaluate("""element => {
+                        const tint = getComputedStyle(element, '::selection').backgroundColor;
+                        const segments = [...CSS.highlights.get('material-sentence')].map(range => range.toString());
+                        return {tint, segments};
+                    }"""), {"tint": "rgba(0, 0, 0, 0)", "segments": ["薄膜", "的红外", "光谱保留峰位。"]})
+                    toolbar.get_by_role("button", name="复制", exact=True).click()
+                    expect(toolbar.get_by_role("button", name="已复制")).to_be_visible()
+                    self.assertEqual(page.evaluate("navigator.clipboard.readText()"), excerpt)
+                    self.assertEqual(page.evaluate("getSelection().toString()"), excerpt)
+                tag_button.click()
+                expect(picker).to_be_visible()
+                expect(toolbar).to_be_hidden()
+                expect(page.locator(".materials-dialog")).to_have_count(0)
+                search = picker.get_by_role("combobox", name="搜索或新建标签")
+                expect(picker.get_by_role("option", name="历史归档", exact=True)).to_be_visible()
+                if index == 0:
+                    search.press("Escape")
+                    expect(picker).to_have_count(0)
+                    expect(tag_button).to_be_focused()
+                    self.assertEqual(page.evaluate("getSelection().toString()"), excerpt)
+                    tag_button.click()
+                    search.fill("#实验/表征/FTIR/峰位")
+                    expect(picker.get_by_role("status")).to_have_text("标签最多三级")
+                    expect(picker.get_by_role("option")).to_have_count(0)
+                    search.fill("FTIR")
+                    expect(picker.get_by_role("option", name="创建并收录「FTIR」")).to_be_visible()
+                    expect(picker.get_by_role("option", name="测量 / 流程 / FTIR", exact=True)).to_be_visible()
+                    search.fill("#实验/表征/FTIR")
+                    expect(picker.get_by_role("option", name="实验 / 表征 / FTIR记录")).to_be_visible()
+                    picker.get_by_role("option", name="创建并收录「实验/表征/FTIR」").click()
+                else:
+                    search.fill("ftir")
+                    expect(picker.get_by_role("option", name="实验 / 表征 / FTIR", exact=True)).to_be_visible()
+                    expect(picker.get_by_role("option", name="测量 / 流程 / FTIR", exact=True)).to_be_visible()
+                    bounds = picker.bounding_box()
+                    self.assertGreaterEqual(bounds["x"], 8)
+                    self.assertGreaterEqual(bounds["y"], 8)
+                    self.assertLessEqual(bounds["x"] + bounds["width"], 632)
+                    self.assertLessEqual(bounds["y"] + bounds["height"], 592)
+                    search.fill("实验/表征/FTIR")
+                    search.press("Meta+Enter")
+                    expect(picker).to_be_visible()
+                    expect(search).to_have_value("")
+                    expect(page.locator("#detail-saved-sentences .materials-chip")).to_have_text("实验 / 表征 / FTIR")
+                    search.fill("历史归档")
+                    search.press("Enter")
+                expect(picker).to_have_count(0)
+                expect(page.locator(".materials-saved-sentence p")).to_have_text(excerpt)
+
+            page.set_viewport_size({"width": 1420, "height": 900})
+            records = {row["text"]: row for row in list_materials(db)["material_excerpts"]}
+            self.assertEqual(set(records), {*selected, texts[2]})
+            for original, excerpt in zip(texts[:2], selected, strict=True):
+                start = original.index(excerpt)
+                self.assertEqual((records[excerpt]["start_offset"], records[excerpt]["end_offset"]),
+                                 (start, start + len(excerpt)))
+            expect(page.locator("#detail-saved-sentences .materials-chip")).to_have_count(2)
+            page.locator("#detail-saved-sentences").get_by_role("button", name="实验 / 表征 / FTIR").click()
             expect(page.locator("#materials-active-tag")).to_have_text("实验 / 表征 / FTIR")
             expect(page.locator("#materials-count")).to_have_text("2 条")
             page.locator(".materials-tree-tag").filter(has_text="表征").click()
             expect(page.locator("#materials-count")).to_have_text("2 条 · 含子标签")
             plus = page.get_by_role("button", name="在 实验 / 表征 下新建子标签")
             plus.click()
+            dialog = page.locator(".materials-dialog")
             dialog.locator("#material-tag-name").fill("XPS/能级")
             dialog.get_by_role("button", name="创建", exact=True).click()
             expect(dialog.locator(".materials-error")).to_have_text("标签最多三级")
             dialog.locator("#material-tag-name").fill("XPS")
             dialog.get_by_role("button", name="创建", exact=True).click()
             expect(page.locator("#materials-active-tag")).to_have_text("实验 / 表征 / XPS")
-            page.locator(".materials-tree-tag").filter(has_text="FTIR").click()
+            page.locator('.materials-tree-tag[data-tag-path="实验/表征/FTIR"]').click()
             page.locator("#materials-filter").fill("薄膜")
             expect(page.locator(".materials-excerpt-row")).to_have_count(2)
             with page.expect_download() as download:
@@ -314,7 +410,11 @@ class MaterialsBrowserTests(unittest.TestCase):
             markdown = Path(download.value.path()).read_text()
             self.assertIn("第 38 页", markdown)
             self.assertIn("第 39 页", markdown)
-            self.assertTrue(all(text in markdown for text in TEXTS))
+            quoted_text = markdown.replace("\n> ", "\n")
+            for text in selected:
+                self.assertIn(text, quoted_text)
+            for text in texts:
+                self.assertNotIn(text, quoted_text)
             page.locator(".materials-excerpt-title").first.click()
             expect(page.locator("#materials-detail")).to_be_visible()
             page.get_by_role("button", name="编辑备注", exact=True).click()
@@ -342,6 +442,6 @@ class MaterialsBrowserTests(unittest.TestCase):
             dialog.get_by_role("button", name="收集", exact=True).click()
             expect(dialog).to_have_count(0)
             after = list_materials(db)
-            self.assertEqual(len(after["material_excerpts"]), 3)
+            self.assertEqual(len(after["material_excerpts"]), 4)
             self.assertEqual(errors, [])
             browser.close()

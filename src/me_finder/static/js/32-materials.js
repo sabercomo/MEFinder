@@ -149,7 +149,7 @@
     }
     if (!visible.length) {
       list.appendChild(node('p', 'materials-empty', query ? '没有符合筛选条件的语料'
-        : active ? '此标签下暂无语料' : '在检索结果中勾选语料，或在阅读器中划选原文，再点「加标签」'));
+        : active ? '此标签下暂无语料' : '在检索结果或阅读器中划选原文，再点「加标签」'));
     }
     renderDetail(visible.find(excerpt => excerpt.excerpt_id === selected));
   }
