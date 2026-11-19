@@ -80,9 +80,11 @@ class MaterialsTests(unittest.TestCase):
                 connection.execute(f"DROP TABLE {table}")
             connection.execute("PRAGMA user_version=11")
             connection.commit()
-        self.assertTrue(migrate_index_database(self.db))
+        self.assertEqual(list_materials(self.db)["material_excerpts"], [])
         captured = self.collect(selection(TEXTS[0]))
         self.assertEqual(self.locate(captured["excerpt_ids"][0])["excerpt"]["citation_start"], "38")
+        with open_write(self.db) as connection:
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 12)
         self.assertFalse(migrate_index_database(self.db))
 
     def test_batch_is_atomic_and_repeated_collection_only_adds_tags(self) -> None:
@@ -176,6 +178,11 @@ class MaterialsTests(unittest.TestCase):
         restore = restore_backup(self.root, archive)
         restored_db = self.root / "restored.sqlite3"
         build_database(document([], source="other-source"), restored_db)
+        with open_write(restored_db) as connection:
+            for table in reversed(TABLES):
+                connection.execute(f"DROP TABLE {table}")
+            connection.execute("PRAGMA user_version=11")
+            connection.commit()
         replace_materials_snapshot(restore["materials_snapshot"], restored_db)
         self.assertEqual(list_materials(restored_db), list_materials(self.db))
         self.assertEqual(mutate_materials(restored_db, {"action": "locate", "excerpt_id": excerpt})["status"],

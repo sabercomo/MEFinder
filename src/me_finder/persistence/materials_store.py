@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterator
 
 from .connection import PROJECT_BUSY_TIMEOUT_MS, open_readonly_snapshot, open_write, table_exists
+from .migrations import migrate_index_database
 from .paragraph_payload import paragraph_from_database_row
 
 EXCERPT_FIELDS = (
@@ -41,6 +42,14 @@ def read_materials_snapshot(db_path: Path) -> dict[str, list]:
     return {table: [] for table in TABLES}
 
 
+def ensure_materials_schema(db_path: Path) -> None:
+    """Upgrade older indexes before their first material write."""
+    with open_readonly_snapshot(db_path) as connection:
+        if table_exists(connection, "material_excerpts"):
+            return
+    migrate_index_database(db_path)
+
+
 def insert_materials_snapshot(connection: sqlite3.Connection, snapshot: dict[str, list]) -> None:
     """Copy the material snapshot into an empty index."""
     for table, columns in TABLES.items():
@@ -52,6 +61,7 @@ def insert_materials_snapshot(connection: sqlite3.Connection, snapshot: dict[str
 
 def replace_materials_snapshot(snapshot: dict[str, list], db_path: Path) -> None:
     """Replace all material data atomically on restore."""
+    ensure_materials_schema(db_path)
     with open_write(db_path, immediate=True, busy_timeout_ms=PROJECT_BUSY_TIMEOUT_MS) as connection:
         for table in reversed(TABLES):
             connection.execute(f"DELETE FROM {table}")

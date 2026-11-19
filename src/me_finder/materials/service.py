@@ -61,6 +61,7 @@ def mutate_materials(db_path: Path, payload: object) -> dict:
         return export_materials_markdown(db_path, payload)
     if action not in ("create_tag", "collect", "edit", "locate"):
         raise UserFacingError("不支持的素材操作")
+    store.ensure_materials_schema(db_path)
     with open_write(db_path, immediate=True, busy_timeout_ms=PROJECT_BUSY_TIMEOUT_MS) as connection:
         if action == "create_tag":
             path = tag_path(payload.get("path"))
