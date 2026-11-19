@@ -24,6 +24,7 @@ from src.me_finder.application.script_search import execute_with_script_folding
 from src.me_finder.application.search_service import SearchRequest
 from src.me_finder.database import build_database
 from src.me_finder.normalization import compact_text, normalize_text, punctuationless_text
+from src.me_finder.persistence.index_schema import DATABASE_SCHEMA_VERSION
 from src.me_finder.persistence import short_gram_index as sgi
 from src.me_finder.persistence import short_gram_schema as sgs
 from src.me_finder.persistence.migrations import migrate_index_database
@@ -235,7 +236,7 @@ class ShortGramLifecycleTests(_Base):
     def test_build_queues_every_paragraph_and_drain_empties_the_queue(self) -> None:
         with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
             total = connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 11)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION)
         self.assertEqual(_pending(self.path), total)
         _drain_all(self.path)
         self.assertEqual(_pending(self.path), 0)
@@ -328,7 +329,7 @@ class ShortGramLifecycleTests(_Base):
             total = connection.execute("SELECT COUNT(*) FROM paragraphs").fetchone()[0]
         self.assertTrue(migrate_index_database(self.path))
         with contextlib.closing(sqlite3.connect(self.path)) as connection, connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 11)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION)
             self.assertTrue(sgi.short_gram_prefilter_ready(connection))
         self.assertEqual(_pending(self.path), total)
         _drain_all(self.path)
@@ -431,7 +432,7 @@ class OlderSqliteOnBuiltIndexTests(_Base):
             self._write_paragraphs()
             self.assertEqual(_pending(self.path), 2)
             with contextlib.closing(sqlite3.connect(self.path)) as connection:
-                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 11)
+                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION)
         _drain_all(self.path)
         self.assertSameAsPlainScan()
 

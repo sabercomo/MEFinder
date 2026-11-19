@@ -11,6 +11,7 @@ from .application.document_query_service import DocumentQueryError
 from .document_group_controller import DocumentGroupController
 from .import_assembly import ImportAssembly
 from .library_query_controller import LibraryQueryController
+from .materials.controller import MaterialsController
 from .errors import UserFacingError
 from .preferences import resolve_preferences_path
 
@@ -19,6 +20,7 @@ from .preferences import resolve_preferences_path
 class LibraryAssembly:
     document_group_controller: DocumentGroupController
     library_query_controller: LibraryQueryController
+    materials_controller: MaterialsController
     open_source_file: Callable[..., Dict[str, object]]
 
 
@@ -73,6 +75,7 @@ def assemble_library(
     return LibraryAssembly(
         document_group_controller=document_group_controller,
         library_query_controller=library_query_controller,
+        materials_controller=MaterialsController(index_runtime),
         open_source_file=open_source_file,
     )
 

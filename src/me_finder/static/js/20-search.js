@@ -325,6 +325,77 @@
   }
 
   /* ═══ Search ═══ */
+  const materialSelection = new Set();
+  let resultTags = new Map();
+  let tagListRequest = 0;
+
+  function excerptForResult(item) {
+    if (!item.source_file_id || !item.paragraph_id || !item.paragraph_text?.trim()) return null;
+    return {
+      source_id: item.source_file_id, kind: 'paragraph',
+      start_anchor: item.paragraph_id, end_anchor: item.paragraph_id,
+      start_offset: 0, end_offset: Array.from(item.paragraph_text).length, text: item.paragraph_text
+    };
+  }
+
+  function renderResultTags(host, item) {
+    const selection = excerptForResult(item);
+    const paths = selection && resultTags.get(global.MEFinderMaterials.selectionKey(selection));
+    host.replaceChildren();
+    host.hidden = !paths?.length;
+    if (paths?.length) host.appendChild(global.MEFinder.materials.chips(paths));
+  }
+
+  async function refreshResultTags() {
+    if (!searchStore.results.length) return;
+    const request = ++tagListRequest;
+    try {
+      const library = await global.MEFinderMaterials.load();
+      if (request !== tagListRequest) return;
+      const tags = global.MEFinderMaterials.tagsByExcerpt(library);
+      resultTags = new Map(library.material_excerpts.map(item =>
+        [global.MEFinderMaterials.selectionKey(item), tags.get(item.excerpt_id)]));
+      document.querySelectorAll('#results-list .materials-result-tags').forEach(host =>
+        renderResultTags(host, searchStore.results[Number(host.closest('.result-row').dataset.index)]));
+      const detail = document.getElementById('detail-material-tags');
+      if (detail) renderResultTags(detail, selectedResult());
+    } catch (failure) {
+      if (currentPage === 'search' && request === tagListRequest) {
+        showToast('标签读取失败：' + failure.message, 'danger');
+      }
+    }
+  }
+
+  function updateMaterialSelection() {
+    const toolbar = document.getElementById('material-search-selection');
+    toolbar.hidden = !materialSelection.size;
+    document.getElementById('material-search-count').textContent = '已选 ' + materialSelection.size + ' 条';
+  }
+
+  function clearMaterialSelection() {
+    materialSelection.clear();
+    document.querySelectorAll('.material-result-checkbox:checked').forEach(input => { input.checked = false; });
+    updateMaterialSelection();
+  }
+
+  function addResultTags(selections, bulk) {
+    global.MEFinderMaterials.openDialog({
+      selections,
+      onSaved: ({created}) => {
+        if (bulk) clearMaterialSelection();
+        showToast(created ? '已收集 ' + created + ' 条语料' : '已保存标签', 'success');
+      },
+      onError: message => showToast(message, 'danger')
+    });
+  }
+
+  MEFinderActions.register('clearMaterialSearchSelection', clearMaterialSelection);
+  MEFinderActions.register('collectMaterialSearchSelection', () => {
+    addResultTags(Array.from(materialSelection, index => excerptForResult(searchStore.results[index])), true);
+  });
+  global.addEventListener('mefinder-materials-change', refreshResultTags);
+  global.addEventListener('focus', refreshResultTags);
+
   async function runSearch() {
     const query = document.getElementById('query').value.trim();
     if (!query) return;
@@ -335,6 +406,9 @@
     statusEl.textContent = '检索中…';
     listEl.replaceChildren();
     searchStore.selectedIndex = -1;
+    searchStore.results = [];
+    tagListRequest++;
+    clearMaterialSelection();
     showEmptyDetail();
 
     try {
@@ -369,6 +443,7 @@
 
       listEl.replaceChildren(...searchStore.results.map((item, i) => resultRowNode(item, i)));
       selectResult(0, false);
+      refreshResultTags();
     } catch (err) {
       if (seq !== searchStore.sequence) return;
       statusEl.textContent = '检索失败：' + err.message;
@@ -469,6 +544,19 @@
     row.dataset.index = String(index);
     row.dataset.action = 'selectSearchResult';
     var head = searchNode('div', 'result-row-head');
+    if (excerptForResult(item)) {
+      const checkbox = searchNode('input', 'material-result-checkbox');
+      checkbox.type = 'checkbox';
+      checkbox.setAttribute('aria-label', '选择第 ' + (index + 1) + ' 条语料');
+      checkbox.checked = materialSelection.has(index);
+      checkbox.addEventListener('click', event => event.stopPropagation());
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) materialSelection.add(index);
+        else materialSelection.delete(index);
+        updateMaterialSelection();
+      });
+      head.appendChild(checkbox);
+    }
     head.appendChild(searchNode('span', 'result-score', score + '%'));
     head.appendChild(searchNode('span', 'result-match-type', typeLabel));
     head.appendChild(searchNode('span', 'result-title', item.document_title || item.work_title || item.volume_display || ''));
@@ -482,6 +570,10 @@
     var snippet = searchNode('div', 'result-snippet');
     appendHighlighted(snippet, item, 100);
     row.appendChild(snippet);
+    const tags = searchNode('div', 'materials-result-tags');
+    tags.addEventListener('click', event => event.stopPropagation());
+    renderResultTags(tags, item);
+    row.appendChild(tags);
     return row;
   }
 
@@ -647,6 +739,10 @@
     if (item.volume_display) pills.appendChild(searchNode('span', 'detail-pill', item.volume_display));
     pills.appendChild(searchNode('span', 'detail-pill', pageLabel));
     header.appendChild(pills);
+    const materialTags = searchNode('div', 'materials-result-tags');
+    materialTags.id = 'detail-material-tags';
+    renderResultTags(materialTags, item);
+    header.appendChild(materialTags);
     if (item.source_type === 'pdf') {
       var pageToggle = searchNode('div', 'page-detail-toggle', '页码详情 ▸');
       pageToggle.dataset.action = 'togglePageDetail';
@@ -700,6 +796,13 @@
     format.appendChild(formatMenu);
     actions.appendChild(format);
     actions.appendChild(detailAction('复制出处', 'copySelectedCitation'));
+    const excerpt = excerptForResult(item);
+    if (excerpt) {
+      const collect = searchNode('button', 'action-btn', '加标签');
+      collect.type = 'button';
+      collect.addEventListener('click', () => addResultTags([excerpt], false));
+      actions.appendChild(collect);
+    }
     if (item.source_file_id) {
       actions.appendChild(detailAction('查看结构化文本', 'openSelectedStructuredReader'));
       var open = detailAction('打开原文', 'openSearchSource', true);

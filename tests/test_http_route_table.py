@@ -110,7 +110,7 @@ class AssembledRouteTableTests(unittest.TestCase):
     def test_derived_policy_sets_equal_the_legacy_hand_written_sets(self) -> None:
         self.assertEqual(self.table.raw_body_post_paths, LEGACY_RAW_BODY_POST_PATHS)
         self.assertEqual(
-            self.table.data_root_mutating_post_paths, LEGACY_DATA_ROOT_MUTATING_POST_PATHS
+            self.table.data_root_mutating_post_paths, LEGACY_DATA_ROOT_MUTATING_POST_PATHS | {"/api/materials"}
         )
 
     def test_body_limits_are_declared_on_their_routes(self) -> None:

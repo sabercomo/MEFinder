@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterator, List, Mapping, Sequence, Tuple
 from unittest import mock
 
+from src.me_finder.persistence.materials_store import replace_materials_snapshot
 from src.me_finder.app_context import AppPaths
 from src.me_finder.application.backup_coordinator import BackupCoordinator
 from src.me_finder.application.document_import_coordinator import DocumentImportCoordinator
@@ -500,6 +501,7 @@ class ImportOrchestratorTests(unittest.TestCase):
             self.runtime,
             DurableOperationGate(),
             orchestrator,
+            restore_materials=replace_materials_snapshot,
             app_data_root=lambda: self.root / "app-data",
             restore=restore,
             config_lock=config_lock,
@@ -586,6 +588,7 @@ class ImportOrchestratorTests(unittest.TestCase):
             self.runtime,
             DurableOperationGate(),
             orchestrator,
+            restore_materials=replace_materials_snapshot,
             app_data_root=lambda: self.root / "app-data",
             restore=restore,
             config_lock=config_lock,

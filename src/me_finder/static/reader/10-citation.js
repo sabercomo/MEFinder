@@ -63,6 +63,7 @@
     state.elements.copyGbt.disabled = state.citationLoading ||
       !citationStyleCanCopy(target, 'gb');
     state.elements.clearSelection.hidden = !state.citationRange;
+    state.elements.tagSelection.hidden = !state.citationRange;
     state.elements.alignmentActions.hidden = !state.citationRange ||
       !state.alignmentTargets.length;
     Array.from(state.elements.alignmentActions.querySelectorAll('button')).forEach(
@@ -373,6 +374,41 @@
   }
 
 
+  function tagSelection() {
+    const target = state.citationRange;
+    if (!target) return;
+    const parts = [];
+    for (let index = target.startIndex; index <= target.endIndex; index++) {
+      const item = state.items.get(index);
+      if (!item) {
+        r.notify('选区已移出阅读窗口，请重新划选');
+        return;
+      }
+      const characters = Array.from(item.text_raw);
+      const start = index === target.startIndex ? target.startOffset : 0;
+      const end = index === target.endIndex ? target.endOffset : characters.length;
+      parts.push({item, anchor: r.itemAnchor(item, index), start, end, text: characters.slice(start, end).join('')});
+    }
+    if (parts.length > 1 && !parts[0].text) parts.shift();
+    if (parts.length > 1 && !parts.at(-1).text) parts.pop();
+    const first = parts[0];
+    const last = parts.at(-1);
+    const selection = {
+      source_id: state.sourceId, kind: first.item.item_type === 'pdf_page' ? 'pdf_page' : 'paragraph',
+      start_anchor: first.anchor, end_anchor: last.anchor,
+      start_offset: first.start, end_offset: last.end, text: parts.map(part => part.text).join('\n')
+    };
+    global.MEFinderMaterials.openDialog({
+      selections: [selection],
+      onSaved: ({created}) => {
+        clearCitationRange();
+        r.notify(created ? '已收集语料' : '已保存标签');
+      },
+      onError: message => { r.setAlert(message, 'error'); r.notify(message); }
+    });
+  }
+
+  r.tagSelection = tagSelection;
   r.updateCitationControls = updateCitationControls;
   r.toggleCitationMenu = toggleCitationMenu;
   r.clearCitationRange = clearCitationRange;

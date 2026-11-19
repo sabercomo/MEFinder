@@ -12,6 +12,7 @@ from src.me_finder.application.backup_coordinator import (
 )
 from src.me_finder.import_queue import ImportQueueFullError
 from src.me_finder.errors import UserFacingError
+from src.me_finder.persistence.materials_store import replace_materials_snapshot
 
 
 class FakeIndex:
@@ -87,6 +88,7 @@ class BackupCoordinatorTests(unittest.TestCase):
         kwargs = {
             "app_data_root": lambda: root / "app-data",
             "config_lock": config_lock,
+            "restore_materials": replace_materials_snapshot,
         }
         if write is not None:
             kwargs["write"] = write

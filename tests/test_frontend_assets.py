@@ -708,9 +708,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.6.2：保留公式排版资源，按版本文字重算指纹。
     # 0.6.3：MinerU 地址修复，界面仅版本文字变化。
     BASELINE_SHA256 = (
-        "a23356f150ef16188381f376e997766867ff26cf2e5c236c378064cfec26d2f6"
+        "36414412230dfc0d04000e019a5237d2d1117b3b607161db461b7161c8b47987"
     )
-    BASELINE_BYTES = 1810114
+    BASELINE_BYTES = 1848652
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

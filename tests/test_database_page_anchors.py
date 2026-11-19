@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from src.me_finder.persistence.index_schema import DATABASE_SCHEMA_VERSION
 from src.me_finder.database import (
     SCHEMA,
     build_database,
@@ -149,7 +150,7 @@ class DatabasePageAnchorTests(unittest.TestCase):
                 connection.close()
 
         expected = index["page_anchors"][0]
-        self.assertEqual(user_version, 11)
+        self.assertEqual(user_version, DATABASE_SCHEMA_VERSION)
         self.assertEqual(paragraph_id, expected["start_paragraph_id"])
         self.assertEqual(payload["source_file_id"], "word-a")
         self.assertEqual(
@@ -259,7 +260,7 @@ class DatabasePageAnchorTests(unittest.TestCase):
             finally:
                 connection.close()
 
-        self.assertEqual(user_version, 11)
+        self.assertEqual(user_version, DATABASE_SCHEMA_VERSION)
         self.assertEqual(columns, ["row_id", "paragraph_id", "payload_json"])
         self.assertEqual(result["deleted"]["page_anchors"], 2)
         self.assertEqual(len(remaining_payloads), 1)

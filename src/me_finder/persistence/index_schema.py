@@ -4,13 +4,41 @@ from pathlib import Path
 
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
-DATABASE_SCHEMA_VERSION = 11
+DATABASE_SCHEMA_VERSION = 12
 ANCHOR_SPEC_VERSION = 1
 PARAGRAPH_FTS_VERSION = 1
 
-SCHEMA = """
+MATERIALS_SCHEMA = (
+    """CREATE TABLE IF NOT EXISTS material_tags (
+        path TEXT PRIMARY KEY
+    )""",
+    """CREATE TABLE IF NOT EXISTS material_excerpts (
+        excerpt_id INTEGER PRIMARY KEY,
+        source_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK(kind IN ('paragraph', 'pdf_page')),
+        start_anchor TEXT NOT NULL,
+        end_anchor TEXT NOT NULL,
+        start_offset INTEGER NOT NULL CHECK(start_offset >= 0),
+        end_offset INTEGER NOT NULL CHECK(end_offset > 0),
+        text TEXT NOT NULL,
+        title TEXT NOT NULL,
+        author TEXT NOT NULL,
+        citation_start TEXT,
+        citation_end TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        UNIQUE(source_id, kind, start_anchor, end_anchor, start_offset, end_offset, text)
+    )""",
+    """CREATE TABLE IF NOT EXISTS material_excerpt_tags (
+        excerpt_id INTEGER NOT NULL REFERENCES material_excerpts(excerpt_id) ON DELETE CASCADE,
+        path TEXT NOT NULL REFERENCES material_tags(path),
+        PRIMARY KEY(excerpt_id, path)
+    )""",
+)
+
+SCHEMA = f"""
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 11;
+PRAGMA user_version = {DATABASE_SCHEMA_VERSION};
 
 CREATE TABLE metadata (
     key TEXT PRIMARY KEY,
@@ -212,3 +240,5 @@ CREATE INDEX idx_segment_paragraph_spans_source_position ON text_segment_paragra
 CREATE INDEX idx_alignment_runs_pair ON alignment_runs(document_group_id, pivot_source_file_id, target_source_file_id, status);
 CREATE INDEX idx_alignment_members_segment ON alignment_link_members(segment_id, side);
 """
+
+SCHEMA += ";\n".join(MATERIALS_SCHEMA) + ";\n"

@@ -128,6 +128,7 @@ def build_application_runtime(
         document_group_controller,
         page_mapping_controller,
         document_lifecycle_controller,
+        library.materials_controller,
     )
     preference_get_routes, preference_post_routes = assemble_preference_routes(
         preferences_controller

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from src.me_finder.database import optimize_database_storage
-from src.me_finder.persistence.index_schema import SCHEMA
+from src.me_finder.persistence.index_schema import DATABASE_SCHEMA_VERSION, SCHEMA
 from src.me_finder.persistence.migrations import Migration, migrate_index_database
 
 
@@ -31,7 +31,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 11
+                connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION
             )
             tables = {
                 row[0]
@@ -70,7 +70,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 11
+                connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION
             )
             columns = [
                 row[1]
@@ -118,7 +118,7 @@ class PersistenceMigrationTests(unittest.TestCase):
         connection = sqlite3.connect(str(self.database_path))
         try:
             self.assertEqual(
-                connection.execute("PRAGMA user_version").fetchone()[0], 11
+                connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION
             )
             columns = [
                 row[1]

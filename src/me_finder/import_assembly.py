@@ -47,6 +47,7 @@ from .pdf.extractors import extract_pdf_source
 from .pdf.import_service import detect_imported_pdf
 from .pdf.parser_adapters import parse_pdf_with_local_ocr, parse_pdf_with_mineru, parse_pdf_with_provider
 from .persistence import SQLiteDocumentHeadingStore, SQLiteDocumentReadRepository
+from .persistence.materials_store import replace_materials_snapshot
 from .preferences import read_preferences, resolve_preferences_path, record_backup_export
 from .pdf.runtime_page_mapping import apply_mapping_to_database
 from .search.engine import SearchEngine
@@ -218,6 +219,7 @@ def assemble_import(context: AppContext) -> ImportAssembly:
         write=write_backup,
         restore=restore_backup,
         config_lock=lambda: import_config_lock(),
+        restore_materials=replace_materials_snapshot,
     )
     archive_transfer_controller = build_archive_transfer_controller(
         backup_coordinator,

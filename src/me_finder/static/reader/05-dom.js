@@ -217,6 +217,8 @@
       'mef-reader-citation-action',
       'copy-gbt7714'
     );
+    var tagSelection = createButton('加标签', 'mef-reader-citation-action', 'tag-selection');
+    tagSelection.hidden = true;
     var clearSelection = createButton(
       '清除选区',
       'mef-reader-citation-clear',
@@ -229,6 +231,7 @@
     citationBar.appendChild(citationContext);
     citationBar.appendChild(copyFootnote);
     citationBar.appendChild(copyGbt);
+    citationBar.appendChild(tagSelection);
     citationBar.appendChild(alignmentActions);
     citationBar.appendChild(clearSelection);
 
@@ -384,6 +387,7 @@
       if (action === 'toggle-citation') r.toggleCitationMenu();
       if (action === 'copy-footnote') r.copyCachedCitation('chinese');
       if (action === 'copy-gbt7714') r.copyCachedCitation('gb');
+      if (action === 'tag-selection') r.tagSelection();
       if (action === 'locate-alignment') {
         r.locateInAlignedVersion(trigger.dataset.readerTarget || '');
       }
@@ -449,6 +453,7 @@
       citationContext: citationContext,
       copyFootnote: copyFootnote,
       copyGbt: copyGbt,
+      tagSelection: tagSelection,
       alignmentActions: alignmentActions,
       clearSelection: clearSelection,
       alert: alert,

@@ -21,6 +21,7 @@ from typing import (
     Sequence,
 )
 
+from .persistence.materials_store import insert_materials_snapshot, read_materials_snapshot
 from .persistence.connection import (
     open_build_target,
     open_readonly_index,
@@ -228,6 +229,8 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
             ),
         )
 
+    preserved_materials = read_materials_snapshot(db_path)
+
     raw_source_files = [
         item for item in index.get("source_files", []) if isinstance(item, dict)
     ]
@@ -306,6 +309,7 @@ def build_database(index: Dict[str, object], db_path: Path = DEFAULT_DATABASE_PA
         # SourceFiles now exist in the rebuilt DB; re-apply preserved groups,
         # skipping members whose source is gone and clearing a missing base.
         restore_document_group_snapshot(connection, preserved_document_groups)
+        insert_materials_snapshot(connection, preserved_materials)
 
         insert_remaining_index_rows(
             connection, index, volumes, works, paragraphs, page_anchors,

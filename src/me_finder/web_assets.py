@@ -81,6 +81,7 @@ READER_WINDOW_HTML = (
     .replace("//__THEME_JS__", _load_asset("static/js/05-theme-engine.js"), 1)
     .replace("//__API_JS__", _load_asset("static/js/07-api.js"), 1)
     .replace("//__ALIGNMENT_JOBS_JS__", _load_asset("static/js/15-alignment-jobs.js"), 1)
+    .replace("//__MATERIAL_TAGS_JS__", _load_asset("static/js/22-material-tags.js"), 1)
     .replace("//__READER_JS__", _load_reader_js(), 1)
     .replace("//__WINDOW_JS__", _load_asset("static/reader-window.js"), 1)
 )

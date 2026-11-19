@@ -67,6 +67,7 @@ class BackupCoordinator:
         jobs: BackupJobsPort,
         *,
         app_data_root: BackupRoot,
+        restore_materials: GroupSnapshotRestorer,
         write: BackupWriter = write_backup,
         restore: BackupRestorer = restore_backup,
         restore_groups: GroupSnapshotRestorer = replace_document_group_snapshot,
@@ -81,6 +82,7 @@ class BackupCoordinator:
         self._write = write
         self._restore = restore
         self._restore_groups = restore_groups
+        self._restore_materials = restore_materials
         self._restore_alignments = restore_alignments
         self._config_lock = config_lock
 
@@ -158,6 +160,9 @@ class BackupCoordinator:
                 group_snapshot = summary.get("document_group_snapshot")
                 if group_snapshot is not None:
                     self._restore_groups(group_snapshot, self._paths.index_path)
+                materials_snapshot = summary.get("materials_snapshot")
+                if materials_snapshot is not None:
+                    self._restore_materials(materials_snapshot, self._paths.index_path)
                 alignment_snapshot = summary.get("alignment_snapshot")
                 if alignment_snapshot is not None:
                     self._restore_alignments(

@@ -15,10 +15,11 @@ from .http_route_table import CNKI_CITATION_BODY, CNKI_LOOKUP_BODY, RoutePair, m
 def assemble_library_routes(
     library_query_controller,
     document_group_controller,
-    page_mapping_controller,
-    document_lifecycle_controller,
+    page_mapping_controller, document_lifecycle_controller,
+    materials_controller,
 ) -> RoutePair:
     get_routes = {
+        "/api/materials": materials_controller.list,
         "/api/index-meta": lambda _params: library_query_controller.index_metadata(),
         "/api/sources": lambda _params: library_query_controller.sources(),
         "/api/library": lambda params: library_query_controller.library(
@@ -31,6 +32,7 @@ def assemble_library_routes(
         "/api/document-groups": lambda _params: document_group_controller.list(),
     }
     post_routes = {
+        "/api/materials": mutating(materials_controller.mutate),
         "/api/document-groups/create": mutating(document_group_controller.create),
         "/api/document-groups/combine": document_group_controller.combine,
         "/api/document-groups/rename": mutating(document_group_controller.rename),

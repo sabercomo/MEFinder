@@ -72,6 +72,9 @@ def optimize_database_storage(
             "alignment_runs",
             "alignment_links",
             "alignment_link_members",
+            "material_tags",
+            "material_excerpts",
+            "material_excerpt_tags",
         )
         for table_name in table_names:
             destination_columns = [

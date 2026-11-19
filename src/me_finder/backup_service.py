@@ -17,6 +17,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Dict, List, Optional
 
 from .document_groups import read_document_group_snapshot
+from .materials.backup import decode_materials_snapshot
+from .persistence.materials_store import read_materials_snapshot
 from .import_config_store import import_config_lock, save_import_config
 from .alignment.snapshots import read_alignment_recipe_snapshot
 
@@ -28,6 +30,7 @@ BACKUP_VERSION = 3
 _CONFIG_FILE = "config/pdf_imports.json"
 _DOCUMENT_GROUPS_FILE = "config/document_groups.json"
 _ALIGNMENTS_FILE = "config/text_alignments.json"
+_MATERIALS_FILE = "config/materials.json"
 _MANIFEST_DIRS = (
     "corpus/processed/mineru/manifests",
     "corpus/processed/vision/manifests",
@@ -159,6 +162,11 @@ def create_backup(
         )
         included.append(_ALIGNMENTS_FILE)
 
+        if index_path is not None:
+            materials_snapshot = read_materials_snapshot(Path(index_path))
+            archive.writestr(_MATERIALS_FILE, json.dumps(materials_snapshot, ensure_ascii=False))
+            included.append(_MATERIALS_FILE)
+
         for relative_dir in _MANIFEST_DIRS:
             manifest_dir = runtime_root / relative_dir
             if manifest_dir.is_dir():
@@ -218,6 +226,7 @@ def _is_safe_member(name: str) -> bool:
         _CONFIG_FILE,
         _DOCUMENT_GROUPS_FILE,
         _ALIGNMENTS_FILE,
+        _MATERIALS_FILE,
     } or any(
         normalized.startswith(f"{relative_dir}/")
         for relative_dir in _MANIFEST_DIRS
@@ -288,6 +297,11 @@ def restore_backup(
         restored: List[str] = []
         group_snapshot = None
         alignment_snapshot = None
+        materials_snapshot = None
+
+        if _MATERIALS_FILE in names:
+            materials_snapshot = decode_materials_snapshot(archive.read(_MATERIALS_FILE))
+            restored.append(_MATERIALS_FILE)
 
         if _DOCUMENT_GROUPS_FILE in names:
             try:
@@ -364,4 +378,5 @@ def restore_backup(
         "count": len(restored),
         "document_group_snapshot": group_snapshot,
         "alignment_snapshot": alignment_snapshot,
+        "materials_snapshot": materials_snapshot,
     }

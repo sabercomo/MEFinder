@@ -52,6 +52,10 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
         </span>
         <span>文献库</span>
       </button>
+      <button class="sidebar-item" data-page="materials" title="素材库" type="button" id="materials-nav">
+        <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg></span>
+        <span>素材库</span>
+      </button>
       <button class="sidebar-item" data-page="works" title="译本对照" data-action="templateClick008" hidden>
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3.5" width="7" height="13" rx="1.5"/><rect x="11" y="3.5" width="7" height="13" rx="1.5"/></svg>
@@ -165,6 +169,12 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
               <div class="empty-state-hint">支持精确匹配和模糊检索</div>
             </div>
           </div>
+          <div class="library-selection-bar materials-selection-bar" id="material-search-selection" role="toolbar" aria-label="批量收集语料" hidden>
+            <button class="action-btn" id="material-search-clear" data-action="clearMaterialSearchSelection" type="button" aria-label="取消选择">×</button>
+            <span id="material-search-count"></span>
+            <span class="library-selection-spacer"></span>
+            <button class="action-btn primary" id="material-search-add" data-action="collectMaterialSearchSelection" type="button">加标签</button>
+          </div>
         </div>
         <div class="results-detail-pane">
           <div id="detail-panel">
@@ -176,6 +186,32 @@ try { if (localStorage.getItem('meFinderSidebarCollapsed') === '1') document.doc
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="page-materials" class="page">
+      <div class="page-header materials-page-header">
+        <div class="page-title">素材库</div>
+      </div>
+      <p class="materials-status" id="materials-status" role="status" hidden></p>
+      <div class="materials-layout">
+        <aside class="materials-sidebar" aria-label="标签">
+          <div class="materials-sidebar-header">
+            <span>标签</span>
+            <button class="materials-tree-control" id="materials-new-tag" type="button" aria-label="新建标签" title="新建标签">＋</button>
+          </div>
+          <div class="materials-tags" id="materials-tags"></div>
+        </aside>
+        <section class="materials-excerpt-pane" aria-label="摘录">
+          <div class="materials-list-header">
+            <h2 id="materials-active-tag">全部语料</h2>
+            <span class="materials-secondary" id="materials-count"></span>
+            <input class="materials-input" id="materials-filter" type="search" aria-label="筛选语料" placeholder="筛选语料…">
+            <button class="action-btn" id="materials-export" type="button" disabled>导出</button>
+          </div>
+          <div class="materials-excerpts" id="materials-excerpts"></div>
+        </section>
+        <aside class="materials-detail" id="materials-detail" aria-label="摘录详情" hidden></aside>
       </div>
     </div>
 

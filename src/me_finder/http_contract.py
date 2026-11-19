@@ -2,6 +2,7 @@
 
 GET_API_ROUTES = frozenset(
     {
+        "/api/materials",
         "/api/bibliographic-metadata",
         "/api/calibration",
         "/api/calibration-library",
@@ -46,6 +47,7 @@ GET_API_ROUTES = frozenset(
 
 POST_API_ROUTES = frozenset(
     {
+        "/api/materials",
         "/api/auto-page-mapping/accept",
         "/api/auto-page-mapping/apply",
         "/api/auto-page-mapping/detect",

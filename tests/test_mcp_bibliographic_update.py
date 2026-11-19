@@ -34,6 +34,7 @@ from src.me_finder.persistence.bibliographic_update_store import (
     read_bibliographic_update_snapshot,
     restore_bibliographic_update_snapshot,
 )
+from src.me_finder.persistence.index_schema import DATABASE_SCHEMA_VERSION
 from src.me_finder.persistence.migrations import migrate_index_database
 from tests.mcp_v1_fixture import PDF_SOURCE_ID, build_mcp_v1_fixture
 
@@ -353,7 +354,7 @@ class QueueSchemaTests(unittest.TestCase):
             connection = sqlite3.connect(index_path)
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             connection.close()
-            self.assertEqual(version, 11)
+            self.assertEqual(version, DATABASE_SCHEMA_VERSION)
 
             service = LiteratureVerificationService(lambda: Path(temp))
             service.propose_bibliographic_update(

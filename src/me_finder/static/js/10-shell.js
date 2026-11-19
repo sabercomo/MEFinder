@@ -208,6 +208,7 @@
     if (link) link.classList.add('active');
     if (page === 'library' && !libraryStore.loaded) global.MEFinder.library.load();
     if (page === 'works') global.MEFinder.works.load();
+    if (page === 'materials') global.MEFinder.materials.refresh();
     if (page === 'import') {
       if (!parserStore.visionConfigLoaded) global.MEFinder.visionProviders.load();
       if (!parserStore.mineruConfigLoaded) global.MEFinder.parserRuntime.loadMineruConfig();

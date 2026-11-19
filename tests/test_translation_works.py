@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from src.me_finder.persistence.index_schema import DATABASE_SCHEMA_VERSION
 from src.me_finder.alignment import translation_works
 from src.me_finder.alignment.overrides import (
     confirm_override,
@@ -606,7 +607,7 @@ class TranslationWorkMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "index.sqlite3"
             connection = sqlite3.connect(str(path))
-            connection.executescript(SCHEMA.replace("PRAGMA user_version = 11;", ""))
+            connection.executescript(SCHEMA.replace(f"PRAGMA user_version = {DATABASE_SCHEMA_VERSION};", ""))
             connection.execute("PRAGMA user_version = 6")
             connection.commit()
             connection.close()
@@ -620,7 +621,7 @@ class TranslationWorkMigrationTests(unittest.TestCase):
                     )
                 }
                 self.assertEqual(
-                    connection.execute("PRAGMA user_version").fetchone()[0], 11
+                    connection.execute("PRAGMA user_version").fetchone()[0], DATABASE_SCHEMA_VERSION
                 )
             finally:
                 connection.close()
