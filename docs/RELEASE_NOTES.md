@@ -1,8 +1,25 @@
+2026-11-20：**v0.6.3 正式发布并设为 Latest。** Windows 安装版、便携版与 macOS Apple Silicon / Intel 的 DMG、ZIP 及各自 SHA-256 共 12 个附件均已公开，状态与远端 digest 核对通过。下载见 [GitHub Release v0.6.3](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.3)。
+
+本版集成主窗口导航、MinerU 完整任务地址与带编号独立公式修复、文字素材库检索划选与一步加标签，以及 Zotero PDF 原位读取。详细功能与兼容性见 [0.6.3 版本记录](release-notes-0.6.3.md)。
+
+发布 tag `v0.6.3` 指向 `2811546`（产品源码 `9fffa1b`，Windows 工作流提交 `9719cfc`；这些提交的产品源码相同，后续只含 CI、测试和文档）。Mac arm64 构建内全量 unittest 2,902 项通过（44 跳过），Intel 2,902 项通过（49 跳过）；Windows 安装版与便携版各 2,903 项通过（58 跳过），安装、从 v0.4.9 升级、MCP 会话、卸载保留用户数据与便携版移动通过。Ruff、JavaScript、前端守卫、冻结 MCP、签名与安装镜像校验通过。macOS 为 ad-hoc 签名、未公证；Intel 经 Rosetta 构建，未在 Intel 真机人工验收；Windows 包未签名。Homebrew 独立 tap 已更新到 0.6.3，arm/intel digest 与本页一致。
+
+| 文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.6.3-macos-arm64.dmg` | 104,347,400 | `dce0676029256317fedcbaba47f7bc745b29a854c9398ba35e26557885c96c01` |
+| `MEFinder-v0.6.3-macos-arm64.zip` | 96,479,965 | `4446806e4bb2464da7f849e014e4606dbf6b040ffa998c7331aab646eb8f9b7d` |
+| `MEFinder-v0.6.3-macos-x86_64.dmg` | 109,207,851 | `a80603b5495399ea39131df22d6d5c7b55c7ad77acd6104dce80db60bb3139e6` |
+| `MEFinder-v0.6.3-macos-x86_64.zip` | 103,016,250 | `9ac464a947f4de17a4bac2b867746fe5e57818788b855deafc04e7db09731155` |
+| `MEFinder-v0.6.3-windows-setup.exe` | 82,222,320 | `ce4b959cacca366df0b5d54b08b62be96920b5974b18926cb8b205aa2100d4ae` |
+| `MEFinder-v0.6.3-windows-portable.zip` | 96,648,854 | `1191275545f3c1e3ae495e2440d023172052ff9bf37bd3070e2a5ffdbb732e25` |
+
+每个二进制文件均附同名 `.sha256.txt`。
+
 2026-11-17：**v0.6.2 正式发布。** Windows 安装版、便携版与 macOS Apple Silicon 共四个二进制及各自 SHA-256 已上传，八个附件状态与远端 digest 核对通过。下载见 [GitHub Release v0.6.2](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.2)。
 
-2026-11-19 核查补充：#24 截图中的完整 MinerU 接口地址仍会在 0.6.2 中重复拼接请求路径。补修已生成 [0.6.3 macOS arm64 本地测试包](release-notes-0.6.3.md)，尚未公开发布；范围及复现证据见 [连接核查报告](../reports/issue-24-connection-validation-2026-11-19.md)。
+2026-11-19 核查补充：#24 截图中的完整 MinerU 接口地址仍会在 0.6.2 中重复拼接请求路径。补修已生成 [0.6.3 版本记录](release-notes-0.6.3.md)，并已于 2026-11-20 随 v0.6.3 正式发布；范围及复现证据见 [连接核查报告](../reports/issue-24-connection-validation-2026-11-19.md)。
 
-macOS Intel 包已完成构建与核验（2,878 项通过、45 跳过；桌面程序与 MCP 侧车均为纯 x86_64、最低 macOS 12.0），因本机上行带宽不足暂未上传，补传后更新本页与 Release。
+macOS Intel 包已完成构建与核验（2,878 项通过、45 跳过；桌面程序与 MCP 侧车均为纯 x86_64、最低 macOS 12.0），因本机上行带宽不足暂未上传，补传后更新本页与 Release。2026-11-20：v0.6.3 的 Intel 包已随本版正式发布。
 
 本版修复 [#24](https://github.com/sabercomo/MEFinder/issues/24)：打包版对 MinerU 与在线 API 的 HTTPS 请求因冻结包缺少构建机解释器要求的 SSL 证书拒绝列表而全部失败。同时让 MinerU 检索结果在本机排版化学式、上下标和角度（已有文献无需重解析，框选单段仍复制原始公式文本），并在测试在线账号时显示对端断开、连接重置或响应截断的具体网络错误。
 
