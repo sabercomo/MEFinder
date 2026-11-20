@@ -6,9 +6,10 @@ name: Update Homebrew tap
 #   - 密钥 secrets.HOMEBREW_TAP_TOKEN：对该 tap 仓库有 contents:write 权限的 PAT
 # 缺任一项时任务如实失败,不会静默跳过。
 #
-# 三种触发:release published(网页发布最可靠)、push tag v*(命令行/API 发布的兜底,
-# 发布草稿时才创建的 tag 会触发它)、workflow_dispatch(手动补跑)。三者可能对同一版本
-# 各触发一次,但 update_homebrew_tap.py 幂等——内容无变化时跳过提交,重复运行安全。
+# 三种触发:release published(网页发布最可靠)、push tag v*(命令行/API 发布的兜底)、
+# workflow_dispatch(手动补跑)。三者可能对同一版本各触发一次,但 update_homebrew_tap.py
+# 幂等——内容无变化时跳过提交,重复运行安全。若对应 Release 仍是 draft,tag 触发的运行
+# 会跳过,避免 cask 指向尚不可公开下载的附件;正式发布事件随后会正常更新 tap。
 
 on:
   release:
@@ -63,7 +64,33 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "解析到版本:$version"
 
+      - name: Check release is published
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          if ! is_draft="$(gh release view "v${VERSION}" \
+            --repo "${{ github.repository }}" \
+            --json isDraft \
+            --jq '.isDraft' 2>/dev/null)"; then
+            echo "找不到 v${VERSION} 的 Release，Homebrew 更新稍后由正式发布触发。" >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$is_draft" = "true" ]; then
+            echo "v${VERSION} 仍是草稿，Homebrew 更新推迟到正式发布。" >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif [ "$is_draft" = "false" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "无法判断 v${VERSION} 的发布状态: ${is_draft}" >&2
+            exit 1
+          fi
+
       - name: Validate required tap credentials
+        if: steps.release.outputs.ready == 'true'
         env:
           TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -84,6 +111,7 @@ jobs:
           fi
 
       - name: Download macOS DMG assets from the release
+        if: steps.release.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
@@ -99,6 +127,7 @@ jobs:
           ls -1 release
 
       - name: Clone standalone tap repo
+        if: steps.release.outputs.ready == 'true'
         env:
           TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -111,6 +140,7 @@ jobs:
           git -C tap-repo config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Render cask and push to tap repo
+        if: steps.release.outputs.ready == 'true'
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |

@@ -206,5 +206,24 @@ class UpdateHomebrewTapScriptTests(unittest.TestCase):
                 self.script.collect_arch_digests(release_dir, "9.9.9")
 
 
+class HomebrewWorkflowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.workflow = (REPO_ROOT / ".github/workflows/homebrew-tap.yml").read_text(
+            encoding="utf-8"
+        )
+
+    def test_tag_push_skips_tap_update_while_release_is_draft(self):
+        self.assertIn('--json isDraft', self.workflow)
+        self.assertIn('echo "ready=false"', self.workflow)
+        self.assertEqual(
+            self.workflow.count("if: steps.release.outputs.ready == 'true'"), 4
+        )
+        self.assertLess(
+            self.workflow.index("Check release is published"),
+            self.workflow.index("Download macOS DMG assets"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

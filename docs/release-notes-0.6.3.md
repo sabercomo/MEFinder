@@ -1,4 +1,4 @@
-2026-11-20：**0.6.3 三平台草稿已齐。** Apple Silicon、Intel 与 Windows 安装版、便携版均已写入 GitHub 草稿；尚未正式发布。
+2026-11-20：**0.6.3 已打 `v0.6.3` 标签，三平台草稿齐备。** Apple Silicon、Intel 与 Windows 安装版、便携版均已写入 GitHub 草稿；尚未正式发布。
 
 2026-11-19：**0.6.3 macOS arm64 本地试用包可试用。** 已纳入贴合文字的跨行选区、已有标签搜索和一步创建并收录。DMG 和 ZIP 沿用原文件名。
 
@@ -32,7 +32,7 @@ macOS arm64 与 x86_64 包均带 DMG、ZIP 及 SHA-256 校验文件，使用 ad-
 
 ## 跨平台草稿（2026-11-20）
 
-Mac 包构建源码 `9fffa1b24abcef7fc9cc37722192523f49907f64`；Windows 云构建使用 `9719cfc7acbb16b4b3b1f7ab5e655d2c08ee39ca`，两个提交的产品源码相同，后者只修复发布工作流并补守卫测试。GitHub 草稿 release id `451571461`，目标提交为 `9fffa1b`；未创建正式 tag，未发布。
+Mac 包构建源码 `9fffa1b24abcef7fc9cc37722192523f49907f64`；Windows 云构建使用 `9719cfc7acbb16b4b3b1f7ab5e655d2c08ee39ca`，两个提交的产品源码相同，后者只修复发布工作流并补守卫测试。GitHub 草稿 release id `451571461`，`v0.6.3` 轻量标签打在包含本记录的发布准备提交上；Release 仍为草稿，尚未正式发布。
 
 | 草稿附件 | 字节数 | SHA-256 |
 | --- | ---: | --- |
@@ -47,6 +47,7 @@ Mac 包构建源码 `9fffa1b24abcef7fc9cc37722192523f49907f64`；Windows 云构�
 - Intel 包由 `arch -x86_64` 的 `.venv-macos12-x86_64` 执行官方 `build_macos.sh` 构建，全量 unittest 2,902 项（49 项条件跳过）通过。独立解包核验主程序与 MCP 侧车均为纯 x86_64，版本 0.6.3，最低 macOS 12.0，ZIP、DMG、严格签名和 SHA-256 均通过。
 - Windows 由 [Windows release smoke 44569616437](https://github.com/sabercomo/MEFinder/actions/runs/44569616437) 云构建，安装版和便携版各自运行全量 unittest 2,903 项（58 项条件跳过）。安装、从 v0.4.9 升级、桌面关闭与开启时的 MCP 会话、卸载保留用户数据、便携版移动和进程回收均通过。
 - 云端构建后直接将四个 Windows 文件和校验文件写入草稿；GitHub 返回的 asset digest 与 sidecar 中的 SHA-256 逐项一致。首次云运行卡在安装器后的应用进程等待，已在 `9719cfc` 改为只等待安装器本身并限时 120 秒。
+- 推送 `v0.6.3` 标签时，Homebrew 更新工作流会检测 Release 仍为 draft 并跳过；正式发布事件触发后再更新 cask，避免指向尚不可下载的附件。
 
 ## 导航、编号公式与检索划选试用包
 
