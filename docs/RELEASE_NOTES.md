@@ -1,3 +1,5 @@
+2026-11-21：**0.6.4 macOS arm64 本地测试包已完成。** 素材库图片、设置内搜索与解析 API 改版已进入包内；数据库升级至 v13，尚未公开发布。详见 [0.6.4 说明](release-notes-0.6.4.md)。
+
 2026-11-20：**v0.6.3 正式发布并设为 Latest。** Windows 安装版、便携版与 macOS Apple Silicon / Intel 的 DMG、ZIP 及各自 SHA-256 共 12 个附件均已公开，状态与远端 digest 核对通过。下载见 [GitHub Release v0.6.3](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.3)。
 
 本版集成主窗口导航、MinerU 完整任务地址与带编号独立公式修复、文字素材库检索划选与一步加标签，以及 Zotero PDF 原位读取。详细功能与兼容性见 [0.6.3 版本记录](release-notes-0.6.3.md)。
