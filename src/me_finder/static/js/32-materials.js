@@ -2,12 +2,18 @@
   'use strict';
 
   const materials = global.MEFinderMaterials;
-  const {node, button, load, post, openDialog, displayPath, tagName, parentPath, tagTree, tagsByExcerpt} = materials;
+  const {node, button, load, post, openDialog, displayPath, tagName, parentPath, tagTree, tagsByExcerpt, normalizePath, editRequest} = materials;
   const host = document.getElementById('page-materials');
   const side = document.getElementById('materials-tags');
   const list = document.getElementById('materials-excerpts');
   const detail = document.getElementById('materials-detail');
   const filter = document.getElementById('materials-filter');
+  const typeFilter = document.getElementById('materials-type');
+  const typeTrigger = typeFilter.querySelector('.app-select-trigger');
+  const imageImport = document.getElementById('materials-image-import');
+  const layout = document.getElementById('materials-layout');
+  const addImage = document.getElementById('materials-add-image');
+  let selectedImage = '';
   const exportButton = document.getElementById('materials-export');
   const expanded = new Set();
   let snapshot = null;
@@ -21,6 +27,57 @@
 
   const notice = (message, type = 'success') => showToast(message, type);
   const report = message => notice(message, 'danger');
+
+  function selectMaterialOption(picker, value, name) {
+    picker.dataset.value = value;
+    for (const option of picker.querySelectorAll('.app-select-option')) {
+      const selected = option.dataset.value === value;
+      option.classList.toggle('is-selected', selected);
+      option.setAttribute('aria-selected', String(selected));
+    }
+    const trigger = picker.querySelector('.app-select-trigger');
+    const title = picker.querySelector('.is-selected').textContent;
+    trigger.querySelector('.app-select-value').textContent = title;
+    trigger.setAttribute('aria-label', name + '：' + title);
+  }
+
+  function bindMaterialSelect(picker, onSelect) {
+    const trigger = picker.querySelector('.app-select-trigger');
+    const isOpen = () => picker.classList.contains('is-open');
+    const close = () => {
+      closeAppSelects();
+      trigger.focus({preventScroll: true});
+    };
+    trigger.addEventListener('click', event => {
+      if (isOpen()) close();
+      else toggleAppSelect(event, picker.id);
+    });
+    trigger.addEventListener('keydown', event => {
+      if (!trigger.disabled && !isOpen() && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+        event.preventDefault();
+        toggleAppSelect(event, picker.id);
+      }
+    });
+    picker.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !isOpen()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    });
+    picker.addEventListener('mousedown', event => {
+      // Keep the focused option in WebKit until the click is handled.
+      if (isOpen() && event.target.closest('button')) event.preventDefault();
+    });
+    picker.addEventListener('focusout', event => {
+      if (isOpen() && !picker.contains(event.relatedTarget)) closeAppSelects();
+    });
+    picker.addEventListener('click', event => {
+      const option = event.target.closest('.app-select-option');
+      if (!option) return;
+      close();
+      if (option.dataset.value !== picker.dataset.value) onSelect(option.dataset.value);
+    });
+  }
 
   function pageLabel(excerpt) {
     if (!excerpt.citation_start) return '页码未核定';
@@ -46,6 +103,7 @@
 
   function choose(path) {
     active = path;
+    selectedImage = '';
     selected = null;
     location = null;
     locating = false;
@@ -100,8 +158,12 @@
     const tags = snapshot.material_tags.map(row => row.path);
     const tree = tagTree(tags);
     const items = snapshot.material_excerpts.slice().sort((a, b) => b.excerpt_id - a.excerpt_id);
+    const imageTags = new Map(snapshot.material_images.map(image => [image.digest, []]));
+    for (const {digest, path} of snapshot.material_image_tags) imageTags.get(digest).push(path);
+    items.push(...snapshot.material_images);
+    items.sort((a, b) => b.created_at.localeCompare(a.created_at));
     const itemsWithTags = items.map(excerpt => {
-      const direct = byExcerpt.get(excerpt.excerpt_id);
+      const direct = excerpt.digest ? imageTags.get(excerpt.digest) : byExcerpt.get(excerpt.excerpt_id);
       const includes = new Set();
       direct.forEach(path => {
         while (path) {
@@ -126,13 +188,29 @@
     side.scrollTop = scroll;
     const query = filter.value.trim().toLowerCase();
     visible = itemsWithTags.filter(excerpt => (!active || excerpt.includes.has(active))
-      && [excerpt.title, excerpt.text, excerpt.author, excerpt.note].some(text => text.toLowerCase().includes(query)));
+      && (typeFilter.dataset.value === 'all' || typeFilter.dataset.value === (excerpt.digest ? 'image' : 'text'))
+      && [excerpt.title, excerpt.text, excerpt.author, excerpt.note].some(text => text?.toLowerCase().includes(query)));
     document.getElementById('materials-active-tag').textContent = active ? displayPath(active) : '全部语料';
     document.getElementById('materials-count').textContent = visible.length + ' 条' + (tree.has(active) && active ? ' · 含子标签' : '');
-    exportButton.disabled = !visible.length;
+    exportButton.disabled = !visible.some(excerpt => !excerpt.digest);
     list.replaceChildren();
     for (const excerpt of visible) {
       const row = node('article', 'materials-excerpt-row');
+      if (excerpt.digest) {
+        row.classList.toggle('selected', excerpt.digest === selectedImage);
+        const open = button(excerpt.title, 'materials-excerpt-title');
+        open.prepend(makeImage(excerpt, 'materials-thumbnail'));
+        open.addEventListener('click', () => {
+          selectedImage = excerpt.digest;
+          selected = null;
+          request++;
+          render();
+          detail.scrollIntoView({block: 'nearest'});
+        });
+        row.append(open, node('p', 'materials-note-preview', excerpt.note), chips(excerpt.tags));
+        list.appendChild(row);
+        continue;
+      }
       row.classList.toggle('selected', excerpt.excerpt_id === selected);
       const rowTitle = button(excerpt.title, 'materials-excerpt-title');
       rowTitle.addEventListener('click', () => selectExcerpt(excerpt.excerpt_id));
@@ -151,7 +229,9 @@
       list.appendChild(node('p', 'materials-empty', query ? '没有符合筛选条件的语料'
         : active ? '此标签下暂无语料' : '在检索结果或阅读器中划选原文，再点「加标签」'));
     }
-    renderDetail(visible.find(excerpt => excerpt.excerpt_id === selected));
+    const image = visible.find(excerpt => excerpt.digest && excerpt.digest === selectedImage);
+    if (image) renderImageDetail(image);
+    else renderDetail(visible.find(excerpt => excerpt.excerpt_id === selected));
   }
 
   function chips(paths) {
@@ -206,18 +286,19 @@
     const dialog = node('dialog', 'materials-dialog');
     dialog.setAttribute('aria-labelledby', 'material-note-title');
     const form = node('form', 'materials-form');
-    const title = node('h2', '', '编辑备注');
+    const field = excerpt.digest ? '说明' : '备注';
+    const title = node('h2', '', '编辑' + field);
     title.id = 'material-note-title';
-    const label = node('label', '', '备注');
+    const label = node('label', '', field);
     const input = node('textarea', 'materials-input');
     input.id = 'material-note';
     input.rows = 4;
-    input.maxLength = 10000;
+    input.maxLength = excerpt.digest ? 200 : 10000;
     input.value = excerpt.note;
     label.htmlFor = input.id;
     const actions = node('div', 'materials-form-actions');
     const cancel = button('取消');
-    const save = button('保存备注', 'action-btn primary');
+    const save = button('保存' + field, 'action-btn primary');
     save.type = 'submit';
     const error = node('p', 'materials-error');
     error.hidden = true;
@@ -233,10 +314,10 @@
       event.preventDefault();
       save.disabled = cancel.disabled = true;
       try {
-        await post({action: 'edit', excerpt_id: excerpt.excerpt_id, note: input.value});
+        await post({...editRequest(excerpt), note: input.value});
         dialog.close();
         global.dispatchEvent(new Event('mefinder-materials-change'));
-        notice('备注已保存');
+        notice(field + '已保存');
       } catch (failure) {
         error.hidden = false;
         error.textContent = failure.message;
@@ -251,6 +332,7 @@
 
   async function selectExcerpt(id) {
     const sequence = ++request;
+    selectedImage = '';
     selected = id;
     location = null;
     locating = true;
@@ -292,6 +374,467 @@
     }
   }
 
+  function makeImage(image, className) {
+    const element = node('img', className);
+    element.alt = image.title;
+    element.loading = 'lazy';
+    element.src = '/api/materials?image=' + encodeURIComponent(image.digest);
+    return element;
+  }
+
+  // Adapted from Magpie picture(src) (MIT, © 2026 yetone).
+  function imageDetailPreview(image) {
+    const viewport = node('div', 'materials-image-viewport');
+    const toggle = button('', 'materials-image-toggle');
+    toggle.disabled = true;
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', '按原尺寸查看图片');
+    const picture = makeImage(image, 'materials-image-detail');
+    const showFailure = () => {
+      const status = node('p', 'materials-secondary', '图片加载失败');
+      status.setAttribute('role', 'status');
+      viewport.replaceChildren(status);
+    };
+    picture.addEventListener('load', () => { toggle.disabled = false; });
+    picture.addEventListener('error', showFailure, {once: true});
+    toggle.addEventListener('click', () => {
+      const expanded = viewport.classList.toggle('is-expanded');
+      toggle.setAttribute('aria-expanded', String(expanded));
+      toggle.setAttribute('aria-label', expanded ? '缩回图片预览' : '按原尺寸查看图片');
+      if (!expanded) viewport.scrollTo(0, 0);
+    });
+    toggle.append(picture);
+    viewport.append(toggle);
+    return viewport;
+  }
+
+  function renderImageDetail(image) {
+    detail.hidden = false;
+    const origin = JSON.parse(image.origin);
+    detail.replaceChildren(node('h3', '', image.title), imageDetailPreview(image));
+    if (origin.source_id) {
+      const open = button('打开原文');
+      open.addEventListener('click', () => openSource(origin.source_id, origin.page));
+      detail.append(node('p', 'materials-secondary', origin.citation_page
+        ? '第 ' + origin.citation_page + ' 页' : 'PDF 第 ' + origin.page + ' 页 · 未校准'), open);
+      const source = node('details');
+      source.append(node('summary', '', '出处详情'),
+        node('p', 'materials-secondary', 'PDF 第 ' + origin.page + ' 页'));
+      detail.append(source);
+    }
+    detail.append(node('h4', '', '说明'), node('p', 'materials-note', image.note || '暂无说明'),
+      node('h4', '', '标签'), chips(image.tags));
+    const actions = node('div', 'materials-form-actions');
+    const note = button('编辑说明');
+    note.addEventListener('click', () => editNote(image));
+    const tag = button('编辑标签');
+    tag.addEventListener('click', () => openDialog({excerpt: image, onSaved: () => notice('已保存标签'), onError: report}));
+    actions.append(note, tag);
+    detail.append(actions);
+  }
+
+  function showImageImport(files) {
+    layout.hidden = true;
+    addImage.hidden = true;
+    imageImport.hidden = false;
+    const heading = document.getElementById('materials-page-title');
+    heading.textContent = '添加图片';
+    const back = button('返回素材库');
+    const form = node('form', 'materials-image-form');
+    const input = node('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg';
+    input.hidden = true;
+    const chooseFile = button('选择文件');
+    chooseFile.addEventListener('click', () => input.click());
+    const preview = node('img', 'materials-image-preview');
+    preview.alt = '待保存的图片';
+    preview.hidden = true;
+    const drop = node('div', 'materials-image-drop');
+    const emptyDrop = node('div', 'materials-image-drop-empty');
+    emptyDrop.append(node('p', '', '拖入图片，或使用 ⌘V / Ctrl+V 粘贴'),
+      node('p', 'materials-secondary', 'PNG / JPEG · 单张不超过 25 MB'), chooseFile);
+    drop.append(preview, emptyDrop, input);
+    const previewMeta = node('div', 'materials-image-alternative');
+    previewMeta.hidden = true;
+    const filename = node('span', 'materials-secondary');
+    const replace = button('更换');
+    replace.addEventListener('click', () => input.click());
+    const remove = button('移除');
+    previewMeta.append(filename, replace, remove);
+    const fromPDF = button('从库内 PDF 截图…', 'action-btn materials-image-secondary');
+    const cropIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    cropIcon.setAttribute('viewBox', '0 0 24 24');
+    cropIcon.setAttribute('aria-hidden', 'true');
+    const cropStrokes = document.createElementNS(cropIcon.namespaceURI, 'path');
+    cropStrokes.setAttribute('d', 'M6 2v16h16M2 6h16v16');
+    cropStrokes.setAttribute('fill', 'none');
+    cropStrokes.setAttribute('stroke', 'currentColor');
+    cropStrokes.setAttribute('stroke-width', '2');
+    cropIcon.append(cropStrokes);
+    fromPDF.prepend(cropIcon);
+    const alternative = node('div', 'materials-image-alternative');
+    alternative.append(node('span', 'materials-secondary', '也可以'), fromPDF,
+      node('span', 'materials-secondary', '选页后框选区域'));
+    const left = node('div');
+    left.append(drop, previewMeta, alternative);
+    const note = node('textarea', 'materials-input');
+    note.rows = 4;
+    note.maxLength = 200;
+    const noteLabel = node('label', '', '说明（可选）');
+    noteLabel.append(note);
+    const tags = node('fieldset', 'materials-image-tags');
+    tags.append(node('legend', '', '标签'));
+    const choices = node('div', 'materials-image-tag-choices');
+    const knownTags = new Set([active || '未整理', ...(snapshot?.material_tags || []).map(row => row.path)]);
+    const tagInput = node('input', 'materials-input');
+    tagInput.placeholder = '新建标签，例如 理论/异化';
+    tagInput.setAttribute('aria-label', '新建标签');
+    const newTag = button('新建');
+    const tagControls = node('div', 'materials-form-actions');
+    tagControls.append(tagInput, newTag);
+    tags.append(choices, tagControls);
+    const save = node('button', 'action-btn primary', '保存到素材库');
+    save.type = 'submit';
+    save.disabled = true;
+    const message = node('p', 'materials-secondary', '选择图片后即可保存');
+    message.setAttribute('role', 'status');
+    const provenance = node('p', 'materials-secondary', '还没有选择图片');
+    const right = node('div', 'materials-image-fields');
+    right.append(provenance, noteLabel, tags, save, message);
+    const selectedTags = () => [...choices.querySelectorAll('input:checked')].map(item => item.value);
+    const updateSave = (hint = '') => {
+      const hasTags = selectedTags().length > 0;
+      save.disabled = !pending || !hasTags;
+      message.textContent = hint || (!pending ? '选择图片后即可保存' : hasTags ? '' : '至少选择一个标签');
+    };
+    const addTagChoice = (path, checked) => {
+      const label = node('label');
+      const choice = node('input');
+      choice.type = 'checkbox';
+      choice.value = path;
+      choice.checked = checked;
+      choice.addEventListener('change', () => updateSave());
+      label.append(choice, node('span', '', displayPath(path)));
+      choices.append(label);
+    };
+    for (const path of [...knownTags].sort((a, b) => a.localeCompare(b, 'zh-CN'))) {
+      addTagChoice(path, path === (active || '未整理'));
+    }
+    newTag.addEventListener('click', () => {
+      try {
+        const path = normalizePath(tagInput.value, '');
+        if (knownTags.has(path)) {
+          [...choices.querySelectorAll('input')].find(item => item.value === path).checked = true;
+        } else {
+          knownTags.add(path);
+          addTagChoice(path, true);
+        }
+        tagInput.value = '';
+        updateSave();
+      } catch (failure) {
+        message.textContent = failure.message;
+      }
+    });
+    tagInput.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      newTag.click();
+    });
+    form.append(left, right);
+    imageImport.replaceChildren(back, form);
+    let pending;
+    let revision = 0;
+    let objectURL;
+    const update = (source, url, name, hint = '') => {
+      if (objectURL) URL.revokeObjectURL(objectURL);
+      objectURL = url.startsWith('blob:') ? url : null;
+      preview.src = url;
+      preview.hidden = false;
+      previewMeta.hidden = false;
+      emptyDrop.hidden = true;
+      filename.textContent = name;
+      provenance.textContent = source.source_id ? name : '外部图片';
+      pending = source;
+      updateSave(hint);
+    };
+    const acceptFiles = async incoming => {
+      if (!incoming.length) return;
+      const current = ++revision;
+      const file = incoming[0];
+      if (file.size > 25 * 1024 * 1024) {
+        message.textContent = '每张图片最多 25 MB';
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const test = new Image();
+      test.src = url;
+      try {
+        await test.decode();
+        if (revision !== current) return;
+        if (!['image/png', 'image/jpeg'].includes(file.type)) {
+          throw new Error('请选择 PNG、JPEG、WebP 或 GIF 图片');
+        }
+        update({file}, url, file.name, incoming.length > 1 ? '一次保存一张，已选第一张' : '');
+      } catch {
+        if (current === revision) message.textContent = '无法读取图片，请选择 PNG、JPEG、WebP 或 GIF';
+      } finally {
+        if (objectURL !== url) URL.revokeObjectURL(url);
+      }
+    };
+    const acceptPaste = event => acceptFiles(event.detail);
+    imageImport.addEventListener('material-image-files', acceptPaste);
+    const close = () => {
+      revision++;
+      if (objectURL) URL.revokeObjectURL(objectURL);
+      imageImport.removeEventListener('material-image-files', acceptPaste);
+      imageImport.replaceChildren();
+      imageImport.hidden = true;
+      layout.hidden = false;
+      addImage.hidden = false;
+      heading.textContent = '素材库';
+      addImage.focus();
+    };
+    back.addEventListener('click', async () => {
+      if (pending && !await showAppConfirm('放弃这张图片？', {
+        title: '放弃添加图片？', confirmText: '放弃', tone: 'danger'
+      })) return;
+      close();
+    });
+    remove.addEventListener('click', () => {
+      revision++;
+      if (objectURL) URL.revokeObjectURL(objectURL);
+      objectURL = pending = null;
+      input.value = '';
+      preview.removeAttribute('src');
+      preview.hidden = previewMeta.hidden = true;
+      emptyDrop.hidden = false;
+      provenance.textContent = '还没有选择图片';
+      updateSave();
+    });
+    input.addEventListener('change', () => acceptFiles(input.files));
+    drop.addEventListener('dragover', event => event.preventDefault());
+    drop.addEventListener('drop', event => {
+      event.preventDefault();
+      acceptFiles(event.dataTransfer.files);
+    });
+    fromPDF.addEventListener('click', () => showPDFCrop((source, url, name) => {
+      revision++;
+      update(source, url, name);
+    }));
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!pending || save.disabled) return;
+      save.disabled = true;
+      form.inert = true;
+      back.disabled = true;
+      try {
+        let source = pending;
+        if (pending.file) {
+          const file = pending.file;
+          const data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = () => reject(new Error('无法读取图片'));
+            reader.readAsDataURL(file);
+          });
+          source = {title: file.name, data};
+        }
+        const paths = selectedTags();
+        const result = await post({action: 'collect_image', ...source, note: note.value, tags: paths});
+        if (result.created) {
+          filter.value = '';
+          selectMaterialOption(typeFilter, 'all', '素材类型');
+          const firstTag = result.tags[0];
+          if (active && !result.tags.some(path => path === active || path.startsWith(active + '/'))) {
+            active = firstTag;
+            reveal(active);
+          }
+          selectedImage = result.digest;
+          selected = null;
+          request++;
+        }
+        close();
+        global.dispatchEvent(new Event('mefinder-materials-change'));
+        notice(result.created ? '图片已保存 · ' + result.tags.map(displayPath).join('、') : '这张图片已在素材库中');
+      } catch (failure) {
+        message.textContent = failure.message;
+      } finally {
+        save.disabled = false;
+        form.inert = false;
+        back.disabled = false;
+      }
+    });
+    back.focus();
+    if (files) acceptFiles(files);
+  }
+
+  async function showPDFCrop(onUse) {
+    const dialog = node('dialog', 'materials-dialog materials-pdf-crop');
+    const heading = node('h2', '', '从 PDF 截图');
+    heading.id = 'materials-pdf-title';
+    dialog.setAttribute('aria-labelledby', heading.id);
+    const select = node('div', 'app-select materials-pdf-select');
+    select.id = 'materials-pdf-select';
+    const trigger = button('', 'app-select-trigger');
+    trigger.disabled = true;
+    trigger.setAttribute('aria-label', 'PDF 文献');
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', 'materials-pdf-options');
+    trigger.append(node('span', 'app-select-value', '正在读取文献…'), typeTrigger.querySelector('svg').cloneNode(true));
+    const options = node('div', 'app-select-menu');
+    options.id = 'materials-pdf-options';
+    options.setAttribute('role', 'listbox');
+    options.setAttribute('aria-label', 'PDF 文献');
+    select.append(trigger, options);
+    const page = node('input', 'materials-input');
+    page.type = 'number';
+    page.min = '1';
+    page.value = '1';
+    page.setAttribute('aria-label', 'PDF 页码');
+    const loadPage = button('预览');
+    const controls = node('div', 'materials-pdf-controls');
+    controls.append(select, page, loadPage);
+    const canvas = node('canvas', 'materials-crop-canvas');
+    canvas.hidden = true;
+    canvas.setAttribute('aria-label', 'PDF 页面预览。拖动框选截图区域');
+    const message = node('p', 'materials-secondary', '选择 PDF 后预览页面');
+    message.setAttribute('role', 'status');
+    const cancel = button('取消');
+    const use = button('使用这张图');
+    use.disabled = true;
+    const actions = node('div', 'materials-form-actions');
+    actions.append(cancel, use);
+    dialog.append(heading, controls, message, canvas, actions);
+    document.body.append(dialog);
+    dialog.addEventListener('close', () => dialog.remove(), {once: true});
+    cancel.addEventListener('click', () => dialog.close());
+    dialog.showModal();
+    let result, image, start, box;
+    let generation = 0;
+    const context = canvas.getContext('2d');
+    const clear = () => {
+      generation++;
+      result = image = box = start = null;
+      canvas.hidden = true;
+      use.disabled = true;
+    };
+    const draw = () => {
+      context.drawImage(image, 0, 0);
+      if (!box) return;
+      context.strokeStyle = getComputedStyle(host).getPropertyValue('--accent-text').trim();
+      context.lineWidth = 4;
+      context.strokeRect(box[0] * canvas.width, box[1] * canvas.height,
+        (box[2] - box[0]) * canvas.width, (box[3] - box[1]) * canvas.height);
+    };
+    const position = event => {
+      const bounds = canvas.getBoundingClientRect();
+      return [(event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height]
+        .map(value => Math.max(0, Math.min(1, value)));
+    };
+    const move = event => {
+      if (!start) return;
+      const [x, y] = position(event);
+      box = [Math.min(x, start[0]), Math.min(y, start[1]), Math.max(x, start[0]), Math.max(y, start[1])];
+      draw();
+    };
+    canvas.addEventListener('pointerdown', event => {
+      if (!image || !event.isPrimary || event.button !== 0) return;
+      canvas.setPointerCapture(event.pointerId);
+      start = position(event);
+      use.disabled = true;
+      move(event);
+    });
+    canvas.addEventListener('pointermove', move);
+    canvas.addEventListener('pointerup', event => {
+      if (!start) return;
+      move(event);
+      start = null;
+      use.disabled = (box[2] - box[0]) * canvas.width < 2 || (box[3] - box[1]) * canvas.height < 2;
+    });
+    canvas.addEventListener('pointercancel', () => {
+      start = box = null;
+      if (image) draw();
+    });
+    bindMaterialSelect(select, value => {
+      selectMaterialOption(select, value, 'PDF 文献');
+      page.value = '1';
+      clear();
+    });
+    options.addEventListener('keydown', event => {
+      if (event.isComposing || event.ctrlKey || event.altKey || event.metaKey
+          || event.key.length !== 1 || event.key === ' ') return;
+      const key = event.key.toLocaleLowerCase();
+      const choices = [...options.children];
+      const current = choices.indexOf(document.activeElement);
+      const next = choices.slice(current + 1).concat(choices.slice(0, current + 1))
+        .find(option => option.textContent.toLocaleLowerCase().startsWith(key));
+      if (!next) return;
+      event.preventDefault();
+      next.focus();
+    });
+    page.addEventListener('input', clear);
+    loadPage.disabled = true;
+    loadPage.addEventListener('click', async () => {
+      clear();
+      if (!select.dataset.value) return;
+      const current = generation;
+      message.textContent = '正在预览…';
+      try {
+        const response = await post({action: 'preview_pdf', source_id: select.dataset.value, page: page.valueAsNumber});
+        const bitmap = new Image();
+        bitmap.src = response.data;
+        await bitmap.decode();
+        if (generation !== current || !dialog.open) return;
+        result = response;
+        image = bitmap;
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        canvas.hidden = false;
+        draw();
+        message.textContent = 'PDF 第 ' + result.page + ' / ' + result.page_count + ' 页 · 拖动框选';
+      } catch (failure) {
+        if (generation === current) message.textContent = failure.message;
+      }
+    });
+    use.addEventListener('click', () => {
+      const [left, top, right, bottom] = box;
+      const crop = node('canvas');
+      crop.width = Math.ceil((right - left) * canvas.width);
+      crop.height = Math.ceil((bottom - top) * canvas.height);
+      crop.getContext('2d').drawImage(image, left * canvas.width, top * canvas.height,
+        crop.width, crop.height, 0, 0, crop.width, crop.height);
+      const label = result.title + (result.citation_page ? ' · 印刷页 ' + result.citation_page : '')
+        + ' · PDF 第 ' + result.page + ' 页';
+      onUse({source_id: result.source_id, page: result.page, revision: result.revision, box}, crop.toDataURL(), label);
+      dialog.close();
+    });
+    try {
+      const {source_files: sources} = await global.MEFinderApi.getJSON('/api/sources');
+      for (const source of sources.filter(source => source.source_type === 'pdf')) {
+        const title = source.display_title || source.title || source.file_name;
+        const option = button('', 'app-select-option');
+        option.dataset.value = source.source_file_id;
+        option.title = title;
+        option.tabIndex = -1;
+        option.setAttribute('role', 'option');
+        option.append(node('span', 'app-select-value', title));
+        options.append(option);
+      }
+      if (options.firstElementChild) {
+        selectMaterialOption(select, options.firstElementChild.dataset.value, 'PDF 文献');
+        trigger.disabled = loadPage.disabled = false;
+      } else {
+        trigger.querySelector('.app-select-value').textContent = '暂无 PDF';
+        message.textContent = '文献库里暂无 PDF';
+      }
+    } catch (failure) {
+      trigger.querySelector('.app-select-value').textContent = '文献读取失败';
+      message.textContent = failure.message;
+    }
+  }
+
   function openTag(path) {
     choose(path);
     if (!host.classList.contains('active')) navigateTo('materials');
@@ -300,7 +843,7 @@
   async function exportMarkdown() {
     const payload = {
       action: 'export', heading: active ? displayPath(active) : '素材库',
-      excerpt_ids: visible.map(excerpt => excerpt.excerpt_id)
+      excerpt_ids: visible.filter(excerpt => !excerpt.digest).map(excerpt => excerpt.excerpt_id)
     };
     try {
       const directory = await chooseDesktopExportDirectory();
@@ -325,6 +868,27 @@
   document.getElementById('materials-nav').addEventListener('click', () => navigateTo('materials'));
   document.getElementById('materials-new-tag').addEventListener('click', () => createTag(''));
   filter.addEventListener('input', render);
+  bindMaterialSelect(typeFilter, value => {
+    selectMaterialOption(typeFilter, value, '素材类型');
+    render();
+  });
+  addImage.addEventListener('click', () => showImageImport());
+  layout.addEventListener('dragover', event => {
+    if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+  });
+  layout.addEventListener('drop', event => {
+    if (!event.dataTransfer.files.length) return;
+    event.preventDefault();
+    showImageImport(event.dataTransfer.files);
+  });
+  document.addEventListener('paste', event => {
+    if (!host.classList.contains('active') || document.querySelector('dialog[open]')) return;
+    const files = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
+    if (!files.length) return;
+    event.preventDefault();
+    if (imageImport.hidden) showImageImport(files);
+    else imageImport.dispatchEvent(new CustomEvent('material-image-files', {detail: files}));
+  });
   exportButton.addEventListener('click', exportMarkdown);
   global.addEventListener('mefinder-materials-change', () => {
     if (host.classList.contains('active')) refresh();

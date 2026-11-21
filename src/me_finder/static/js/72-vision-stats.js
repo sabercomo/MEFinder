@@ -313,7 +313,7 @@
       });
       showToast('备份已导出（' + formatFileSize(data.size_bytes) + '）');
     } catch (e) {
-      if (hint) hint.textContent = '仅备份页码、书目和偏好，不含 PDF';
+      if (hint) hint.textContent = '备份包含素材库中的图片、页码、书目和偏好。源文献需单独备份';
       showToast('导出备份失败：' + e.message);
     }
   }
@@ -328,7 +328,7 @@
       if (!chooseResp.ok || chosen.error) throw new Error(chosen.error || '选择备份失败');
       if (chosen.cancelled) return;
       if (!await showAppConfirm(
-        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖当前的页码映射与书目信息',
+        '将从「' + (chosen.name || '所选备份') + '」恢复，并覆盖备份中包含的页码映射、书目信息和素材库数据',
         {title:'导入并覆盖当前数据？', confirmText:'确认导入', tone:'danger'}
       )) return;
       if (button) button.textContent = '正在导入…';

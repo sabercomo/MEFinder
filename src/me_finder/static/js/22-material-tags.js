@@ -188,6 +188,11 @@
     return picker;
   }
 
+  function editRequest(material) {
+    return material.digest ? {action: 'edit_image', digest: material.digest}
+      : {action: 'edit', excerpt_id: material.excerpt_id};
+  }
+
   function openDialog({selections, excerpt, parent = '', onSaved, onError}) {
     if (document.querySelector('.materials-dialog')) return;
     const create = !selections && !excerpt;
@@ -306,7 +311,7 @@
         form.inert = true;
         dialog.setAttribute('aria-busy', 'true');
         const payload = create ? {action: 'create_tag', path}
-          : excerpt ? {action: 'edit', excerpt_id: excerpt.excerpt_id, tags: [...checked]}
+          : excerpt ? {...editRequest(excerpt), tags: [...checked]}
             : {action: 'collect', selections, tags: [...checked]};
         const result = await post(payload);
         dialog.close();
@@ -346,6 +351,6 @@
   }
 
   global.MEFinderMaterials = Object.freeze({
-    load, post, openDialog, createPicker, selectionKey, tagTree, tagsByExcerpt, displayPath, tagName, parentPath, node, button,
+    load, post, openDialog, editRequest, createPicker, selectionKey, tagTree, tagsByExcerpt, normalizePath, displayPath, tagName, parentPath, node, button,
   });
 }(window));

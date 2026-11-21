@@ -55,9 +55,14 @@ async def smoke(executable: Path, runtime_root: Path | None) -> None:
                     f"missing={sorted(expected - tool_names)} "
                     f"unexpected={sorted(tool_names - expected)}"
                 )
-            documents = await session.call_tool("list_documents", {})
-            if documents.is_error:
-                raise RuntimeError(f"Packaged MCP list_documents failed: {documents}")
+            for name, arguments in (
+                ("list_documents", {}),
+                ("list_material_tags", {}),
+                ("read_tag_excerpts", {"tag": "打包验证"}),
+            ):
+                result = await session.call_tool(name, arguments)
+                if result.is_error:
+                    raise RuntimeError(f"Packaged MCP {name} failed: {result}")
 
 
 def main() -> None:

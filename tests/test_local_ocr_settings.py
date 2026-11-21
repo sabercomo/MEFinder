@@ -82,6 +82,43 @@ class LocalOCRSettingsTests(unittest.TestCase):
         raw = json.loads(self.config_path.read_text(encoding="utf-8"))
         self.assertEqual(raw["engines"]["ndlocr-lite"]["script_path"], str(script))
 
+    def test_engine_update_preserves_other_engine_and_runtime_settings(self) -> None:
+        script = self.root / "ocr.py"
+        script.touch()
+        payload = self._payload(enabled=True, script=script)
+        payload["engines"]["ndlkotenocr-lite"] = dict(payload["engines"]["ndlocr-lite"])
+        save_local_ocr_config(payload, self.config_path)
+
+        # Another engine can become unavailable after its configuration was saved.
+        manual_script = self.root / "manual_ocr.py"
+        manual_script.touch()
+        script.unlink()
+        update = {"action": "update_engine", "provider_id": "ndlocr-lite"}
+        summary = save_local_ocr_config({**update, "enabled": False}, self.config_path)
+        modern, ancient = summary["engines"]
+        self.assertFalse(modern["enabled"])
+        self.assertEqual(modern["script_path"], str(script))
+        self.assertTrue(ancient["enabled"])
+        self.assertEqual(ancient["script_path"], str(script))
+        self.assertEqual(summary["render_dpi"], 240)
+        self.assertEqual(summary["blank_ink_ratio"], 0.002)
+
+        summary = save_local_ocr_config({
+            **update, "python_path": sys.executable, "script_path": str(manual_script),
+        }, self.config_path)
+        modern, ancient = summary["engines"]
+        self.assertFalse(modern["enabled"])
+        self.assertEqual(modern["script_path"], str(manual_script))
+        self.assertTrue(ancient["enabled"])
+        self.assertEqual(ancient["script_path"], str(script))
+        self.assertEqual(ancient["weights_sha256"], "weights-digest")
+        before = self.config_path.read_bytes()
+        with self.assertRaisesRegex(LocalOCRError, "有效的 Python"):
+            save_local_ocr_config({
+                **update, "provider_id": "ndlkotenocr-lite", "enabled": True,
+            }, self.config_path)
+        self.assertEqual(self.config_path.read_bytes(), before)
+
     def test_managed_venv_symlink_is_not_resolved_to_base_python(self) -> None:
         python_path = (
             self.root

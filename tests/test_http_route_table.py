@@ -79,6 +79,7 @@ LEGACY_BODY_LIMITS = {
     "/api/import-upload/start": (64 * 1024, False),
     "/api/import-upload/finish": (64 * 1024, False),
     "/api/import-upload/cancel": (64 * 1024, False),
+    "/api/materials": (36 * 1024 * 1024, False),
 }
 
 

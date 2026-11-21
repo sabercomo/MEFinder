@@ -19,16 +19,18 @@ TABLES = {
     "material_tags": ("path",),
     "material_excerpts": ("excerpt_id", *EXCERPT_FIELDS, "note", "created_at"),
     "material_excerpt_tags": ("excerpt_id", "path"),
+    "material_images": ("digest", "title", "mime", "note", "created_at", "origin"),
+    "material_image_tags": ("digest", "path"),
 }
 IDENTITY = EXCERPT_FIELDS[:7]
 
 
 def read_materials(connection: sqlite3.Connection) -> dict[str, list]:
-    """Read the three material tables in one transaction."""
+    """Read excerpts, images and shared tags in one transaction."""
     return {
         table: [dict(zip(columns, row)) for row in connection.execute(
             f"SELECT {', '.join(columns)} FROM {table} ORDER BY {', '.join(columns[:2])}"
-        )] for table, columns in TABLES.items()
+        )] if table_exists(connection, table) else [] for table, columns in TABLES.items()
     }
 
 
@@ -45,7 +47,7 @@ def read_materials_snapshot(db_path: Path) -> dict[str, list]:
 def ensure_materials_schema(db_path: Path) -> None:
     """Upgrade older indexes before their first material write."""
     with open_readonly_snapshot(db_path) as connection:
-        if table_exists(connection, "material_excerpts"):
+        if table_exists(connection, "material_images"):
             return
     migrate_index_database(db_path)
 
@@ -55,7 +57,7 @@ def insert_materials_snapshot(connection: sqlite3.Connection, snapshot: dict[str
     for table, columns in TABLES.items():
         connection.executemany(
             f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
-            [tuple(row[column] for column in columns) for row in snapshot[table]],
+            [tuple(row[column] for column in columns) for row in snapshot.get(table, [])],
         )
 
 
@@ -63,6 +65,19 @@ def replace_materials_snapshot(snapshot: dict[str, list], db_path: Path) -> None
     """Replace all material data atomically on restore."""
     ensure_materials_schema(db_path)
     with open_write(db_path, immediate=True, busy_timeout_ms=PROJECT_BUSY_TIMEOUT_MS) as connection:
+        if "material_images" not in snapshot:
+            current = read_materials(connection)
+            image_tags = set()
+            for assignment in current["material_image_tags"]:
+                parts = assignment["path"].split("/")
+                image_tags.update("/".join(parts[:depth]) for depth in range(1, len(parts) + 1))
+            image_tags.update(row["path"] for row in snapshot["material_tags"])
+            snapshot = {
+                **snapshot,
+                "material_tags": [{"path": path} for path in sorted(image_tags)],
+                "material_images": current["material_images"],
+                "material_image_tags": current["material_image_tags"],
+            }
         for table in reversed(TABLES):
             connection.execute(f"DELETE FROM {table}")
         insert_materials_snapshot(connection, snapshot)
@@ -188,3 +203,42 @@ def iter_units(
         )
         for row in rows:
             yield row["paragraph_index"], row["paragraph_id"], paragraph_from_database_row(row)
+
+
+def save_image(connection: sqlite3.Connection, image: dict, tags: list[str]) -> bool:
+    """Insert a unique image and its tag assignments."""
+    if connection.execute("SELECT 1 FROM material_images WHERE digest=?", (image["digest"],)).fetchone():
+        return False
+    connection.execute(
+        "INSERT INTO material_images(digest, title, mime, note, created_at, origin) VALUES (?, ?, ?, ?, ?, ?)",
+        tuple(image[key] for key in TABLES["material_images"]),
+    )
+    for path in tags:
+        insert_tag(connection, path)
+    connection.executemany(
+        "INSERT INTO material_image_tags(digest, path) VALUES (?, ?)",
+        [(image["digest"], path) for path in tags],
+    )
+    return True
+
+
+def image_mime(connection: sqlite3.Connection, digest: str) -> str | None:
+    """Return the MIME type of a registered image."""
+    if not table_exists(connection, "material_images"):
+        return None
+    row = connection.execute("SELECT mime FROM material_images WHERE digest=?", (digest,)).fetchone()
+    return row[0] if row else None
+
+
+def update_image(connection: sqlite3.Connection, digest: str, note: str | None, tags: list[str] | None) -> None:
+    """Update image details without replacing the imported file."""
+    if note is not None:
+        connection.execute("UPDATE material_images SET note=? WHERE digest=?", (note, digest))
+    if tags is not None:
+        connection.execute("DELETE FROM material_image_tags WHERE digest=?", (digest,))
+        for path in tags:
+            insert_tag(connection, path)
+        connection.executemany(
+            "INSERT INTO material_image_tags(digest, path) VALUES (?, ?)",
+            [(digest, path) for path in tags],
+        )

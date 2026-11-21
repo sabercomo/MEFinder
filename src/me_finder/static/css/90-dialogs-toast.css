@@ -43,6 +43,9 @@
 .app-dialog-actions { margin-top: 20px; display: flex; justify-content: flex-end; gap: 8px; }
 .app-dialog[data-tone="danger"] #app-dialog-confirm { color: var(--danger); border-color: var(--danger); background: var(--surface); }
 .app-dialog[data-tone="danger"] #app-dialog-confirm:hover { background: var(--danger-soft); }
+.app-dialog-compact { width: min(410px, 100%); }
+.app-dialog-compact .app-dialog-icon { display: none; }
+.app-dialog-compact .app-dialog-title { min-width: 0; overflow-wrap: anywhere; }
 
 .remove-modal-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
 .remove-modal-copy { margin-top: 9px; font-size: 13px; line-height: 1.65; color: var(--text-secondary); }

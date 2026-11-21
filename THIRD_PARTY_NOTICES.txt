@@ -263,6 +263,10 @@ Source: https://github.com/yetone/magpie/tree/v0.1.4512
 
 MEFinder's navigation relocation and view transition adapt code from
 Magpie's internal/gui/assets/app.js and app.css.
+The compact settings confirmation dialog adapts the keyboard focus handling
+from confirmAction in internal/gui/assets/app.js at revision 2ab2f69.
+Settings search and image preview also adapt findSettings/searchSettings and
+picture from Magpie revision 6204547 (internal/gui/assets/app.js and context.js).
 The Common MIT License Text below applies.
 
 Common MIT License Text

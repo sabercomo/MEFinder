@@ -14,6 +14,7 @@ from .schema_installers import (
     install_bibliographic_update_schema,
     install_document_group_schema,
     install_materials_schema,
+    install_material_images_schema,
     install_text_alignment_schema,
     install_translation_workspace_schema,
     install_zotero_sync_schema,
@@ -75,6 +76,7 @@ INDEX_MIGRATIONS: tuple[Migration, ...] = (
     Migration(target_version=10, apply=install_short_gram_index),
     Migration(target_version=11, apply=upgrade_short_gram_triggers),
     Migration(target_version=12, apply=install_materials_schema),
+    Migration(target_version=13, apply=install_material_images_schema),
 )
 
 

@@ -4,9 +4,25 @@ from pathlib import Path
 
 
 DEFAULT_DATABASE_PATH = Path("data/index.sqlite3")
-DATABASE_SCHEMA_VERSION = 12
+DATABASE_SCHEMA_VERSION = 13
 ANCHOR_SPEC_VERSION = 1
 PARAGRAPH_FTS_VERSION = 1
+
+MATERIAL_IMAGE_SCHEMA = (
+    """CREATE TABLE IF NOT EXISTS material_images (
+        digest TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        note TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        origin TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS material_image_tags (
+        digest TEXT NOT NULL REFERENCES material_images(digest) ON DELETE CASCADE,
+        path TEXT NOT NULL REFERENCES material_tags(path),
+        PRIMARY KEY(digest, path)
+    )""",
+)
 
 MATERIALS_SCHEMA = (
     """CREATE TABLE IF NOT EXISTS material_tags (
@@ -241,4 +257,4 @@ CREATE INDEX idx_alignment_runs_pair ON alignment_runs(document_group_id, pivot_
 CREATE INDEX idx_alignment_members_segment ON alignment_link_members(segment_id, side);
 """
 
-SCHEMA += ";\n".join(MATERIALS_SCHEMA) + ";\n"
+SCHEMA += ";\n".join(MATERIALS_SCHEMA + MATERIAL_IMAGE_SCHEMA) + ";\n"

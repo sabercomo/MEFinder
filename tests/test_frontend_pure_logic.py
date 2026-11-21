@@ -1143,7 +1143,7 @@ _MODULE_EVAL_HARNESS = r"""
 const fs = require('fs');
 const src = fs.readFileSync(process.argv[2], 'utf8');
 const expr = fs.readFileSync(process.argv[3], 'utf8');
-process.stdout.write(JSON.stringify(eval(src + '\n;\n' + expr)));
+Promise.resolve(eval(src + '\n;\n' + expr)).then(value => process.stdout.write(JSON.stringify(value)));
 """
 
 _FRONTEND_STORE_STUB = r"""
@@ -1847,7 +1847,8 @@ class MineruLocalDisplayTests(unittest.TestCase):
           'vision-model':{value:'qwen-vl-ocr'},
           'vision-api-key':{value:'secret'},
           'vision-provider-enabled':{checked:true},
-          'vision-save-hint':{textContent:''}
+          'vision-save-hint':{textContent:''},
+          'vision-editor-card':{inert:false, hidden:false, contains:function() { return false; }}
         };
         globalThis.document = {
           getElementById:function(id) { return fields[id] || null; }
@@ -1855,14 +1856,16 @@ class MineruLocalDisplayTests(unittest.TestCase):
         var savedNames = [];
         globalThis.fetch = function(url, options) {
           savedNames.push(JSON.parse(options.body).provider.name);
-          return new Promise(function() {});
+          return Promise.resolve({ok:false, json:async function() { return {error:'save refused'}; }});
         };
         globalThis.showToast = function() {};
-        saveVisionProvider();
-        fields['vision-provider-name'].value = '通义千问';
-        module.exports.setVisionNameAutoValue('通义千问');
-        saveVisionProvider();
-        return savedNames;
+        return (async function() {
+          await saveVisionProvider();
+          fields['vision-provider-name'].value = '通义千问';
+          module.exports.setVisionNameAutoValue('通义千问');
+          await saveVisionProvider();
+          return savedNames;
+        })();
         """
         self.assertEqual(
             _vision_eval(tail),

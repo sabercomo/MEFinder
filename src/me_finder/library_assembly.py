@@ -75,7 +75,7 @@ def assemble_library(
     return LibraryAssembly(
         document_group_controller=document_group_controller,
         library_query_controller=library_query_controller,
-        materials_controller=MaterialsController(index_runtime),
+        materials_controller=MaterialsController(index_runtime, root, document_queries.source_path),
         open_source_file=open_source_file,
     )
 

@@ -178,7 +178,7 @@ claude mcp list
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下会列出十七个工具：
+正常情况下会列出十九个工具：
 
 ```text
 list_documents
@@ -198,6 +198,8 @@ list_alignment_corrections
 propose_alignment_correction
 confirm_alignment_correction
 revoke_alignment_correction
+list_material_tags
+read_tag_excerpts
 ```
 
 再确认能读取你自己的文献库：
@@ -361,7 +363,7 @@ D:\MEFinder\MEFinderMCP.exe  →  D:\\MEFinder\\MEFinderMCP.exe
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-正常情况下应该能看到十七个工具：
+正常情况下应该能看到十九个工具：
 
 ```text
 list_documents
@@ -381,6 +383,8 @@ list_alignment_corrections
 propose_alignment_correction
 confirm_alignment_correction
 revoke_alignment_correction
+list_material_tags
+read_tag_excerpts
 ```
 
 然后测试是否能读取自己的文献库：
@@ -472,7 +476,7 @@ Windows 路径中的反斜杠在 JSON 里必须写成两个。编辑器也接受
 请查看 mefinder MCP 提供了哪些工具。
 ```
 
-能列出十七个工具（清单见第九节）就说明接入成功；再用下面这句确认能读到自己的文献库：
+能列出十九个工具（清单见第九节）就说明接入成功；再用下面这句确认能读到自己的文献库：
 
 ```text
 请只使用 mefinder，列出当前已经导入的文献。
@@ -726,13 +730,13 @@ macOS 路径使用 `/`，不需要像 Windows 一样改成双反斜杠。
 
 #### 3. 保存并验证
 
-点击「保存」后**新开一个会话**（ZCode 在会话启动时连接 MCP，老会话不会自动接上），输入「请查看 mefinder MCP 提供了哪些工具」，能列出十七个工具就说明接入成功。
+点击「保存」后**新开一个会话**（ZCode 在会话启动时连接 MCP，老会话不会自动接上），输入「请查看 mefinder MCP 提供了哪些工具」，能列出十九个工具就说明接入成功。
 
 ## 九、配置成功后能做什么
 
-MEFinder MCP 提供十七个工具，分为三组。
+MEFinder MCP 提供十九个工具，分为三组。
 
-### 只读检索工具（12 个）
+### 只读工具（14 个）
 
 - `list_documents`：按题名、作者或文件名筛选已导入文献，返回后续工具使用的稳定文献 ID，并标出所属作品及组内已对齐的其他版本；
 - `locate_quote`：在本地索引中定位原句，返回原文、上下文、匹配方式与页码状态；支持精确、忽略空格、忽略标点、模糊等多种模式；
@@ -745,6 +749,8 @@ MEFinder MCP 提供十七个工具，分为三组。
 - `find_parallel_passages`：输入一句中文或任一译本文本，以作品组已有对齐为中心召回其他版本的多个候选和前后文；Agent 比较跨语言语义、专名、引文结构后才确认，无法唯一确定时列出歧义或明确说明证据不足；
 - `read_bibliographic_pages`：读取文献首尾的版权页和 CIP 页候选，供 AI 直接从原书文本提取题录；
 - `read_bibliographic_metadata`：查看已存题录字段及缺口（标注 present / invalid / missing），配合上一个工具补全；
+- `list_material_tags`：列出完整标签路径和文字摘录数；
+- `read_tag_excerpts`：读取标签及其子标签下已保存的原文、说明与出处，可用 `limit` 和 `offset` 分页；
 - `list_alignment_corrections`：只读列出已记录的人工对齐修正（待确认 / 已确认 / 已撤销），用于复核与审计。
 
 ### 书目补全（2 个，写操作）

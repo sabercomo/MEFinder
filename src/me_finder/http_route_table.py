@@ -28,6 +28,12 @@ CNKI_CITATION_BODY = dict(
 )
 CNKI_LOOKUP_BODY = dict(max_body_bytes=32 * 1024, oversize_error="知网题录请求内容过大。")
 
+MATERIALS_BODY = dict(
+    mutates_data_root=True,
+    max_body_bytes=36 * 1024 * 1024,
+    oversize_error="图片请求过大。",
+)
+
 
 @dataclass(frozen=True)
 class RawRequest:
@@ -39,6 +45,14 @@ class RawRequest:
     headers: Mapping[str, str]
     stream: BinaryIO
     drain: Callable[[], None]
+
+
+@dataclass(frozen=True)
+class BinaryResponse:
+    """A local GET response whose bytes must bypass JSON encoding."""
+
+    body: bytes
+    content_type: str
 
 
 @dataclass(frozen=True)

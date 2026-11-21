@@ -126,3 +126,35 @@ def mutate_materials(db_path: Path, payload: object) -> dict:
                 result = {"status": "located", "excerpt": {**excerpt, **fields}, "reader": reader}
         connection.commit()
         return result
+
+
+def list_material_tags(db_path: Path) -> list[dict]:
+    """Read the shared tag tree and count unique text excerpts under each tag."""
+    snapshot = list_materials(db_path)
+    counts = {row["path"]: set() for row in snapshot["material_tags"]}
+    for row in snapshot["material_excerpt_tags"]:
+        path = row["path"]
+        while path:
+            counts[path].add(row["excerpt_id"])
+            path = path.rpartition("/")[0]
+    return [{"path": path, "excerpt_count": len(ids)} for path, ids in counts.items()]
+
+
+def read_tag_excerpts(db_path: Path, path: str) -> list[dict]:
+    """Return saved text and its captured anchors for a tag and its descendants."""
+    try:
+        path = tag_path(path)
+    except UserFacingError as exc:
+        raise ValueError(str(exc)) from exc
+    snapshot = list_materials(db_path)
+    assigned: dict[int, list[str]] = {}
+    matching = set()
+    for row in snapshot["material_excerpt_tags"]:
+        assigned.setdefault(row["excerpt_id"], []).append(row["path"])
+        if row["path"] == path or row["path"].startswith(path + "/"):
+            matching.add(row["excerpt_id"])
+    return [
+        {**row, "tags": assigned[row["excerpt_id"]]}
+        for row in reversed(snapshot["material_excerpts"])
+        if row["excerpt_id"] in matching
+    ]

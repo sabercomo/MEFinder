@@ -103,6 +103,7 @@
     var showCancel = options.showCancel !== false;
     var tone = ['info', 'warning', 'danger'].indexOf(options.tone) >= 0 ? options.tone : 'info';
     dialog.dataset.tone = tone;
+    dialog.classList.toggle('app-dialog-compact', !!options.compact);
     title.textContent = options.title || (showCancel ? '请确认' : '提示');
     messageElement.textContent = String(message || '');
     cancelButton.hidden = !showCancel;
@@ -114,7 +115,8 @@
     backdrop.setAttribute('aria-hidden', 'false');
     return new Promise(function(resolve) {
       appDialogResolve = resolve;
-      setTimeout(function() { confirmButton.focus(); }, 0);
+      var focusTarget = showCancel && options.focusCancel ? cancelButton : confirmButton;
+      setTimeout(function() { focusTarget.focus(); }, 0);
     });
   }
 
@@ -135,7 +137,7 @@
     appDialogResolve = null;
     var previousFocus = appDialogPreviousFocus;
     appDialogPreviousFocus = null;
-    if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+    if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus({preventScroll:true});
     if (resolve) resolve(!!accepted);
   }
 
@@ -143,9 +145,26 @@
     if (event.target && event.target.id === 'app-dialog-backdrop') settleAppDialog(false);
   }
 
-  // 统一 Esc 栈（G-02）：按从最内层到最外层的顺序，一次 Esc 关一层。
+  // Adapted from Magpie's confirmAction (MIT): keep keyboard focus inside compact confirmations.
   document.addEventListener('keydown', function(event) {
+    if (event.key !== 'Tab' && event.key !== 'Escape') return;
+    var compact = document.querySelector('#app-dialog-backdrop.open .app-dialog-compact');
+    if (compact && event.key === 'Tab') {
+      var cancel = document.getElementById('app-dialog-cancel');
+      var accept = document.getElementById('app-dialog-confirm');
+      var boundary = event.shiftKey ? cancel : accept;
+      if (document.activeElement !== boundary && compact.contains(document.activeElement)) return;
+      event.preventDefault();
+      (event.shiftKey ? accept : cancel).focus({preventScroll:true});
+      return;
+    }
     if (event.key !== 'Escape') return;
+    if (compact) {
+      event.preventDefault();
+      settleAppDialog(false);
+      return;
+    }
+    // 统一 Esc 栈（G-02）：按从最内层到最外层的顺序，一次 Esc 关一层。
     // 1. 开着的下拉 / 菜单先关。
     if (document.querySelector('.app-select.is-open, .bib-menu.open')) {
       event.preventDefault();

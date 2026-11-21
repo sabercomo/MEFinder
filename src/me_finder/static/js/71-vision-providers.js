@@ -190,7 +190,11 @@
   }
 
   function visionBaseKeydown(event) {
-    if (event.key === 'Escape') { closeVisionBasePop(); return; }
+    if (event.key === 'Escape' && visionBasePopOpen) {
+      event.preventDefault();
+      closeVisionBasePop();
+      return;
+    }
     if (!visionBasePopOpen) {
       if (event.key === 'ArrowDown') {
         event.preventDefault();
@@ -278,7 +282,11 @@
   }
 
   function visionModelKeydown(event) {
-    if (event.key === 'Escape') { closeVisionModelPop(); return; }
+    if (event.key === 'Escape' && visionModelPopOpen) {
+      event.preventDefault();
+      closeVisionModelPop();
+      return;
+    }
     if (!visionModelPopOpen) {
       if (event.key === 'ArrowDown' && parserStore.visionModelOptions.length) {
         event.preventDefault();
@@ -374,13 +382,11 @@
       if (!resp.ok || data.error) throw new Error(data.error || '获取模型失败');
       if (requestSerial !== parserStore.visionModelRequestSerial) return;
       renderVisionModelOptions(data.models || []);
-      setVisionModelHint(
-        '已获取 ' + parserStore.visionModelOptions.length + ' 个模型；不在列表里也可直接手动输入模型名称',
-        'is-ready'
-      );
-      if (!silent) {
-        openVisionModelPop();
-        showToast('已获取 ' + parserStore.visionModelOptions.length + ' 个模型');
+      if (parserStore.visionModelOptions.length) {
+        setVisionModelHint('也可手动填写模型名', '');
+        if (!silent) openVisionModelPop();
+      } else {
+        setVisionModelHint('接口未返回模型，请手动填写模型名', '');
       }
     } catch (e) {
       if (requestSerial !== parserStore.visionModelRequestSerial) return;
@@ -736,15 +742,41 @@
     parserStore.visionTestResults[provider.id] = {sig: visionProviderSig(provider), ok: !!ok};
   }
 
-  // Returns {label, cls} for the card badge. 绿色“已连通”只在真实测连成功后出现，
-  // 填完三个框但未验证的接口显示中性的“待测试”，避免像旧版那样误报“可用”。
-  function visionProviderBadge(provider) {
-    if (!provider.enabled) return {label: '已停用', cls: ' muted'};
-    if (!provider.configured) return {label: '缺少密钥', cls: ' warning'};
+  // 只有实际检测成功才显示「已连通」。
+  function visionProviderStatus(provider) {
+    if (!provider.enabled) return {label: '已停用', tone: ''};
+    if (!provider.configured) return {label: '缺少密钥', tone: ' is-warning'};
     var verified = visionVerifiedState(provider);
-    if (verified === 'ok') return {label: '已连通', cls: ''};
-    if (verified === 'failed') return {label: '连接失败', cls: ' warning'};
-    return {label: '待测试', cls: ' pending'};
+    if (verified === 'ok') return {label: '已连通', tone: ' is-ready'};
+    if (verified === 'failed') return {label: '连接失败', tone: ' is-warning'};
+    return {label: '待测试', tone: ''};
+  }
+
+  var visionWritePending = false;
+  var visionWriteRevision = 0;
+
+  async function saveVisionConfiguration(payload) {
+    visionWritePending = true;
+    visionWriteRevision += 1;
+    try {
+      var response = await MEFinderApi.fetch('/api/vision-providers', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      var data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || '保存失败');
+      parserStore.visionConfig = data;
+      parserStore.visionConfigLoaded = true;
+    } finally {
+      visionWritePending = false;
+    }
+  }
+
+  function findVisionProviderAction(providerId, action) {
+    return Array.from(document.querySelectorAll('#vision-provider-list [data-action="' + action + '"]')).find(function(button) {
+      return button.dataset.providerId === providerId;
+    });
   }
 
   function renderVisionProviders() {
@@ -756,13 +788,13 @@
     var readyProviders = configuredVisionProviders();
     var fallbackProvider = readyProviders[0] || null;
     var providers = parserStore.visionConfig.providers || [];
-    if (count) count.textContent = providers.length.toLocaleString() + ' 个接口';
-    if (status) {
-      var readyCount = readyProviders.length;
-      status.className = 'settings-status ' + (readyCount ? 'ready' : 'warning');
-      status.textContent = readyCount ? '已配置 ' + readyCount + ' 个接口' : '尚未配置';
-    }
+    if (count) count.textContent = providers.length.toLocaleString() + ' 个';
+    if (status) status.textContent = '';
     if (list) {
+      var card = document.getElementById('vision-editor-card');
+      var editorFocus = card.contains(document.activeElement) ? document.activeElement : null;
+      var providerId = document.getElementById('vision-provider-id').value;
+      if (list.contains(card)) list.after(card);
       if (!providers.length) {
         var empty = providerNode('div', 'vision-provider-empty');
         var icon = providerSvg(['M12 3 3 7.5 12 12l9-4.5L12 3z', 'M3 12l9 4.5 9-4.5', 'M3 16.5 12 21l9-4.5'], null, '0 0 24 24');
@@ -774,44 +806,58 @@
       } else {
         list.replaceChildren();
         providers.forEach(function(provider) {
-          // 与 MinerU 账号同一套行式布局：名称 + 事实行 + 开关，第二行是地址与动作。
-          var badge = visionProviderBadge(provider);
-          var row = providerNode('div', 'mineru-account-row');
-          var main = providerNode('div', 'mineru-account-main');
-          var copy = providerNode('div', 'mineru-account-copy');
-          copy.appendChild(providerNode('strong', null, provider.name));
-          var facts = providerNode('small', null, (provider.model || '未选择模型') + ' · ' + (provider.has_api_key ? '密钥已保存' : '未填写密钥') + ' · ');
-          facts.appendChild(providerNode('span', 'vision-provider-state' + badge.cls, badge.label));
+          var connection = visionProviderStatus(provider);
+          var row = providerNode('div', 'vision-ledger-row');
+          row.dataset.providerId = provider.id;
+          var main = providerNode('div', 'vision-ledger-line');
+          var copy = providerNode('div', 'vision-ledger-copy');
+          copy.appendChild(providerNode('strong', 'vision-ledger-name', provider.name));
+          var facts = providerNode('small', 'vision-ledger-meta', (provider.model || '未选择模型') + ' · ');
+          facts.appendChild(providerNode('span', 'vision-ledger-state' + connection.tone, connection.label));
           copy.appendChild(facts);
+          copy.appendChild(providerNode('code', 'vision-ledger-host', provider.api_base));
           main.appendChild(copy);
-          var switchLabel = providerNode('label', 'ui-switch mineru-row-switch');
+          var switchLabel = providerNode('label', 'ui-switch vision-ledger-toggle');
           switchLabel.title = provider.enabled ? '停用这个接口' : '启用这个接口';
           var input = document.createElement('input');
           input.type = 'checkbox';
           input.checked = !!provider.enabled;
           input.dataset.actionChange = 'quickToggleVisionProvider';
           input.dataset.providerId = provider.id;
+          input.setAttribute('role', 'switch');
           switchLabel.appendChild(input);
           var track = providerNode('span', 'ui-switch-track');
           track.setAttribute('aria-hidden', 'true');
           switchLabel.appendChild(track);
           switchLabel.appendChild(providerNode('span', 'visually-hidden', (provider.enabled ? '停用' : '启用') + ' ' + provider.name));
+          var toggleCaption = providerNode('span', 'vision-toggle-label', provider.enabled ? '开启' : '关闭');
+          toggleCaption.setAttribute('aria-hidden', 'true');
+          switchLabel.appendChild(toggleCaption);
           main.appendChild(switchLabel);
-          main.appendChild(providerNode('span', 'mineru-account-switch-text', provider.enabled ? '开启' : '关闭'));
-          row.appendChild(main);
-          var actions = providerNode('div', 'mineru-account-actions');
-          actions.appendChild(providerNode('code', 'mineru-account-aside', provider.api_base));
-          [['检测连接', 'testVisionProvider', 'action-btn quiet'], ['编辑', 'editVisionProvider', 'action-btn']].forEach(function(action) {
+          var actions = providerNode('div', 'vision-ledger-actions');
+          [
+            ['检测连接', 'testVisionProvider', 'action-btn vision-quiet-action'],
+            ['编辑', 'editVisionProvider', 'action-btn vision-quiet-action'],
+            ['删除', 'deleteVisionProvider', 'action-btn mineru-remove-btn']
+          ].forEach(function(action) {
             var button = providerNode('button', action[2], action[0]);
             button.type = 'button';
             button.dataset.action = action[1];
             button.dataset.providerId = provider.id;
+            button.setAttribute('aria-label', action[0] + provider.name);
+            if (action[1] === 'editVisionProvider') {
+              button.setAttribute('aria-controls', card.id);
+              button.setAttribute('aria-expanded', String(!card.hidden && providerId === provider.id));
+            }
             actions.appendChild(button);
           });
-          row.appendChild(actions);
+          main.appendChild(actions);
+          row.appendChild(main);
+          if (!card.hidden && providerId === provider.id) row.appendChild(card);
           list.appendChild(row);
         });
       }
+      if (editorFocus && editorFocus !== document.activeElement) editorFocus.focus({preventScroll:true});
     }
     if (autoFallback) {
       autoFallback.checked = !!parserStore.visionConfig.auto_fallback_from_mineru;
@@ -821,9 +867,9 @@
       if (!fallbackProvider) {
         fallbackSummary.textContent = '请先添加并启用一个解析接口，之后即可开启自动切换';
       } else if (parserStore.visionConfig.auto_fallback_from_mineru) {
-        fallbackSummary.textContent = '已开启；MinerU 失败后将自动改用「' + fallbackProvider.name + '」，可能产生调用费用';
+        fallbackSummary.textContent = '失败时改用「' + fallbackProvider.name + '」，可能产生调用费用';
       } else {
-        fallbackSummary.textContent = '已关闭；开启后将使用「' + fallbackProvider.name + '」，可能产生调用费用';
+        fallbackSummary.textContent = '开启后改用「' + fallbackProvider.name + '」，可能产生调用费用';
       }
     }
     syncImportVisionProviders();
@@ -831,24 +877,22 @@
   }
 
   async function loadVisionProviders() {
+    if (visionWritePending) return;
+    var revision = visionWriteRevision;
     var status = document.getElementById('vision-config-status');
-    if (status) {
-      status.className = 'settings-status';
-      status.textContent = '读取中…';
-    }
+    if (status) status.textContent = '读取中…';
     try {
       var resp = await MEFinderApi.fetch('/api/vision-providers');
       var data = await resp.json();
+      if (revision !== visionWriteRevision) return;
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
       parserStore.visionConfig = data;
       parserStore.visionConfigLoaded = true;
       renderVisionProviders();
     } catch (e) {
+      if (revision !== visionWriteRevision) return;
       parserStore.visionConfigLoaded = false;
-      if (status) {
-        status.className = 'settings-status warning';
-        status.textContent = '读取失败';
-      }
+      if (status) status.textContent = '读取失败';
       syncImportVisionProviders();
       showToast('读取其他解析 API 配置失败：' + e.message);
     }
@@ -859,14 +903,13 @@
   function updateVisionEditorHead() {
     var title = document.getElementById('vision-editor-title');
     var avatar = document.getElementById('vision-editor-avatar');
-    var cancel = document.getElementById('vision-cancel-edit');
     if (!title) return;
     var editing = !!document.getElementById('vision-provider-id').value.trim();
     var name = document.getElementById('vision-provider-name').value.trim();
     var base = document.getElementById('vision-api-base').value.trim();
     title.textContent = editing
-      ? '编辑接口' + (name ? ' · ' + name : '')
-      : (name ? '添加接口 · ' + name : '添加解析接口');
+      ? '编辑「' + name + '」'
+      : '添加接口';
     if (avatar) {
       if (name || base) {
         var brand = visionBrandFromBase(base);
@@ -890,7 +933,6 @@
         avatar.replaceChildren(providerSvg(['M10 4.5v11M4.5 10h11']));
       }
     }
-    if (cancel) cancel.hidden = !editing;
   }
 
   function autoFillVisionName() {
@@ -910,6 +952,13 @@
     parserStore.visionModelRequestSerial += 1;
     resetVisionModelButton();
     closeVisionModelPop();
+    closeVisionBasePop();
+    var key = document.getElementById('vision-api-key');
+    key.type = 'password';
+    key.placeholder = '输入 API Key';
+    var toggle = document.getElementById('vision-key-toggle');
+    toggle.classList.remove('is-visible');
+    toggle.setAttribute('aria-label', '显示');
     ['vision-provider-id','vision-provider-name','vision-api-base','vision-model','vision-api-key'].forEach(function(id) {
       var input = document.getElementById(id);
       if (input) input.value = '';
@@ -919,74 +968,82 @@
     if (enabled) enabled.checked = true;
     var hint = document.getElementById('vision-save-hint');
     if (hint) hint.textContent = '';
-    clearVisionModelOptions('填写 API 地址和 Key 后会自动读取模型；接口不支持时仍可手动输入');
+    clearVisionModelOptions('也可手动填写模型名');
     updateVisionEditorHead();
-    renderVisionProviders();
+  }
+
+  function placeVisionEditor(trigger) {
+    var card = document.getElementById('vision-editor-card');
+    document.querySelectorAll('[aria-controls="vision-editor-card"]').forEach(function(button) {
+      button.setAttribute('aria-expanded', String(button === trigger));
+    });
+    if (trigger && trigger.dataset.providerId) {
+      trigger.closest('.vision-ledger-row').appendChild(card);
+    } else {
+      var list = document.getElementById('vision-provider-list');
+      list.after(card);
+    }
+    card.hidden = !trigger;
+  }
+
+  function closeVisionProviderEditor(restoreFocus) {
+    var providerId = document.getElementById('vision-provider-id').value;
+    var trigger = findVisionProviderAction(providerId, 'editVisionProvider') || document.getElementById('vision-add-provider');
+    placeVisionEditor(null);
+    resetVisionProviderForm();
+    if (restoreFocus) trigger.focus({preventScroll:true});
   }
 
   function startAddVisionProvider() {
+    if (visionWritePending) return;
     setSettingsSection('vision-api-settings', true);
     resetVisionProviderForm();
-    var card = document.getElementById('vision-editor-card');
-    if (card) card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-    var base = document.getElementById('vision-api-base');
-    if (base) base.focus();
+    placeVisionEditor(document.getElementById('vision-add-provider'));
+    document.getElementById('vision-api-base').focus();
   }
 
-  function editVisionProvider(providerId) {
-    var provider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === providerId; });
-    if (!provider) return;
+  function editVisionProvider(trigger) {
+    var provider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === trigger.dataset.providerId; });
+    if (!provider || visionWritePending) return;
+    resetVisionProviderForm();
     document.getElementById('vision-provider-id').value = provider.id;
     document.getElementById('vision-provider-name').value = provider.name || '';
     document.getElementById('vision-api-base').value = provider.api_base || '';
     document.getElementById('vision-model').value = provider.model || '';
-    document.getElementById('vision-api-key').value = '';
+    if (provider.has_api_key) document.getElementById('vision-api-key').placeholder = '已保存，留空时沿用';
     document.getElementById('vision-provider-enabled').checked = !!provider.enabled;
-    document.getElementById('vision-save-hint').textContent = provider.has_api_key ? '已保存密钥；留空不会覆盖' : '尚未保存 API Key';
-    visionNameAutoValue = '';
-    parserStore.visionModelRequestSerial += 1;
-    resetVisionModelButton();
-    closeVisionModelPop();
-    clearVisionModelOptions('正在读取这个接口的模型列表…');
     updateVisionEditorHead();
-    renderVisionProviders();
-    var card = document.getElementById('vision-editor-card');
-    if (card) card.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    placeVisionEditor(trigger);
+    document.getElementById('vision-api-base').focus();
     if (provider.api_base && provider.has_api_key) fetchVisionModels({silent: true});
   }
 
-  async function quickToggleVisionProvider(providerId, enabled) {
-    var provider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === providerId; });
+  async function quickToggleVisionProvider(toggle) {
+    var provider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === toggle.dataset.providerId; });
     if (!provider) return;
+    if (visionWritePending) {
+      toggle.checked = !!provider.enabled;
+      return;
+    }
+    var enabled = toggle.checked;
+    toggle.disabled = true;
     try {
-      var resp = await MEFinderApi.fetch('/api/vision-providers', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          action: 'save_provider',
-          provider: {
-            id: provider.id,
-            name: provider.name,
-            api_base: provider.api_base,
-            model: provider.model,
-            api_key: '',
-            enabled: enabled
-          }
-        })
+      await saveVisionConfiguration({
+        action: 'save_provider',
+        provider: {id: provider.id, name: provider.name, api_base: provider.api_base, model: provider.model, enabled: enabled}
       });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '切换失败');
-      parserStore.visionConfig = data;
-      parserStore.visionConfigLoaded = true;
       renderVisionProviders();
       showToast(provider.name + (enabled ? ' 已启用' : ' 已停用'));
     } catch (e) {
-      renderVisionProviders();
-      showToast('切换失败：' + e.message);
+      toggle.checked = !!provider.enabled;
+      showToast('切换失败：' + e.message, 'danger');
+    } finally {
+      toggle.disabled = false;
     }
   }
 
   async function saveVisionProvider() {
+    if (visionWritePending) return;
     var hint = document.getElementById('vision-save-hint');
     var provider = {
       id: document.getElementById('vision-provider-id').value.trim(),
@@ -1016,46 +1073,54 @@
       provider.name = (brand ? brand.name : visionHostLabel(provider.api_base) || '自定义接口') + ' · ' + provider.model;
       document.getElementById('vision-provider-name').value = provider.name;
     }
-    if (hint) hint.textContent = '正在保存…';
+    var card = document.getElementById('vision-editor-card');
+    var previousFocus = document.activeElement;
+    card.inert = true;
+    hint.textContent = '正在保存…';
     try {
-      var resp = await MEFinderApi.fetch('/api/vision-providers', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({action: 'save_provider', provider: provider})
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-      parserStore.visionConfig = data;
-      parserStore.visionConfigLoaded = true;
-      resetVisionProviderForm();
+      await saveVisionConfiguration({action: 'save_provider', provider: provider});
+      closeVisionProviderEditor(false);
       renderVisionProviders();
+      var edit = findVisionProviderAction(provider.id, 'editVisionProvider');
+      (edit || document.getElementById('vision-add-provider')).focus({preventScroll:true});
       showToast('其他解析 API 已保存');
     } catch (e) {
-      if (hint) hint.textContent = '保存失败';
-      showToast('保存解析接口失败：' + e.message);
+      hint.textContent = '保存失败：' + e.message;
+    } finally {
+      card.inert = false;
+      if (!card.hidden && document.activeElement === document.body && card.contains(previousFocus)) {
+        previousFocus.focus({preventScroll:true});
+      }
     }
   }
 
-  async function deleteVisionProvider(providerId) {
+  async function deleteVisionProvider(button) {
+    if (visionWritePending) return;
+    var providerId = button.dataset.providerId;
     var provider = (parserStore.visionConfig.providers || []).find(function(item) { return item.id === providerId; });
-    if (!provider || !await showAppConfirm(
-      '将删除解析接口「' + provider.name + '」',
-      {title:'删除解析接口？', confirmText:'删除', tone:'danger'}
-    )) return;
+    if (!provider) return;
+    button.focus({preventScroll:true});
+    if (!await showAppConfirm(
+      '将移除此接口及本机保存的 API Key',
+      {title:'删除「' + provider.name + '」？', confirmText:'删除', tone:'danger', focusCancel:true, compact:true}
+    ) || visionWritePending) return;
+    button.setAttribute('aria-disabled', 'true');
+    button.textContent = '删除中…';
     try {
-      var resp = await MEFinderApi.fetch('/api/vision-providers', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({action: 'delete_provider', provider_id: providerId})
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '删除失败');
-      parserStore.visionConfig = data;
-      resetVisionProviderForm();
+      await saveVisionConfiguration({action: 'delete_provider', provider_id: providerId});
+      var restoreFocus = document.activeElement === button;
+      if (document.getElementById('vision-provider-id').value === providerId) closeVisionProviderEditor(false);
       renderVisionProviders();
-      showToast('解析接口已删除');
+      if (restoreFocus) {
+        var next = document.querySelector('#vision-provider-list [data-action="deleteVisionProvider"]');
+        (next || document.getElementById('vision-add-provider')).focus({preventScroll:true});
+      }
+      showToast('已删除「' + provider.name + '」', 'success');
     } catch (e) {
-      showToast('删除解析接口失败：' + e.message);
+      showToast('删除解析接口失败：' + e.message, 'danger');
+    } finally {
+      button.removeAttribute('aria-disabled');
+      button.textContent = '删除';
     }
   }
 
@@ -1094,6 +1159,10 @@
     var providers = configuredVisionProviders();
     var provider = providers[0] || null;
     var previous = !!parserStore.visionConfig.auto_fallback_from_mineru;
+    if (visionWritePending) {
+      toggle.checked = previous;
+      return;
+    }
     if (enabled && !provider) {
       if (toggle) toggle.checked = false;
       showToast('请先添加并启用一个其他解析 API');
@@ -1101,17 +1170,7 @@
     }
     if (toggle) toggle.disabled = true;
     try {
-      var resp = await MEFinderApi.fetch('/api/vision-providers', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          action: 'save_policy',
-          auto_fallback_from_mineru: !!enabled
-        })
-      });
-      var data = await resp.json();
-      if (!resp.ok || data.error) throw new Error(data.error || '保存失败');
-      parserStore.visionConfig = data;
+      await saveVisionConfiguration({action: 'save_policy', auto_fallback_from_mineru: !!enabled});
       renderVisionProviders();
       showToast(enabled ? '已开启；MinerU 失败后将自动改用 ' + provider.name : '已关闭 MinerU 失败后自动切换');
     } catch (e) {
@@ -1174,13 +1233,19 @@
     importVisionOptionKeydown(event);
   });
   MEFinderActions.register('quickToggleVisionProvider', function(event, target) {
-    quickToggleVisionProvider(target.dataset.providerId, target.checked);
+    quickToggleVisionProvider(target);
   });
   MEFinderActions.register('testVisionProvider', function(event, target) {
     testVisionProvider(target.dataset.providerId);
   });
   MEFinderActions.register('editVisionProvider', function(event, target) {
-    editVisionProvider(target.dataset.providerId);
+    editVisionProvider(target);
+  });
+  MEFinderActions.register('deleteVisionProvider', function(event, target) {
+    deleteVisionProvider(target);
+  });
+  MEFinderActions.register('closeVisionProviderEditor', function() {
+    if (!visionWritePending) closeVisionProviderEditor(true);
   });
 
   // 模板与动态 HTML 的内联处理器必须保持浏览器全局可见。
@@ -1190,9 +1255,21 @@
   global.toggleImportVisionProvider = toggleImportVisionProvider;
   global.importVisionTriggerKeydown = importVisionTriggerKeydown;
   global.startAddVisionProvider = startAddVisionProvider;
-  global.deleteVisionProvider = deleteVisionProvider;
   global.saveVisionProvider = saveVisionProvider;
   global.setVisionAutoFallback = setVisionAutoFallback;
+
+  if (typeof document !== 'undefined' && document.getElementById('vision-editor-card')) {
+    document.getElementById('vision-editor-card').addEventListener('keydown', function(event) {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        if (!visionWritePending) closeVisionProviderEditor(true);
+      } else if (event.key === 'Enter' && event.target.matches('.settings-input')) {
+        event.preventDefault();
+        saveVisionProvider();
+      }
+    });
+  }
 
   if (typeof module !== "undefined" && module.exports) {
     Object.assign(module.exports, {

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="frost-blue">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEFinder · 加标签轻量浮层样稿</title>
+<style>
+/* Hallmark · component: anchored tag picker + combobox · genre: utilitarian desktop workbench · theme: MEFinder frost-blue
+ * scope: replace only the tag dialog; keep selection, collection entry points and the tag tree
+ * states: default · hover · focus-visible · active · disabled · loading · error · success
+ * contrast: checked after render · no production code · pre-emit critique: P4 H4 E4 S5 R5 V4
+ */
+:root{
+  --color-paper:#FFFFFF;--color-paper-2:#F8FAFD;--color-paper-3:#F1F5FA;--color-app:#F5F8FC;
+  --color-ink:#172033;--color-ink-2:#414D61;--color-muted:#667085;--color-faint:#98A2B3;
+  --color-rule-1:#EDF1F6;--color-rule-2:#DDE5EF;--color-rule-3:#C8D4E2;--color-control:#828CA0;
+  --color-accent:#0F62E6;--color-accent-hover:#0B54C9;--color-accent-text:#0B5EC7;
+  --color-accent-soft:#EAF3FF;--color-accent-ink:#FFFFFF;--color-focus:#0F62E6;
+  --color-danger:#C8322B;--color-danger-soft:#FFF1F0;--color-success:#168A46;
+  --color-match-bg:#FFF8E6;--color-match-border:#E9B644;--color-match-text:#30240A;
+  --shadow-popover:0 12px 32px rgba(23,32,51,.14);--shadow-selection:0 4px 16px rgba(23,32,51,.08);
+  --font-ui:"PingFang SC","Microsoft YaHei UI","Segoe UI Variable",-apple-system,system-ui,sans-serif;
+  --font-reading:"Noto Serif SC","Songti SC","STSong",Georgia,serif;
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:24px;
+  --radius-xs:4px;--radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-pill:999px;
+  --ease-out:cubic-bezier(.23,1,.32,1);--ease-in:cubic-bezier(.7,0,.84,0);--ease-in-out:cubic-bezier(.65,0,.35,1);
+  --dur-fast:120ms;--dur-pop:180ms;--dur-exit:140ms;--z-pop:100;--z-toast:500;
+}
+html,body{overflow-x:clip;min-width:0}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh;background:var(--color-app);color:var(--color-ink);font:14px/1.55 var(--font-ui)}
+button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.5}
+button{color:var(--color-ink);border:1px solid var(--color-rule-2);background:var(--color-paper);border-radius:var(--radius-md)}
+button:focus-visible,input:focus-visible,label:has(input:focus-visible){outline:2px solid var(--color-focus);outline-offset:2px}
+button:active:not(:disabled){transform:translateY(1px);background:var(--color-paper-3)}
+[hidden]{display:none!important}
+@media(hover:hover) and (pointer:fine){button:hover:not(:disabled){background:var(--color-paper-3)}}
+.demo-head{max-width:1400px;margin:0 auto;padding:20px 24px 14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.demo-title{font-size:15px;font-weight:600;margin:0;min-width:0;overflow-wrap:anywhere}
+.demo-note{font-size:12px;color:var(--color-muted)}
+.demo-actions{margin-inline-start:auto;display:flex;gap:8px;align-items:center}
+.demo-actions button{height:30px;padding:0 10px;font-size:12px;white-space:nowrap}
+.workbench{max-width:1400px;min-height:680px;margin:0 24px 24px;border:1px solid var(--color-rule-2);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;background:var(--color-paper)}
+.topbar{height:52px;flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:0 20px;border-block-end:1px solid var(--color-rule-1)}
+.brand{font-weight:650;margin-inline-end:12px}
+.topbar-nav{display:flex;gap:4px;min-width:0}.nav-btn{border:0;background:transparent;padding:7px 12px;color:var(--color-ink-2);white-space:nowrap}
+.nav-btn.current{background:var(--color-accent-soft);color:var(--color-accent-text)}
+.search-head{padding:22px 24px 16px;border-block-end:1px solid var(--color-rule-1)}
+.page-title{font-size:23px;font-weight:650;line-height:1.4;margin:0 0 4px;overflow-wrap:anywhere;min-width:0}
+.subtitle{font-size:13px;color:var(--color-muted);margin:0 0 16px}
+.search-row{display:flex;gap:8px;max-width:1100px}.search-field{flex:1;min-width:0;height:38px;border:1px solid var(--color-control);border-radius:var(--radius-md);display:flex;align-items:center;padding:0 12px;gap:8px;background:var(--color-paper);color:var(--color-ink)}
+.search-field input{border:0;outline:0;flex:1;min-width:0;background:transparent;color:var(--color-ink)}
+.search-btn,.primary{background:var(--color-accent);color:var(--color-accent-ink);border-color:var(--color-accent);font-weight:600}
+@media(hover:hover) and (pointer:fine){.search-btn:hover:not(:disabled),.primary:hover:not(:disabled){background:var(--color-accent-hover);color:var(--color-accent-ink)}}
+.search-btn:active:not(:disabled),.primary:active:not(:disabled){background:var(--color-accent-hover);color:var(--color-accent-ink)}
+.search-btn{height:38px;padding:0 18px;white-space:nowrap}
+.filters{display:flex;align-items:center;gap:10px;margin-block-start:12px;color:var(--color-muted);font-size:12px}
+.filter-on{background:var(--color-accent-soft);color:var(--color-accent-text);padding:3px 8px;border-radius:var(--radius-sm)}
+.content{display:grid;grid-template-columns:400px minmax(0,1fr);flex:1;min-height:0}
+.result-list{position:relative;min-width:0;border-inline-end:1px solid var(--color-rule-1);padding-block-end:70px}
+.result-count{padding:10px 16px;font-size:12px;color:var(--color-muted);border-block-end:1px solid var(--color-rule-1)}
+.result-row{padding:14px 16px;border-block-end:1px solid var(--color-rule-1);cursor:pointer}
+.result-row.current{background:var(--color-accent-soft)}
+.result-head{display:flex;align-items:center;gap:8px;min-width:0}.result-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.check{width:16px;height:16px;accent-color:var(--color-accent);margin:0;flex:0 0 auto;cursor:pointer}
+.score{font-size:12px;font-weight:600;color:var(--color-accent-text);white-space:nowrap}
+.meta{color:var(--color-muted);font-size:12px;margin-block-start:5px}
+.excerpt{color:var(--color-ink-2);font-size:13px;line-height:1.8;margin-block-start:6px}
+mark{background:var(--color-match-bg);color:var(--color-match-text);border:1px solid var(--color-match-border);border-radius:var(--radius-xs);padding:0 2px}
+.tag-inline{display:flex;gap:5px;flex-wrap:wrap;margin-block-start:8px}.tag-inline span{font-size:11px;color:var(--color-accent-text);background:var(--color-paper);padding:1px 7px;border:1px solid var(--color-rule-2);border-radius:var(--radius-pill)}
+.selection-bar{position:absolute;inset-inline:12px;inset-block-end:12px;min-height:48px;display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--color-rule-2);border-radius:var(--radius-lg);background:var(--color-paper);box-shadow:var(--shadow-selection);z-index:2}
+.icon-btn{width:32px;height:32px;padding:0;display:grid;place-items:center;font-size:21px;line-height:1;white-space:nowrap}
+.selection-count{font-size:13px;font-weight:600;white-space:nowrap}.spacer{flex:1}
+.tag-trigger{height:34px;padding:0 13px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.detail{min-width:0;padding:24px 28px;overflow:hidden}.detail h2{font-size:17px;line-height:1.5;margin:0 0 5px;overflow-wrap:anywhere;min-width:0}.detail-meta{font-size:13px;color:var(--color-ink-2)}
+.detail-text{font-family:var(--font-reading);font-size:17px;line-height:1.95;margin:22px 0 0;padding:16px 18px;border-inline-start:3px solid var(--color-match-border);background:var(--color-match-bg);color:var(--color-ink)}
+.detail-context{margin-block-start:16px;color:var(--color-ink-2);font-size:13px;line-height:1.8}.detail-actions{margin-block-start:20px;display:flex;gap:8px;flex-wrap:wrap}.action-btn{height:34px;padding:0 12px;white-space:nowrap}
+/* The picker is a small contextual surface, not a tag-maintenance dialog. */
+.tag-picker{position:fixed;z-index:var(--z-pop);width:min(340px,calc(100% - 24px));max-height:calc(100dvh - 24px);display:flex;flex-direction:column;background:var(--color-paper);color:var(--color-ink);border:1px solid var(--color-rule-2);border-radius:var(--radius-lg);box-shadow:var(--shadow-popover);padding:12px;transform-origin:bottom right;animation:picker-in var(--dur-pop) var(--ease-out)}
+.tag-picker[data-placement="top"]{transform-origin:top right}
+@keyframes picker-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.picker-title{font-size:14px;font-weight:650;line-height:1.5;margin:0}.picker-subtitle{font-size:12px;color:var(--color-muted);margin:2px 0 12px}
+.tag-label{display:block;font-size:12px;font-weight:600;margin-block-end:6px}
+.tag-input{height:34px;width:100%;padding:0 10px;border:1px solid var(--color-control);border-radius:var(--radius-md);background:var(--color-paper);color:var(--color-ink);outline:2px solid transparent;outline-offset:1px;min-width:0}
+.tag-input::placeholder{color:var(--color-muted)}
+.tag-input[aria-invalid="true"]{border-color:var(--color-danger);background:var(--color-danger-soft)}
+.picker-hint{font-size:12px;color:var(--color-muted);min-height:1lh;margin:5px 0 10px}
+.picker-error{font-size:12px;color:var(--color-danger);min-height:1lh;margin:5px 0 10px}
+.tag-options{overflow:auto;min-height:0;max-height:min(250px,calc(100dvh - 286px));border-block-start:1px solid var(--color-rule-1);padding-block-start:4px}
+.options-label{font-size:12px;color:var(--color-muted);padding:6px 8px 4px}
+.tag-option{min-height:36px;display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;min-width:0}
+.tag-option:hover{background:var(--color-paper-3)}.tag-option.active{background:var(--color-accent-soft)}
+.tag-option .check{width:16px;height:16px;flex:0 0 auto}.tag-name{min-width:0;overflow-wrap:anywhere;flex:1}.tag-path{font-size:11px;color:var(--color-muted);white-space:nowrap;max-width:42%;overflow:hidden;text-overflow:ellipsis}
+.new-option{display:flex;align-items:center;gap:8px;width:100%;padding:8px;border:0;background:transparent;text-align:start;white-space:normal;overflow-wrap:anywhere;min-width:0}.new-option.active{background:var(--color-accent-soft)}.new-option svg{flex:0 0 auto;color:var(--color-accent-text)}
+.picker-foot{padding-block-start:10px;margin-block-start:4px;border-block-start:1px solid var(--color-rule-1);display:flex;align-items:center;gap:10px;min-width:0}.picker-selection{font-size:12px;color:var(--color-muted);min-width:0;flex:1}.picker-actions{display:flex;gap:8px}.picker-actions button{height:34px;padding:0 12px;white-space:nowrap}
+.toast{position:fixed;z-index:var(--z-toast);inset-block-end:24px;inset-inline-start:50%;transform:translateX(-50%);background:var(--color-ink);color:var(--color-paper);padding:10px 16px;border-radius:var(--radius-md);box-shadow:var(--shadow-popover);max-width:calc(100% - 24px);font-size:13px}
+.loading-dot{display:inline-block;width:12px;height:12px;border:1.5px solid var(--color-accent-ink);border-inline-end-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-inline-end:5px}@keyframes spin{to{transform:rotate(360deg)}}
+[data-theme="dark"]{--color-paper:#1D2733;--color-paper-2:#1A232F;--color-paper-3:#1F2937;--color-app:#0F141C;--color-ink:#E7ECF3;--color-ink-2:#BAC4D2;--color-muted:#8E99AA;--color-faint:#667085;--color-rule-1:#222C39;--color-rule-2:#2C3847;--color-rule-3:#3A4757;--color-control:#6B7688;--color-accent:#5B9BFF;--color-accent-hover:#79AEFF;--color-accent-text:#8FBBFF;--color-accent-soft:#1A2C47;--color-accent-ink:#0B1422;--color-focus:#8FBBFF;--color-danger:#FF9B94;--color-danger-soft:#36201F;--color-success:#4CC27E;--color-match-bg:#2E2615;--color-match-border:#8B6F1F;--color-match-text:#F0C877;--shadow-popover:0 16px 40px rgba(0,0,0,.5)}
+@media(min-width:960px){.content{grid-template-columns:400px minmax(0,1fr)}}
+@media(max-width:959px){.content{grid-template-columns:330px minmax(0,1fr)}.detail{padding:20px}.demo-note{display:none}}
+@media(max-width:680px){.demo-head{padding:14px 12px 10px;gap:10px}.demo-actions{margin-inline-start:0;width:100%;flex-wrap:wrap}.workbench{margin:0 12px 12px;min-height:700px}.topbar{padding:0 12px;gap:8px}.brand{font-size:12px;margin:0}.topbar-nav{gap:0;overflow:auto}.nav-btn{padding:6px;font-size:12px}.search-head{padding:18px 14px 14px}.page-title{font-size:21px}.content{grid-template-columns:minmax(0,1fr)}.detail{display:none}.result-list{border:0}.selection-bar{position:sticky;inset-block-end:8px;margin:8px}.tag-picker{position:fixed;inset-inline:12px!important;inset-block:auto 12px!important;width:auto;max-height:calc(100dvh - 24px);transform-origin:bottom center}.tag-options{max-height:calc(100dvh - 260px)}.filters{flex-wrap:wrap}.search-btn{padding:0 12px}.picker-foot{gap:8px}.picker-selection{font-size:11px}.picker-actions button{padding:0 10px}}
+@media(pointer:coarse){.tag-option{min-height:44px}.icon-btn,.action-btn,.tag-trigger,.picker-actions button{min-height:44px}.tag-input{height:44px}}
+@media(prefers-reduced-motion:reduce){.tag-picker{animation:none}.loading-dot{animation-duration:1.5s}button:active:not(:disabled){transform:none}}
+</style>
+</head>
+<body>
+<header class="demo-head">
+  <h1 class="demo-title">加标签 · 轻量浮层样稿</h1>
+  <span class="demo-note">独立样稿 · 演示数据 · 不修改软件</span>
+  <div class="demo-actions">
+    <button type="button" id="theme-toggle" aria-pressed="false">深色</button>
+    <button type="button" id="reset-demo">重置样稿</button>
+  </div>
+</header>
+<main class="workbench" id="workbench">
+  <header class="topbar"><span class="brand">MEFinder</span><nav class="topbar-nav" aria-label="页面"><button class="nav-btn current" type="button">文献检索</button><button class="nav-btn" type="button">文献库</button><button class="nav-btn" type="button">素材库</button><button class="nav-btn" type="button">译本对照</button></nav></header>
+  <section class="search-head"><h2 class="page-title">文献检索</h2><p class="subtitle">在本地文献库中定位原句、文献与准确页码</p><div class="search-row"><label class="search-field"><span aria-hidden="true">⌕</span><input aria-label="搜索引文" value="异化" readonly></label><button class="search-btn" type="button">搜索</button></div><div class="filters"><span class="filter-on">综合检索</span><span>全部来源</span><span>全部文献</span><span>10 条</span></div></section>
+  <div class="content">
+    <section class="result-list" aria-label="检索结果">
+      <div class="result-count" id="result-count">找到 3 条候选</div>
+      <div id="result-rows"></div>
+      <div class="selection-bar" id="selection-bar" role="toolbar" aria-label="批量收集语料" hidden><button class="icon-btn" id="clear-selection" type="button" aria-label="取消选择">×</button><span class="selection-count" id="selection-count"></span><span class="spacer"></span><button class="tag-trigger primary" id="tag-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="tag-picker">加标签</button></div>
+    </section>
+    <section class="detail" aria-label="原文详情"><h2>法哲学原理：或自然法和国家学纲要</h2><div class="detail-meta">黑格尔 · 第 62 页 · PDF</div><div class="detail-text">自然界各种对象的利用，按其本性来说，是不能特殊化而成为私人占有的。罗马的土地法包含着关于土地占有的公有和私有之间的斗争。</div><p class="detail-context">附释：共同所有权由于它的本性可变为个别所有，也获得了一种自在地可分解的共同性的规定。至于我把我的应有部分留在其中，这本身是一种任意的事。</p><div class="detail-actions"><button class="action-btn" type="button">复制原文与出处</button><button class="action-btn" type="button">查看结构化文本</button><button class="action-btn primary" type="button">打开原文</button></div></section>
+  </div>
+</main>
+<section class="tag-picker" id="tag-picker" role="dialog" aria-modal="false" aria-labelledby="picker-title" hidden>
+  <h2 class="picker-title" id="picker-title">加标签</h2>
+  <p class="picker-subtitle" id="picker-subtitle">已选 1 条语料 · 原有标签会保留</p>
+  <label class="tag-label" for="tag-input">标签</label>
+  <input class="tag-input" id="tag-input" type="text" placeholder="输入名称，如 #哲学/异化" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="tag-options" aria-describedby="picker-help" maxlength="100">
+  <p class="picker-hint" id="picker-help" role="status" aria-live="polite">输入可查找已有标签，用 / 分层，最多三级</p>
+  <div class="tag-options" id="tag-options" role="group" aria-label="标签选项"></div>
+  <div class="picker-foot"><span class="picker-selection" id="picker-selection">未选择标签</span><div class="picker-actions"><button type="button" id="picker-cancel">取消</button><button type="button" class="primary" id="picker-submit">收集</button></div></div>
+</section>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>
+(function(){
+'use strict';
+const rows=[
+ {id:'r1',title:'法哲学原理：或自然法和国家学纲要',meta:'黑格尔 · 第 62 页 · PDF',text:'62 第一篇抽象法 第 46 节 因为我的意志作为人的意志，从而作为单个人的意志，在所有权中，对我说来是成为客观的了',tags:[]},
+ {id:'r2',title:'1844年经济学哲学手稿',meta:'马克思 · 第 57 页 · PDF',text:'劳动所生产的对象，即劳动的产品，作为一种异己的存在物，作为不依赖于生产者的力量，同劳动相对立',tags:['哲学/异化']},
+ {id:'r3',title:'为承认而斗争',meta:'霍耐特 · 第 112 页 · PDF',text:'如果个体在社会中不能获得充分的承认，那么他就会经验到一种自我异化的状态',tags:['哲学/承认理论']}
+];
+const initialTags=['哲学','哲学/异化','哲学/承认理论','读书笔记','读书笔记/黑格尔','待整理'];
+let known=new Set(initialTags),checked=new Set(['哲学/异化']),selected=new Set(['r1']),collected=new Set();
+let active=-1,options=[],busy=false,previousFocus=null;
+const $=id=>document.getElementById(id), picker=$('tag-picker'),input=$('tag-input'),trigger=$('tag-trigger');
+function displayPath(path){return path.split('/').join(' / ')}
+function normalize(value){
+ const parts=value.trim().replace(/^#/,'').split(/[/／]/).map(p=>p.trim());
+ if(parts.some(p=>!p)) throw new Error('标签名不能为空，请补全 / 两侧的名称');
+ if(parts.length>3) throw new Error('标签最多三级，请减少一层');
+ if(parts.some(p=>Array.from(p).length>30)) throw new Error('每级标签最多 30 个字符，请缩短名称');
+ return parts.join('/');
+}
+function drawRows(){
+ $('result-rows').replaceChildren();rows.forEach(row=>{
+  const el=document.createElement('article');el.className='result-row'+(row.id==='r1'?' current':'');
+  const head=document.createElement('div');head.className='result-head';
+  const cb=document.createElement('input');cb.type='checkbox';cb.className='check';cb.checked=selected.has(row.id);cb.setAttribute('aria-label','选择：'+row.title);cb.addEventListener('change',()=>{cb.checked?selected.add(row.id):selected.delete(row.id);drawRows()});
+  const score=document.createElement('span');score.className='score';score.textContent='100%';const title=document.createElement('span');title.className='result-title';title.textContent=row.title;
+  head.append(cb,score,title);el.appendChild(head);
+  const meta=document.createElement('div');meta.className='meta';meta.textContent=row.meta;el.appendChild(meta);
+  const text=document.createElement('div');text.className='excerpt';text.textContent=row.text;el.appendChild(text);
+  if(row.tags.length){const wrap=document.createElement('div');wrap.className='tag-inline';row.tags.forEach(path=>{const chip=document.createElement('span');chip.textContent='#'+displayPath(path);wrap.appendChild(chip)});el.appendChild(wrap)}
+  $('result-rows').appendChild(el);
+ });
+ $('selection-bar').hidden=!selected.size;$('selection-count').textContent='已选 '+selected.size+' 条';
+}
+function positionPicker(){
+ if(matchMedia('(max-width:680px)').matches)return;
+ const r=trigger.getBoundingClientRect(),width=Math.min(340,innerWidth-24),height=picker.offsetHeight;
+ let left=Math.max(12,Math.min(r.right-width,innerWidth-width-12)),top=r.top-height-8;
+ picker.dataset.placement='top';
+ if(top<12){top=Math.min(r.bottom+8,innerHeight-height-12);picker.dataset.placement='bottom'}
+ picker.style.left=left+'px';picker.style.top=Math.max(12,top)+'px';
+}
+function matchingRows(query){
+ const needle=query.trim().replace(/^#/,'').toLowerCase();
+ return [...known].filter(path=>path.toLowerCase().includes(needle)).sort((a,b)=>a.localeCompare(b,'zh-CN'));
+}
+function setMessage(message,isError){const help=$('picker-help');help.textContent=message;help.className=isError?'picker-error':'picker-hint';input.setAttribute('aria-invalid',isError?'true':'false')}
+function drawOptions(){
+ const raw=input.value.trim();let path='',error='';try{if(raw)path=normalize(raw)}catch(e){error=e.message}
+ options=[];$('tag-options').replaceChildren();
+ const listTitle=document.createElement('div');listTitle.className='options-label';listTitle.textContent=raw?'匹配已有标签':'已有标签';$('tag-options').appendChild(listTitle);
+ const matches=matchingRows(raw);
+ matches.forEach(tag=>{
+  const id='tag-'+options.length;options.push({id,path:tag});
+  const label=document.createElement('label');label.className='tag-option';label.id=id;
+  const cb=document.createElement('input');cb.type='checkbox';cb.className='check';cb.checked=checked.has(tag);cb.tabIndex=-1;cb.setAttribute('aria-label','选择 '+displayPath(tag));
+  cb.addEventListener('change',()=>{cb.checked?checked.add(tag):checked.delete(tag);updateCount()});
+  const name=document.createElement('span');name.className='tag-name';name.textContent=tag.split('/').at(-1);
+  const parent=tag.includes('/')?tag.slice(0,tag.lastIndexOf('/')):'';const trail=document.createElement('span');trail.className='tag-path';trail.textContent=parent;
+  label.append(cb,name,trail);$('tag-options').appendChild(label);
+ });
+ if(raw&&!known.has(path)&&!error){
+  const id='tag-new';options.push({id,path,create:true});
+  const create=document.createElement('button');create.type='button';create.id=id;create.className='new-option';
+  const plus=document.createElement('span');plus.textContent='＋';plus.setAttribute('aria-hidden','true');
+  const text=document.createElement('span');text.textContent='创建“'+displayPath(path)+'”';
+  create.append(plus,text);create.addEventListener('click',()=>chooseOption(options.findIndex(o=>o.id===id)));$('tag-options').appendChild(create);
+ }
+ if(error)setMessage(error,true);else if(raw&&known.has(path))setMessage('已有同名标签，Enter 选择',false);else if(raw&&!matches.length&&!known.has(path))setMessage('没有这个标签，可直接创建',false);else setMessage('输入可查找已有标签，用 / 分层，最多三级',false);
+ active=options.findIndex(o=>o.path===path);if(active<0)active=options.findIndex(o=>o.create);if(active<0&&options.length)active=0;syncActive();updateCount();
+}
+function syncActive(){options.forEach((o,i)=>{const el=$(o.id);el.classList.toggle('active',i===active);if(i===active)el.setAttribute('aria-current','true');else el.removeAttribute('aria-current')});if(options[active])input.setAttribute('aria-activedescendant',options[active].id);else input.removeAttribute('aria-activedescendant')}
+function updateCount(){$('picker-selection').textContent=checked.size?'已选 '+checked.size+' 个标签':'未选择标签';$('picker-submit').textContent=checked.size?'收集':'直接收集';$('picker-submit').title=checked.size?'':'不添加标签，仅收集到全部语料'}
+function chooseOption(index){
+ if(index<0||!options[index]||busy)return;const option=options[index];
+ if(option.create){try{const path=normalize(option.path);path.split('/').forEach((_,i)=>known.add(path.split('/').slice(0,i+1).join('/')));checked.add(path);input.value='';drawOptions();input.focus();setMessage('已加入待保存标签：'+displayPath(path),false)}catch(e){setMessage(e.message,true)}return}
+ checked.has(option.path)?checked.delete(option.path):checked.add(option.path);const cb=$(option.id).querySelector('input');cb.checked=checked.has(option.path);updateCount();input.focus();
+}
+function openPicker(){
+ if(picker.hidden===false)return;previousFocus=document.activeElement;picker.hidden=false;trigger.setAttribute('aria-expanded','true');
+ $('picker-subtitle').textContent='已选 '+selected.size+' 条语料 · 原有标签会保留';drawOptions();positionPicker();input.focus();
+}
+function closePicker(){if(picker.hidden)return;picker.hidden=true;trigger.setAttribute('aria-expanded','false');if(previousFocus&&previousFocus.isConnected)previousFocus.focus()}
+function showToast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout($('toast')._timer);$('toast')._timer=setTimeout(()=>$('toast').hidden=true,4500)}
+trigger.addEventListener('click',openPicker);$('clear-selection').addEventListener('click',()=>{selected.clear();closePicker();drawRows()});
+$('picker-cancel').addEventListener('click',closePicker);
+input.addEventListener('input',()=>{if(!busy)drawOptions()});
+input.addEventListener('keydown',e=>{
+ if(e.isComposing)return;
+ if(e.key==='ArrowDown'){e.preventDefault();if(options.length)active=(active+1+options.length)%options.length;syncActive()}
+ if(e.key==='ArrowUp'){e.preventDefault();if(options.length)active=(active-1+options.length)%options.length;syncActive()}
+ if(e.key==='Enter'){e.preventDefault();if(options.length)chooseOption(active);else if(input.value.trim()){try{checked.add(normalize(input.value));updateCount()}catch(error){setMessage(error.message,true)}}}
+ if(e.key==='Escape'){e.preventDefault();closePicker()}
+});
+$('tag-options').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closePicker()}});
+$('picker-submit').addEventListener('click',()=>{
+ if(busy)return;
+ try{if(input.value.trim()){const path=normalize(input.value);if(known.has(path))checked.add(path);else{input.focus();setMessage('按 Enter 创建这个标签，或点击“创建”选项',false);return}}}catch(e){setMessage(e.message,true);input.focus();return}
+ busy=true;$('picker-submit').disabled=true;$('picker-submit').replaceChildren();const spinner=document.createElement('span');spinner.className='loading-dot';spinner.setAttribute('aria-hidden','true');$('picker-submit').append(spinner,document.createTextNode('收集中'));$('picker-cancel').disabled=true;input.disabled=true;
+ setTimeout(()=>{busy=false;collected=new Set([...collected,...selected]);closePicker();showToast('已收集 '+collected.size+' 条语料到素材库');$('picker-submit').disabled=false;$('picker-cancel').disabled=false;input.disabled=false;$('picker-submit').textContent='收集';},350);
+});
+document.addEventListener('pointerdown',e=>{if(!picker.hidden&&!picker.contains(e.target)&&!trigger.contains(e.target))closePicker()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!picker.hidden)closePicker()});
+window.addEventListener('resize',positionPicker);window.addEventListener('scroll',()=>{if(!picker.hidden)positionPicker()},true);
+$('theme-toggle').addEventListener('click',()=>{const dark=document.documentElement.dataset.theme!=='dark';document.documentElement.dataset.theme=dark?'dark':'frost-blue';$('theme-toggle').textContent=dark?'浅色':'深色';$('theme-toggle').setAttribute('aria-pressed',String(dark));positionPicker()});
+$('reset-demo').addEventListener('click',()=>{known=new Set(initialTags);checked=new Set(['哲学/异化']);selected=new Set(['r1']);collected=new Set();input.value='';closePicker();drawRows();showToast('样稿已重置')});
+drawRows();
+})();
+</script>
+</body>
+</html>

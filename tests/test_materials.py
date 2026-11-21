@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import threading
@@ -11,10 +12,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+import fitz
+
 from src.me_finder.app_context import AppContext
 from src.me_finder.backup_service import create_backup, restore_backup
 from src.me_finder.database import build_database, delete_source_from_database, replace_source_in_database
 from src.me_finder.errors import UserFacingError
+from src.me_finder.materials.images import collect_image, edit_image, image_path, preview_pdf, read_image
 from src.me_finder.materials.service import list_materials, mutate_materials
 from src.me_finder.persistence.connection import open_write
 from src.me_finder.persistence.materials_store import TABLES, replace_materials_snapshot
@@ -84,7 +88,7 @@ class MaterialsTests(unittest.TestCase):
         captured = self.collect(selection(TEXTS[0]))
         self.assertEqual(self.locate(captured["excerpt_ids"][0])["excerpt"]["citation_start"], "38")
         with open_write(self.db) as connection:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 12)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 13)
         self.assertFalse(migrate_index_database(self.db))
 
     def test_batch_is_atomic_and_repeated_collection_only_adds_tags(self) -> None:
@@ -188,6 +192,69 @@ class MaterialsTests(unittest.TestCase):
         self.assertEqual(mutate_materials(restored_db, {"action": "locate", "excerpt_id": excerpt})["status"],
                          "source_deleted")
         self.assertIsNone(restore_backup(self.root, create_backup(self.root))["materials_snapshot"])
+
+    def test_import_image_deduplicates_and_survives_rebuild_and_backup(self) -> None:
+        with fitz.open() as pdf:
+            pdf.new_page(width=20, height=20)
+            png = pdf[0].get_pixmap().tobytes("png")
+        payload = {"action": "collect_image", "title": "diagram.png", "tags": ["实验/表征"],
+                   "note": "外部参考图", "data": base64.b64encode(png).decode("ascii")}
+        saved = collect_image(self.db, self.root, payload, lambda _: self.fail("external image opened a PDF"))
+        self.assertTrue(saved["created"])
+        duplicate = collect_image(self.db, self.root, {**payload, "title": "copy.png"}, lambda _: self.fail())
+        self.assertFalse(duplicate["created"])
+        self.assertEqual(duplicate["digest"], saved["digest"])
+        self.assertEqual(list(image_path(self.root, saved["digest"]).parent.iterdir()),
+                         [image_path(self.root, saved["digest"])])
+        edit_image(self.db, {"digest": saved["digest"], "tags": ["实验/光谱"], "note": "修订说明"})
+        snapshot = list_materials(self.db)
+        self.assertEqual(snapshot["material_images"][0]["note"], "修订说明")
+        self.assertEqual(snapshot["material_image_tags"], [{"digest": saved["digest"], "path": "实验/光谱"}])
+        legacy = {name: [] for name in ("material_tags", "material_excerpts", "material_excerpt_tags")}
+        replace_materials_snapshot(legacy, self.db)
+        preserved = list_materials(self.db)
+        self.assertEqual(preserved["material_images"], snapshot["material_images"])
+        self.assertEqual(preserved["material_image_tags"], snapshot["material_image_tags"])
+        snapshot = preserved
+        build_database(document(TEXTS), self.db)
+        self.assertEqual(list_materials(self.db), snapshot)
+        archive = create_backup(self.root, index_path=self.db)
+        with TemporaryDirectory() as directory:
+            restored_root = Path(directory)
+            restored_db = restored_root / "index.sqlite3"
+            build_database(document([]), restored_db)
+            restored = restore_backup(restored_root, archive)
+            replace_materials_snapshot(restored["materials_snapshot"], restored_db)
+            self.assertEqual(list_materials(restored_db), snapshot)
+            self.assertEqual(read_image(restored_db, restored_root, saved["digest"]), (png, "image/png"))
+
+    def test_crop_rotated_pdf_uses_display_coordinates_and_printed_page(self) -> None:
+        original = self.root / "rotated.pdf"
+        with fitz.open() as pdf:
+            page = pdf.new_page(width=100, height=160)
+            page.draw_rect(fitz.Rect(0, 0, 100, 80), fill=(1, 0, 0), color=None)
+            page.set_rotation(90)
+            pdf.save(original)
+        index = document([])
+        index["source_files"][0].update(source_type="pdf", source_format="pdf", file_name=original.name)
+        index["pdf_pages"] = [{"source_file_id": SOURCE_ID, "pdf_page_index": 0,
+                               "page_source_type": "manual_page", "citation_page": "38"}]
+        build_database(index, self.db)
+        request = {"source_id": SOURCE_ID, "page": 1}
+        preview = preview_pdf(self.db, {**request, "action": "preview_pdf"}, lambda _: original)
+        self.assertEqual(preview["page_count"], 1)
+        saved = collect_image(self.db, self.root, {
+            **request, "action": "collect_image", "revision": preview["revision"],
+            "box": [0.60, 0.10, 0.90, 0.60], "tags": ["实验"],
+        }, lambda _: original)
+        data, _ = read_image(self.db, self.root, saved["digest"])
+        crop = fitz.Pixmap(data)
+        self.assertEqual(crop.pixel(crop.width // 2, crop.height // 2), (255, 0, 0))
+        origin = json.loads(list_materials(self.db)["material_images"][0]["origin"])
+        self.assertEqual(origin["citation_page"], "38")
+        self.assertEqual(origin["page"], 1)
+        delete_source_from_database(SOURCE_ID, self.db, backup_existing=False)
+        self.assertEqual(read_image(self.db, self.root, saved["digest"])[0], data)
 
     def test_rejects_backup_with_missing_material_parent(self) -> None:
         archive = BytesIO()

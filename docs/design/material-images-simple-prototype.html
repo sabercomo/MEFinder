@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEFinder 素材库 · 简化导入样稿</title>
+<style>
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app
+ * theme: MEFinder frost-blue (existing tokens) · tone: utilitarian · enrichment: none
+ * pre-emit critique: P5 H5 E4 S5 R5 V4
+ */
+:root{
+  --app-bg:#F5F8FC;--sidebar-bg:#F1F5FA;--surface-primary:#FFFFFF;--surface-secondary:#F8FAFD;--surface-elevated:#FFFFFF;
+  --surface-hover:#F1F5FA;--surface-selected:#EAF3FF;--surface-sunken:#EEF2F7;
+  --text-primary:#172033;--text-secondary:#414D61;--text-tertiary:#667085;--text-decorative:#98A2B3;--text-disabled:#B8C0CC;
+  --border-subtle:#EDF1F6;--border-default:#DDE5EF;--border-strong:#C8D4E2;--border-control:#828CA0;
+  --accent-fill:#0F62E6;--accent-hover:#0B54C9;--accent-soft:#EAF3FF;--accent-text:#0B5EC7;--accent-contrast:#FFFFFF;
+  --success:#168A46;--warning:#B8620F;--warning-soft:#FFF2E2;--danger:#C8322B;--danger-soft:#FDECEA;--neutral-soft:#EEF1F5;
+  --focus-ring:0 0 0 3px rgba(22,119,255,.18);
+  --shadow-popover:0 12px 32px rgba(23,32,51,.13);--shadow-dialog:0 24px 64px rgba(23,32,51,.22);--dialog-backdrop:rgba(23,32,51,.32);
+  --radius-xs:4px;--radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-xl:16px;--radius-pill:999px;
+  --font-ui:"PingFang SC","Microsoft YaHei UI","Segoe UI Variable",-apple-system,system-ui,sans-serif;
+  --font-reading:"Noto Serif SC","Songti SC","STSong",Georgia,serif;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --z-dropdown:100;--z-modal:400;--z-toast:500;
+}
+html[data-theme="dark"]{
+  --app-bg:#0F141C;--sidebar-bg:#131A24;--surface-primary:#161E29;--surface-secondary:#1A232F;--surface-elevated:#1D2733;
+  --surface-hover:#1F2937;--surface-selected:#1B2C45;--surface-sunken:#121923;
+  --text-primary:#E7ECF3;--text-secondary:#BAC4D2;--text-tertiary:#8E99AA;--text-decorative:#667085;--text-disabled:#5B6675;
+  --border-subtle:#222C39;--border-default:#2C3847;--border-strong:#3A4757;--border-control:#6B7688;
+  --accent-fill:#5B9BFF;--accent-hover:#79AEFF;--accent-soft:#1A2C47;--accent-text:#8FBBFF;--accent-contrast:#0B1422;
+  --success:#4CC27E;--warning:#F0A04B;--warning-soft:#2E2215;--danger:#FF7A72;--danger-soft:#33191A;--neutral-soft:#222A36;
+  --focus-ring:0 0 0 3px rgba(91,155,255,.22);
+  --shadow-popover:0 16px 40px rgba(0,0,0,.5);--shadow-dialog:0 28px 80px rgba(0,0,0,.6);--dialog-backdrop:rgba(0,0,0,.55);
+}
+*{box-sizing:border-box}
+html,body{height:100%;overflow-x:clip}
+body{margin:0;background:var(--app-bg);color:var(--text-primary);font-family:var(--font-ui);font-size:14px;line-height:1.55;padding:12px 16px 16px;display:flex;flex-direction:column;gap:10px}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+[hidden]{display:none!important}
+mark{background:var(--surface-selected);color:var(--accent-text);padding:0 2px;border-radius:3px}
+
+/* demo bar */
+.demo{display:flex;align-items:center;align-content:flex-start;gap:8px 14px;flex-wrap:wrap;flex:0 0 auto;font-size:12.5px;color:var(--text-tertiary);min-height:30px}
+.demo b{color:var(--text-secondary);font-weight:600}
+.demo .spacer{flex:1}
+.demo label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);white-space:nowrap}
+.demo input[type=checkbox]{accent-color:var(--accent-fill)}
+.seg{display:inline-flex;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:2px;background:var(--surface-primary)}
+.seg button{height:26px;padding:0 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-tertiary);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+.link-btn{font-size:12px;color:var(--text-secondary);height:28px;padding:0 8px;border-radius:var(--radius-sm)}
+.link-btn:hover{background:var(--surface-hover);color:var(--text-primary)}
+
+/* shell */
+.win{position:relative;flex:1;min-height:720px;display:grid;grid-template-columns:180px minmax(0,1fr);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface-primary)}
+.side{background:var(--sidebar-bg);border-right:1px solid var(--border-subtle);padding:16px 10px 12px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.brand{display:flex;align-items:center;gap:7px;padding:6px 10px 16px;font-size:14px;font-weight:700;color:var(--text-primary);white-space:nowrap}
+.brand svg{width:19px;height:19px;color:var(--text-tertiary);flex:0 0 auto}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow:auto}
+.nav-item{display:flex;align-items:center;gap:9px;padding:0 10px;height:38px;border-radius:var(--radius-md);font-size:14px;color:var(--text-secondary);white-space:nowrap;text-align:left;width:100%}
+.nav-item svg{width:18px;height:18px;flex:0 0 auto;color:var(--text-tertiary)}
+.nav-item[aria-current="page"]{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+.nav-item[aria-current="page"] svg{color:var(--accent-text)}
+.nav-count{margin-left:auto;font-size:11px;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
+.side-foot{font-size:11px;color:var(--text-decorative);padding:10px 10px 0;white-space:nowrap}
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:var(--surface-primary)}
+.page-head{padding:20px 24px 0;flex:0 0 auto;display:flex;align-items:flex-start;gap:16px;min-width:0}
+.page-head .head-text{flex:1;min-width:0}
+.page-title{font-size:23px;font-weight:700;line-height:1.3;margin:0;overflow-wrap:anywhere}
+.page-subtitle{font-size:13px;color:var(--text-tertiary);margin-top:4px}
+.head-actions{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding-top:2px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 13px;border-radius:var(--radius-md);font-size:13px;font-weight:500;border:1px solid var(--border-default);background:var(--surface-primary);color:var(--text-primary);white-space:nowrap;transition:background 140ms var(--ease-out),transform 100ms var(--ease-out)}
+.btn:hover{background:var(--surface-hover)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent-fill);color:var(--accent-contrast);border-color:var(--accent-fill)}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--text-secondary)}
+.btn.ghost:hover{background:var(--surface-hover);color:var(--text-primary)}
+.btn.danger{color:var(--danger);border-color:var(--danger-soft)}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn:disabled{opacity:.45;cursor:default;transform:none}
+.btn svg{width:15px;height:15px;flex:0 0 auto}
+.icon-btn{width:32px;height:32px;border-radius:var(--radius-md);display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary)}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text-primary)}
+.icon-btn svg{width:16px;height:16px}
+.text-btn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 7px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--text-secondary);white-space:nowrap}
+.text-btn:hover{background:var(--surface-hover);color:var(--text-primary)}
+.text-btn svg{width:14px;height:14px}
+
+/* materials layout */
+.lib-layout{flex:1;min-height:0;display:grid;grid-template-columns:200px minmax(0,1fr) 340px;margin-top:16px;border-top:1px solid var(--border-subtle)}
+.tag-pane{min-height:0;display:flex;flex-direction:column;background:var(--surface-secondary);border-right:1px solid var(--border-subtle)}
+.tag-head{height:42px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 16px;font-size:12px;font-weight:600;color:var(--text-tertiary)}
+.tag-head .icon-btn{width:26px;height:26px}
+.tag-head .icon-btn svg{width:14px;height:14px}
+.tag-list{flex:1;min-height:0;overflow:auto;padding:2px 8px 12px}
+.tag-row{display:flex;align-items:center;gap:4px;height:32px;padding-right:8px;border-radius:var(--radius-md);color:var(--text-secondary);font-size:13px;cursor:pointer}
+.tag-row:hover{background:var(--surface-hover);color:var(--text-primary)}
+.tag-row.active{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+.tag-toggle{width:18px;height:22px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;color:var(--text-tertiary);border-radius:var(--radius-sm)}
+.tag-toggle:hover{background:var(--surface-hover);color:var(--text-primary)}
+.tag-toggle svg{width:12px;height:12px;transition:transform 140ms var(--ease-out)}
+.tag-toggle[aria-expanded="true"] svg{transform:rotate(90deg)}
+.tag-toggle-space{width:18px;flex:0 0 auto}
+.tag-label{flex:1;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.tag-count{font-size:11px;color:var(--text-tertiary);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.tag-row.active .tag-count{color:var(--accent-text)}
+
+.list-pane{min-width:0;min-height:0;display:flex;flex-direction:column}
+.list-head{flex:0 0 auto;padding:12px 18px 10px;border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:9px}
+.list-head-top{display:flex;align-items:baseline;gap:8px;min-width:0}
+.list-title{font-size:15px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-count{font-size:12px;color:var(--text-tertiary);white-space:nowrap}
+.list-head-top .spacer{flex:1}
+.list-head-bottom{display:flex;align-items:center;gap:10px;min-width:0}
+.tabs{display:inline-flex;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:2px;background:var(--surface-primary);flex:0 0 auto}
+.tabs button{height:26px;padding:0 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-tertiary);white-space:nowrap}
+.tabs button[aria-pressed="true"]{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+.search{flex:1;min-width:0;height:32px;display:flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--surface-primary)}
+.search svg{width:14px;height:14px;color:var(--text-tertiary);flex:0 0 auto}
+.search input{flex:1;min-width:0;border:0;background:none;outline:none;font-size:12.5px}
+.list-scroll{flex:1;min-height:0;overflow:auto}
+
+.item-row{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer;position:relative;transition:background 120ms var(--ease-out)}
+.item-row:hover{background:var(--surface-hover)}
+.item-row.sel{background:var(--accent-soft)}
+.item-row.sel::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:var(--radius-sm);background:var(--accent-fill)}
+.thumb{width:72px;height:72px;flex:0 0 auto;border-radius:var(--radius-md);overflow:hidden;background:var(--surface-sunken);border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:center}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.row-main{min-width:0;flex:1;display:flex;flex-direction:column;gap:4px;justify-content:center}
+.row-title{font-size:14px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-page{font-size:12px;font-weight:400;color:var(--text-tertiary);margin-left:7px}
+.row-meta{font-size:12px;color:var(--text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-snippet{font-size:13px;line-height:1.6;color:var(--text-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.row-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:1px}
+.tag-chip{display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:var(--radius-sm);background:var(--surface-secondary);border:1px solid var(--border-subtle);color:var(--text-secondary);font-size:11px;white-space:nowrap}
+.tag-chip:hover{border-color:var(--border-default);color:var(--text-primary)}
+.list-empty{padding:64px 26px;text-align:center;color:var(--text-tertiary);font-size:13px;line-height:1.8}
+.list-empty b{display:block;color:var(--text-secondary);font-size:14px;margin-bottom:4px}
+.list-empty .btn{margin-top:14px}
+
+/* detail */
+.detail{min-height:0;display:flex;flex-direction:column;border-left:1px solid var(--border-subtle);background:var(--surface-primary)}
+.detail-empty{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--text-tertiary);font-size:13px}
+.detail-head{padding:18px 20px 14px;border-bottom:1px solid var(--border-subtle);flex:0 0 auto}
+.detail-kicker{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-tertiary);margin-bottom:5px}
+.detail-title{font-size:17px;font-weight:700;line-height:1.45;overflow-wrap:anywhere}
+.detail-sub{font-size:12.5px;color:var(--text-secondary);margin-top:3px}
+.detail-body{flex:1;min-height:0;overflow:auto;padding:16px 20px 20px;display:flex;flex-direction:column;gap:16px}
+.detail-image{border:1px solid var(--border-subtle);border-radius:var(--radius-md);overflow:hidden;background:var(--surface-sunken);cursor:zoom-in}
+.detail-image img{width:100%;max-height:280px;object-fit:contain;display:block}
+.detail-section{display:flex;flex-direction:column;gap:6px}
+.detail-label{font-size:11px;font-weight:600;color:var(--text-tertiary);letter-spacing:.03em}
+.detail-text{font-family:var(--font-reading);font-size:14px;line-height:1.85;color:var(--text-primary);white-space:pre-wrap}
+.detail-note{font-size:13px;line-height:1.7;color:var(--text-secondary);white-space:pre-wrap}
+.detail-note.empty{color:var(--text-decorative)}
+.source-details{border-top:1px solid var(--border-subtle);padding-top:10px}
+.source-details summary{list-style:none;display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-tertiary);cursor:pointer;width:max-content;border-radius:var(--radius-sm);padding:2px 4px}
+.source-details summary::-webkit-details-marker{display:none}
+.source-details summary:hover{color:var(--text-primary);background:var(--surface-hover)}
+.source-details summary svg{width:12px;height:12px;transition:transform 140ms var(--ease-out)}
+.source-details[open] summary svg{transform:rotate(90deg)}
+.meta-list{display:grid;grid-template-columns:76px minmax(0,1fr);gap:6px 10px;font-size:12px;color:var(--text-secondary);align-items:baseline;margin-top:8px}
+.meta-list dt{color:var(--text-tertiary);font-size:11.5px}
+.meta-list dd{margin:0;word-break:break-all}
+.warn-bar{display:flex;gap:8px;align-items:flex-start;margin:12px 20px 0;padding:9px 11px;border-radius:var(--radius-md);background:var(--warning-soft);color:var(--warning);font-size:12px;line-height:1.6}
+.warn-bar svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px}
+.detail-actions{flex:0 0 auto;padding:12px 20px 16px;border-top:1px solid var(--border-subtle);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.detail-actions .spacer{flex:1}
+
+/* import view */
+.import-shell{flex:1;min-height:0;overflow:auto;padding:20px 28px 48px}
+.import-inner{max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;align-items:start}
+.import-main{min-width:0;display:flex;flex-direction:column;gap:10px}
+.dropzone{min-height:380px;border:1.5px dashed var(--border-control);border-radius:var(--radius-lg);background:var(--surface-secondary);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:28px;cursor:pointer;text-align:center;transition:border-color 140ms var(--ease-out),background 140ms var(--ease-out)}
+.dropzone:hover,.dropzone:focus-visible{border-color:var(--accent-fill);background:var(--accent-soft)}
+.dropzone.over{border-color:var(--accent-fill);background:var(--accent-soft);box-shadow:var(--focus-ring)}
+.dropzone > svg{width:34px;height:34px;flex:0 0 auto;color:var(--text-tertiary)}
+.drop-title{font-size:15px;font-weight:600;color:var(--text-primary)}
+.drop-hint{font-size:12px;color:var(--text-tertiary)}
+.dropzone .btn{margin-top:6px}
+.dropzone.has-image{padding:10px;cursor:default;background:var(--surface-primary);border-style:solid;border-color:var(--border-subtle);min-height:0;align-items:stretch;justify-content:center}
+.dropzone.has-image:hover{background:var(--surface-primary);border-color:var(--border-default)}
+.preview-img{width:100%;max-height:440px;object-fit:contain;display:block;border-radius:var(--radius-md);background:var(--surface-sunken)}
+.preview-meta{display:flex;align-items:flex-start;gap:10px;padding:2px 4px 0;min-width:0}
+.preview-meta .file{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
+.preview-meta .file b{font-size:12.5px;font-weight:600;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preview-meta .file span{font-size:11.5px;color:var(--text-tertiary)}
+.preview-meta .actions{display:flex;gap:2px;flex:0 0 auto}
+.import-secondary{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:2px 2px 0}
+.import-secondary .also{font-size:12px;color:var(--text-tertiary)}
+.import-secondary .btn{height:34px;font-size:13px;padding:0 13px}
+.import-secondary .hint{font-size:12px;color:var(--text-tertiary)}
+.import-form{border:1px solid var(--border-subtle);border-radius:var(--radius-lg);background:var(--surface-primary);padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.form-source{font-size:12px;line-height:1.6;color:var(--text-tertiary);padding-bottom:12px;border-bottom:1px solid var(--border-subtle);overflow-wrap:anywhere}
+.form-source b{color:var(--text-secondary);font-weight:600}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label,.field .field-label{font-size:11.5px;font-weight:600;color:var(--text-tertiary)}
+.field textarea{width:100%;min-height:86px;resize:vertical;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--surface-primary);padding:8px 10px;font-size:13px;line-height:1.6;outline:none}
+.field textarea:focus{border-color:var(--accent-fill);box-shadow:var(--focus-ring)}
+.tag-checks{max-height:186px;overflow:auto;display:flex;flex-direction:column;gap:1px;margin:0 -4px}
+.tag-check{display:flex;align-items:center;gap:8px;min-height:30px;padding:2px 6px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;overflow:hidden}
+.tag-check:hover{background:var(--surface-hover)}
+.tag-check input{width:15px;height:15px;accent-color:var(--accent-fill);flex:0 0 auto}
+.tag-check span{overflow:hidden;text-overflow:ellipsis}
+.new-tag{display:flex;gap:6px;padding-top:2px}
+.new-tag input{flex:1;min-width:0;height:32px;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:0 9px;font-size:12.5px;background:var(--surface-primary);outline:none}
+.new-tag input:focus{border-color:var(--accent-fill);box-shadow:var(--focus-ring)}
+.save-block{display:flex;flex-direction:column;gap:6px;padding-top:2px}
+.save-block .btn{width:100%;height:38px}
+.form-hint{min-height:17px;font-size:11.5px;color:var(--text-tertiary);text-align:center;line-height:1.5}
+.form-hint.error{color:var(--danger)}
+
+/* reader demo */
+.reader-wrap{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.reader-toolbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 24px;border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);background:var(--surface-secondary)}
+.reader-toolbar .spacer{flex:1}
+.page-chip{font-size:12px;color:var(--text-secondary);background:var(--surface-primary);border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:3px 9px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.reader-scroll{flex:1;min-height:0;overflow:auto;padding:26px 24px 60px}
+.reader-hint{max-width:720px;margin:0 auto 14px;font-size:12.5px;color:var(--text-tertiary);display:flex;align-items:center;gap:6px}
+.reader-hint svg{width:14px;height:14px}
+.reader-paper{max-width:720px;margin:0 auto;font-family:var(--font-reading);font-size:15.5px;line-height:2;color:var(--text-primary);background:var(--surface-primary);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:42px 48px}
+.reader-paper h2{font-size:20px;margin:0 0 20px;font-weight:700}
+.reader-paper p{margin:0 0 16px;text-align:justify}
+
+/* dialog base */
+.backdrop{position:fixed;inset:0;background:var(--dialog-backdrop);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:18px}
+.dialog{background:var(--surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);box-shadow:var(--shadow-dialog);display:flex;flex-direction:column;min-height:0;max-height:calc(100vh - 36px)}
+.dialog-head{flex:0 0 auto;display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;border-bottom:1px solid var(--border-subtle)}
+.dialog-title{font-size:16px;font-weight:700;line-height:1.4}
+.dialog-sub{font-size:12px;color:var(--text-tertiary);margin-top:2px}
+.dialog-head .spacer{flex:1}
+.dialog-close{width:30px;height:30px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary)}
+.dialog-close:hover{background:var(--surface-hover);color:var(--text-primary)}
+.dialog-close svg{width:16px;height:16px}
+.dialog-foot{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--border-subtle)}
+.dialog-foot .spacer{flex:1}
+
+/* capture */
+.cap-dialog{width:min(1120px,calc(100vw - 36px));height:min(840px,calc(100vh - 36px))}
+.cap-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;overflow:hidden}
+.cap-left{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--surface-sunken)}
+.cap-tools{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--surface-primary);border-bottom:1px solid var(--border-subtle);flex-wrap:wrap}
+.cap-select{position:relative}
+.cap-select-btn{height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 9px;border:1px solid var(--border-default);border-radius:var(--radius-sm);background:var(--surface-primary);font-size:12.5px;color:var(--text-secondary);max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap-select-btn:hover{background:var(--surface-hover)}
+.cap-select-btn svg{width:12px;height:12px;flex:0 0 auto}
+.cap-book-menu{position:absolute;left:0;top:calc(100% + 5px);z-index:var(--z-dropdown);min-width:250px;background:var(--surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);padding:4px}
+.cap-book-menu button{display:block;width:100%;text-align:left;padding:7px 9px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cap-book-menu button:hover{background:var(--surface-hover)}
+.cap-book-menu button.on{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+.pager{display:inline-flex;align-items:center;gap:4px}
+.pager button{width:28px;height:28px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:var(--surface-primary);display:inline-flex;align-items:center;justify-content:center;color:var(--text-secondary)}
+.pager button:hover:not(:disabled){background:var(--surface-hover)}
+.pager button:disabled{opacity:.4;cursor:default}
+.pager svg{width:13px;height:13px}
+.pager .label{font-size:12px;color:var(--text-secondary);padding:0 4px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cap-tool-note{font-size:11.5px;color:var(--text-tertiary);margin-left:auto}
+.cap-scroll{flex:1;min-height:0;overflow:auto;padding:18px;display:flex;justify-content:center;align-items:flex-start}
+.page-wrap{position:relative;width:min(100%,560px);flex:0 0 auto;box-shadow:0 8px 28px rgba(23,32,51,.16);user-select:none;touch-action:none}
+.page-wrap img{width:100%;display:block;border-radius:2px;background:#F6F1E6}
+.page-wrap.drawable{cursor:crosshair}
+.page-box{position:absolute;border:2px solid var(--accent-fill);background:rgba(15,98,230,.10);box-shadow:0 0 0 9999px rgba(23,32,51,.28);pointer-events:none}
+.page-box.locate{background:rgba(15,98,230,.05);box-shadow:0 0 0 9999px rgba(23,32,51,.16)}
+.page-box::after{content:'';position:absolute;inset:0;border:1px dashed rgba(255,255,255,.85)}
+.corner{position:absolute;width:9px;height:9px;background:var(--surface-primary);border:1.5px solid var(--accent-fill);border-radius:2px}
+.page-box .c1{left:-5px;top:-5px}.page-box .c2{right:-5px;top:-5px}.page-box .c3{left:-5px;bottom:-5px}.page-box .c4{right:-5px;bottom:-5px}
+.box-label{position:absolute;left:0;top:-24px;font-size:10.5px;font-weight:600;color:var(--accent-contrast);background:var(--accent-fill);border-radius:4px;padding:1px 6px;white-space:nowrap}
+.cap-side{min-height:0;border-left:1px solid var(--border-subtle);display:flex;flex-direction:column;background:var(--surface-primary)}
+.cap-side-body{flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.cap-preview{border:1px solid var(--border-subtle);border-radius:var(--radius-md);background:var(--surface-sunken);min-height:118px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cap-preview img{max-width:100%;max-height:230px;display:block}
+.cap-preview .placeholder{padding:28px 16px;text-align:center;font-size:12px;line-height:1.7;color:var(--text-tertiary)}
+.cap-source{font-size:12px;line-height:1.7;color:var(--text-tertiary);border-top:1px solid var(--border-subtle);padding-top:12px;overflow-wrap:anywhere}
+.cap-source b{color:var(--text-secondary);font-weight:600}
+.cap-hint{font-size:11.5px;line-height:1.7;color:var(--text-tertiary);background:var(--surface-secondary);border-radius:var(--radius-md);padding:9px 11px}
+
+/* tag dialog */
+.tag-dialog{width:min(430px,calc(100vw - 36px))}
+.tag-dialog-body{padding:14px 18px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.tag-dialog .tag-checks{max-height:260px;margin:0}
+.tag-dialog .new-tag{border-top:1px solid var(--border-subtle);padding-top:10px}
+
+/* lightbox */
+.lightbox{position:fixed;inset:0;z-index:calc(var(--z-modal) + 10);background:rgba(15,20,28,.86);display:flex;align-items:center;justify-content:center;padding:32px;cursor:zoom-out}
+.lightbox img{max-width:100%;max-height:100%;border-radius:var(--radius-md);box-shadow:0 24px 80px rgba(0,0,0,.5)}
+.lightbox .close{position:fixed;top:16px;right:18px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;display:flex;align-items:center;justify-content:center}
+.lightbox .close svg{width:18px;height:18px}
+
+/* toast + drop */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(23,32,51,.94);color:#fff;font-size:13px;border-radius:var(--radius-md);padding:9px 14px;z-index:var(--z-toast);box-shadow:0 8px 24px rgba(0,0,0,.24);max-width:min(520px,calc(100vw - 40px));text-align:center}
+html[data-theme="dark"] .toast{background:#E7ECF3;color:#172033}
+.drop-overlay{position:fixed;inset:0;z-index:calc(var(--z-modal) + 20);background:rgba(15,98,230,.09);backdrop-filter:blur(1.5px);display:flex;align-items:center;justify-content:center;pointer-events:none}
+.drop-card{background:var(--surface-elevated);border:1.5px dashed var(--accent-fill);border-radius:var(--radius-lg);padding:26px 38px;box-shadow:var(--shadow-dialog);text-align:center}
+.drop-card svg{width:32px;height:32px;color:var(--accent-text);margin-bottom:8px}
+.drop-card b{display:block;font-size:15px;margin-bottom:3px}
+.drop-card span{font-size:12.5px;color:var(--text-tertiary)}
+.visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+@media (max-width:1250px){
+  .lib-layout{grid-template-columns:184px minmax(0,1fr) 320px}
+  .import-inner{grid-template-columns:minmax(0,1fr) 320px;gap:22px}
+}
+@media (max-width:1080px){
+  .win{grid-template-columns:minmax(0,1fr)}
+  .side{display:none}
+}
+@media (max-width:900px){
+  .lib-layout{display:flex;flex-direction:column;overflow:auto}
+  .tag-pane{border-right:0;border-bottom:1px solid var(--border-subtle);max-height:190px;flex:0 0 auto}
+  .list-pane{min-height:380px;flex:0 0 auto}
+  .detail{border-left:0;border-top:1px solid var(--border-subtle);flex:0 0 auto}
+  .detail-body{max-height:none}
+  .import-inner{grid-template-columns:minmax(0,1fr)}
+  .import-form{max-width:560px}
+  .dropzone{min-height:300px}
+  .cap-body{grid-template-columns:minmax(0,1fr);overflow:auto}
+  .cap-dialog{height:calc(100vh - 24px)}
+  .cap-left{min-height:420px}
+  .cap-side{border-left:0;border-top:1px solid var(--border-subtle)}
+  .cap-side-body{max-height:260px}
+}
+@media (max-width:600px){
+  body{padding:8px}
+  .page-head{padding:16px 16px 0}
+  .page-title{font-size:21px}
+  .lib-layout{margin-top:12px}
+  .import-shell{padding:16px 16px 36px}
+  .dropzone{padding:20px 16px;min-height:240px}
+  .reader-paper{padding:28px 22px}
+  .demo{gap:6px 10px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important;scroll-behavior:auto!important}
+}
+</style>
+</head>
+<body>
+<div class="demo">
+  <b>素材库 · 简化导入样稿</b>
+  <span>示例数据 · 保存只在本次预览生效</span>
+  <span class="seg" role="group" aria-label="预览页面">
+    <button type="button" data-demo-view="materials" aria-pressed="true">素材库</button>
+    <button type="button" data-demo-view="reader" aria-pressed="false">阅读页</button>
+  </span>
+  <span class="spacer"></span>
+  <button class="link-btn" type="button" id="demo-sample">载入示例图片</button>
+  <label><input type="checkbox" id="demo-missing"> 模拟原书已删除</label>
+  <button class="link-btn" type="button" id="demo-theme">深色预览</button>
+</div>
+
+<div class="win">
+  <aside class="side">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v18H6.5A2.5 2.5 0 0 1 4 18.5z"/><path d="M8 7h8M8 11h8"/></svg>
+      MEFinder
+    </div>
+    <nav class="nav" id="nav" aria-label="主导航"></nav>
+    <div class="side-foot">本地优先</div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+
+<div class="drop-overlay" id="drop-overlay" hidden>
+  <div class="drop-card">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m4 17 5-5 4 4 3-3 4 4"/></svg>
+    <b>松开，添加这张图片</b>
+    <span>PNG / JPEG，单张不超过 25 MB</span>
+  </div>
+</div>
+
+<div class="backdrop" id="cap-dialog" hidden>
+  <div class="dialog cap-dialog" role="dialog" aria-modal="true" aria-labelledby="cap-title">
+    <div class="dialog-head">
+      <div>
+        <div class="dialog-title" id="cap-title">从 PDF 截图</div>
+        <div class="dialog-sub" id="cap-sub">在页面上拖出一个框，只保留框内区域</div>
+      </div>
+      <span class="spacer"></span>
+      <button class="dialog-close" type="button" id="cap-close" aria-label="关闭">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+    <div class="cap-body">
+      <div class="cap-left">
+        <div class="cap-tools">
+          <div class="cap-select">
+            <button class="cap-select-btn" type="button" id="cap-book-btn" aria-haspopup="listbox" aria-expanded="false">
+              <span id="cap-book-label">1844年经济学哲学手稿</span>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 8 4 4 4-4"/></svg>
+            </button>
+            <div class="cap-book-menu" id="cap-book-menu" role="listbox" hidden></div>
+          </div>
+          <span class="pager">
+            <button type="button" id="cap-prev" aria-label="上一页"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 5-5 5 5 5"/></svg></button>
+            <span class="label" id="cap-page-label">第 57 页 · PDF 62</span>
+            <button type="button" id="cap-next" aria-label="下一页"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 5 5 5-5 5"/></svg></button>
+          </span>
+          <span class="cap-tool-note" id="cap-tool-note">拖动框选</span>
+        </div>
+        <div class="cap-scroll">
+          <div class="page-wrap drawable" id="cap-page-wrap">
+            <img id="cap-page-img" alt="文献页面">
+            <div class="page-box" id="cap-box" hidden>
+              <span class="box-label" id="cap-box-label">框选区域</span>
+              <i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+      <aside class="cap-side">
+        <div class="cap-side-body">
+          <div class="cap-preview" id="cap-preview"><div class="placeholder">在页面上拖出一个框<br>这里会出现裁切预览</div></div>
+          <div class="cap-source" id="cap-source"></div>
+          <div class="cap-hint" id="cap-hint">框选后只保存框内区域；说明和标签在下一步填写。</div>
+        </div>
+        <div class="dialog-foot" style="padding:12px 14px">
+          <span class="spacer"></span>
+          <button class="btn ghost" type="button" id="cap-cancel">取消</button>
+          <button class="btn primary" type="button" id="cap-use" disabled>使用这张图</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="tag-dialog" hidden>
+  <div class="dialog tag-dialog" role="dialog" aria-modal="true" aria-labelledby="tag-title">
+    <div class="dialog-head">
+      <div>
+        <div class="dialog-title" id="tag-title">编辑标签</div>
+        <div class="dialog-sub">勾选要保留的标签 · 最多三级</div>
+      </div>
+      <span class="spacer"></span>
+      <button class="dialog-close" type="button" id="tag-close" aria-label="关闭">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+    <div class="tag-dialog-body">
+      <div class="tag-checks" id="tag-dialog-checks"></div>
+      <div class="new-tag">
+        <input type="text" id="tag-dialog-new" placeholder="新建标签，例如 理论/异化" maxlength="100">
+        <button class="btn" type="button" id="tag-dialog-add">新建</button>
+      </div>
+    </div>
+    <div class="dialog-foot">
+      <span class="spacer"></span>
+      <button class="btn ghost" type="button" id="tag-dialog-cancel">取消</button>
+      <button class="btn primary" type="button" id="tag-dialog-save">保存标签</button>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <button class="close" type="button" id="lightbox-close" aria-label="关闭大图">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+  </button>
+  <img id="lightbox-img" alt="图片大图">
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<input class="visually-hidden" type="file" id="file-input" accept="image/png,image/jpeg" multiple>
+
+<script>
+(function(){
+'use strict';
+
+/* ── helpers ── */
+function esc(v){var d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML;}
+function el(tag,cls,text){var n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
+var toastTimer=0;
+function toast(message){
+  var box=document.getElementById('toast');
+  box.textContent=message;box.hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){box.hidden=true;},3200);
+}
+function icon(name){
+  var p={
+    image:'<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m4 17 5-5 4 4 3-3 4 4"/>',
+    plus:'<path d="M12 5v14M5 12h14"/>',
+    upload:'<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16"/>',
+    crop:'<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/>',
+    search:'<circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/>',
+    chevron:'<path d="m9 6 6 6-6 6"/>',
+    down:'<path d="m6 8 4 4 4-4"/>',
+    back:'<path d="M15 5 8 12l7 7"/>',
+    tag:'<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+    trash:'<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/>',
+    pencil:'<path d="M4 20h4L20 8l-4-4L4 16z"/><path d="m14 6 4 4"/>',
+    external:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+    alert:'<path d="M12 3 2.8 19h18.4z"/><path d="M12 9v4M12 16.5v.5"/>',
+    close:'<path d="M5 5l10 10M15 5 5 15"/>',
+    check:'<path d="m5 11 4 4 8-8"/>',
+    book:'<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v18H6.5A2.5 2.5 0 0 1 4 18.5z"/><path d="M8 7h8M8 11h8"/>',
+    work:'<circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/>',
+    import:'<path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/>',
+    settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.12.36.38.66.71.85.3.17.64.26.99.26H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/>',
+    more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'
+  };
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+p[name]+'</svg>';
+}
+function tagLabel(p){return p.slice(p.lastIndexOf('/')+1);}
+function displayPath(p){return p.split('/').join(' / ');}
+function parentPath(p){return p.slice(0,Math.max(0,p.lastIndexOf('/')));}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function splitPath(value){
+  var parts=value.trim().replace(/^#/,'').replace(/／/g,'/').split('/').map(function(s){return s.trim();});
+  return parts.filter(Boolean);
+}
+
+/* ── data ── */
+var state={
+  view:'materials',
+  tags:['理论','理论/异化','理论/承认','写作素材','未整理'],
+  activeTag:'',
+  filter:'all',
+  query:'',
+  activeId:'i1',
+  expanded:new Set(['理论']),
+  sourceMissing:false,
+  importData:null,
+  items:[
+    {id:'i1',type:'image',source:'pdf',book:'1844年经济学哲学手稿',author:'马克思',printed:'57',pdfPage:'62',asset:'assets/page-57.png',box:{x:200,y:620,w:790,h:520},note:'对象化与异化的循环',tags:['理论/异化'],date:'2026-11-20',fingerprint:'8f3a2c…',dims:'790 × 520'},
+    {id:'t1',type:'text',book:'1844年经济学哲学手稿',author:'马克思',page:'第 57 页',date:'2026-11-20',note:'',tags:['理论/异化'],text:'劳动所生产的对象，即劳动的产品，作为一种异己的存在物，作为不依赖于生产者的力量，同劳动相对立。劳动的产品固定在某个对象中，这就是劳动的对象化。'},
+    {id:'i3',type:'image',source:'local',file:'承认的三种形式.png',note:'读书会白板草图',tags:['理论/承认','写作素材'],date:'2026-11-19',cropSrc:'assets/sketch-recognition.png',dims:'1440 × 1040'},
+    {id:'t2',type:'text',book:'承认理论',author:'霍耐特',page:'第 112 页',date:'2026-11-18',note:'承认的三种形式',tags:['理论/承认'],text:'如果个体在社会中不能获得充分的承认，那么他就会经验到一种自我异化的状态——他无法把自己理解为社会共同体的平等成员，他的自我关系因此被扭曲。'},
+    {id:'i4',type:'image',source:'pdf',book:'1844年经济学哲学手稿',author:'马克思',printed:'58',pdfPage:'63',asset:'assets/page-58.png',box:{x:126,y:292,w:940,h:590},note:'手稿篇目与篇幅',tags:['理论/异化'],date:'2026-11-17',fingerprint:'8f3a2c…',dims:'940 × 590'},
+    {id:'i2',type:'image',source:'pdf',book:'承认理论',author:'霍耐特',printed:'112',pdfPage:'118',asset:'assets/page-112.png',box:{x:200,y:610,w:790,h:520},note:'承认关系的三层结构',tags:['理论/承认'],date:'2026-11-16',fingerprint:'b41e07…',dims:'790 × 520'},
+    {id:'t3',type:'text',book:'法哲学原理',author:'黑格尔',page:'第 78 页',date:'2026-11-15',note:'页码待校准',tags:['理论/异化'],text:'市民社会中的劳动分工使人陷入一种异化的状态：个人越是专业化，他就越是依赖于他人的劳动，他的独立性就越是被社会的相互依存关系所取代。'}
+  ]
+};
+var books=[
+  {id:'b1',title:'1844年经济学哲学手稿',author:'马克思',pages:[
+    {printed:'57',pdf:'62',img:'assets/page-57.png'},
+    {printed:'58',pdf:'63',img:'assets/page-58.png'}
+  ]},
+  {id:'b2',title:'承认理论',author:'霍耐特',pages:[
+    {printed:'112',pdf:'118',img:'assets/page-112.png'}
+  ]}
+];
+var imageCache={};
+function loadImage(src){
+  if(!imageCache[src]){
+    imageCache[src]=new Promise(function(resolve,reject){
+      var img=new Image();img.onload=function(){resolve(img);};img.onerror=reject;img.src=src;
+    });
+  }
+  return imageCache[src];
+}
+function cropToDataUrl(img,box){
+  var canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(box.w));canvas.height=Math.max(1,Math.round(box.h));
+  canvas.getContext('2d').drawImage(img,box.x,box.y,box.w,box.h,0,0,canvas.width,canvas.height);
+  return canvas.toDataURL('image/png');
+}
+function prepareImages(){
+  return Promise.all(state.items.filter(function(i){return i.type==='image';}).map(function(item){
+    if(item.crop) return Promise.resolve();
+    if(item.cropSrc) return loadImage(item.cropSrc).then(function(img){item.crop=item.cropSrc;item.natW=img.naturalWidth;item.natH=img.naturalHeight;});
+    return loadImage(item.asset).then(function(img){item.crop=cropToDataUrl(img,item.box);item.natW=img.naturalWidth;item.natH=img.naturalHeight;});
+  })).catch(function(){});
+}
+
+/* ── filtering ── */
+function itemHasTag(item,path){if(!path)return true;return item.tags.some(function(t){return t===path||t.indexOf(path+'/')===0;});}
+function itemMatches(item){
+  if(!itemHasTag(item,state.activeTag))return false;
+  if(state.filter==='image'&&item.type!=='image')return false;
+  if(state.filter==='text'&&item.type!=='text')return false;
+  if(!state.query)return true;
+  var q=state.query.toLowerCase();
+  var hay=(item.note||'')+' '+(item.text||'')+' '+(item.book||'')+' '+(item.author||'')+' '+(item.file||'')+' '+item.tags.join(' ');
+  return hay.toLowerCase().indexOf(q)>=0;
+}
+function visibleItems(){return state.items.filter(itemMatches);}
+function tagCount(path){return state.items.filter(function(i){return itemHasTag(i,path);}).length;}
+function buildTree(paths){var map=new Map();paths.forEach(function(p){var parent=parentPath(p);if(!map.has(parent))map.set(parent,[]);map.get(parent).push(p);});return map;}
+
+/* ── shell ── */
+function renderNav(){
+  var items=[['search','文献检索','search'],['library','文献库','book'],['materials','素材库','tag'],['works','作品','work'],['import','导入','import'],['settings','设置','settings']];
+  var nav=document.getElementById('nav');nav.innerHTML='';
+  items.forEach(function(row){
+    var btn=el('button','nav-item');
+    btn.type='button';
+    btn.innerHTML=icon(row[2])+'<span>'+row[1]+'</span>'+(row[0]==='materials'?'<span class="nav-count" id="nav-count">'+state.items.length+'</span>':'');
+    if(row[0]==='materials'&&(state.view==='materials'||state.view==='import'))btn.setAttribute('aria-current','page');
+    btn.onclick=function(){
+      if(row[0]!=='materials'){toast('样稿只演示素材库与阅读页');return;}
+      state.view='materials';state.importData=null;render();
+    };
+    nav.appendChild(btn);
+  });
+}
+
+/* ── materials page ── */
+function renderMaterials(){
+  var main=document.getElementById('main');main.innerHTML='';
+  var head=el('div','page-head');
+  var text=el('div','head-text');
+  text.innerHTML='<div class="page-title">素材库</div><div class="page-subtitle">按标签整理收集的语料与图片，随时取用</div>';
+  head.appendChild(text);
+  var actions=el('div','head-actions');
+  var add=el('button','btn primary');
+  add.type='button';add.id='open-import';
+  add.innerHTML=icon('image')+'添加图片';
+  add.onclick=function(){openImport();};
+  actions.appendChild(add);
+  head.appendChild(actions);
+  main.appendChild(head);
+
+  var layout=el('div','lib-layout');
+  layout.appendChild(renderTagPane());
+  layout.appendChild(renderListPane());
+  layout.appendChild(renderDetailPane());
+  main.appendChild(layout);
+}
+function chooseTag(path){state.activeTag=path;state.activeId=null;render();}
+function renderTagPane(){
+  var pane=el('div','tag-pane');
+  var head=el('div','tag-head');
+  head.innerHTML='<span>标签</span><button class="icon-btn" type="button" id="new-tag" aria-label="新建标签" title="新建标签">'+icon('plus')+'</button>';
+  pane.appendChild(head);
+  var list=el('div','tag-list');
+  list.id='tag-list';
+
+  var all=el('div','tag-row'+(state.activeTag===''?' active':''));
+  all.innerHTML='<span class="tag-toggle-space"></span><button class="tag-label" type="button">全部语料</button><span class="tag-count">'+state.items.length+'</span>';
+  all.onclick=function(){chooseTag('');};
+  list.appendChild(all);
+
+  var tree=buildTree(state.tags);
+  function branch(parent,depth){
+    var wrap=el('div');
+    (tree.get(parent)||[]).slice().sort(function(a,b){return a.localeCompare(b,'zh-CN');}).forEach(function(path){
+      var hasChildren=tree.has(path);
+      var row=el('div','tag-row'+(state.activeTag===path?' active':''));
+      row.style.paddingLeft=(6+depth*14)+'px';
+      if(hasChildren){
+        var toggle=el('button','tag-toggle');
+        toggle.type='button';
+        toggle.setAttribute('aria-expanded',String(state.expanded.has(path)));
+        toggle.setAttribute('aria-label',(state.expanded.has(path)?'收起 ':'展开 ')+displayPath(path));
+        toggle.innerHTML=icon('chevron');
+        toggle.onclick=function(event){event.stopPropagation();if(state.expanded.has(path))state.expanded.delete(path);else state.expanded.add(path);render();};
+        row.appendChild(toggle);
+      }else{
+        row.appendChild(el('span','tag-toggle-space'));
+      }
+      var label=el('button','tag-label',tagLabel(path));
+      label.type='button';label.title=displayPath(path);
+      row.appendChild(label);
+      row.appendChild(el('span','tag-count',String(tagCount(path))));
+      row.onclick=function(){chooseTag(path);};
+      wrap.appendChild(row);
+      if(hasChildren&&state.expanded.has(path))wrap.appendChild(branch(path,depth+1));
+    });
+    return wrap;
+  }
+  list.appendChild(branch('',0));
+  pane.appendChild(list);
+
+  head.querySelector('#new-tag').onclick=function(){
+    var raw=window.prompt('新建标签（用 / 分隔层级，最多三级）','写作素材');
+    if(raw===null)return;
+    var parts=splitPath(raw);
+    if(!parts.length)return;
+    if(parts.length>3||parts.some(function(p){return p.length>30;})){toast('标签最多三级，每级 1–30 个字符');return;}
+    var path=parts.join('/');
+    if(state.tags.indexOf(path)>=0){toast('这个标签已经存在');return;}
+    state.tags.push(path);
+    var parent=parentPath(path);if(parent)state.expanded.add(parent);
+    render();toast('已创建标签 '+displayPath(path));
+  };
+  return pane;
+}
+function renderListPane(){
+  var pane=el('div','list-pane');
+  var head=el('div','list-head');
+  var top=el('div','list-head-top');
+  var title=state.activeTag?displayPath(state.activeTag):'全部语料';
+  var visible=visibleItems().length;
+  var countLabel=state.query?visible+' / '+state.items.filter(function(i){return itemHasTag(i,state.activeTag);}).length+' 条':visible+' 条';
+  top.innerHTML='<span class="list-title" title="'+esc(title)+'">'+esc(title)+'</span><span class="list-count" id="list-count">'+countLabel+'</span><span class="spacer"></span>';
+  var exportBtn=el('button','btn ghost','导出');
+  exportBtn.type='button';exportBtn.style.height='30px';exportBtn.style.fontSize='12.5px';
+  exportBtn.onclick=function(){toast('导出 Markdown + 图片 ZIP（原型）');};
+  top.appendChild(exportBtn);
+  head.appendChild(top);
+
+  var bottom=el('div','list-head-bottom');
+  var tabs=el('div','tabs');
+  [['all','全部'],['text','文字'],['image','图片']].forEach(function(row){
+    var btn=el('button',null,row[1]);
+    btn.type='button';btn.setAttribute('aria-pressed',String(state.filter===row[0]));
+    btn.onclick=function(){state.filter=row[0];render();};
+    tabs.appendChild(btn);
+  });
+  bottom.appendChild(tabs);
+  var search=el('div','search');
+  search.innerHTML=icon('search');
+  var input=el('input');input.type='search';input.placeholder='筛选说明、书名或标签';input.value=state.query;
+  input.setAttribute('aria-label','筛选素材');
+  input.oninput=function(){state.query=input.value;renderRowsOnly();};
+  search.appendChild(input);
+  bottom.appendChild(search);
+  head.appendChild(bottom);
+  pane.appendChild(head);
+
+  var scroll=el('div','list-scroll');scroll.id='list-scroll';
+  pane.appendChild(scroll);
+  fillRows(scroll);
+  return pane;
+}
+function fillRows(scroll){
+  scroll.innerHTML='';
+  var items=visibleItems();
+  if(!items.length){
+    var empty=el('div','list-empty');
+    var hasAny=state.items.filter(function(i){return itemHasTag(i,state.activeTag);}).length>0;
+    empty.innerHTML='<b>'+(hasAny?'没有匹配的素材':'这里还没有素材')+'</b>'+
+      (hasAny?'换一个关键词，或点左侧的标签':'把图片拖进来，或点右上角「添加图片」');
+    if(!hasAny){
+      var btn=el('button','btn','添加图片');btn.type='button';btn.onclick=function(){openImport();};
+      empty.appendChild(btn);
+    }
+    scroll.appendChild(empty);
+    return;
+  }
+  items.forEach(function(item){scroll.appendChild(renderRow(item));});
+}
+function renderRowsOnly(){
+  var scroll=document.getElementById('list-scroll');
+  if(!scroll){render();return;}
+  fillRows(scroll);
+  var count=document.getElementById('list-count');
+  if(count){
+    var total=state.items.filter(function(i){return itemHasTag(i,state.activeTag);}).length;
+    count.textContent=state.query?visibleItems().length+' / '+total+' 条':visibleItems().length+' 条';
+  }
+}
+function renderRow(item){
+  var row=el('div','item-row'+(state.activeId===item.id?' sel':''));
+  row.dataset.id=item.id;
+  if(item.type==='image'){
+    var thumb=el('div','thumb');
+    var img=el('img');img.src=item.crop||item.cropSrc||'';img.alt='';
+    thumb.appendChild(img);row.appendChild(thumb);
+  }
+  var main=el('div','row-main');
+  if(item.type==='image'){
+    var title=el('div','row-title',item.note||item.file||'未命名图片');
+    main.appendChild(title);
+    var meta=el('div','row-meta');
+    meta.textContent=item.source==='pdf'?('《'+item.book+'》 · 第 '+item.printed+' 页'):('外部图片 · '+(item.file||''));
+    main.appendChild(meta);
+  }else{
+    var head=el('div','row-title');
+    head.innerHTML='《'+esc(item.book)+'》<span class="row-page">'+esc(item.page)+'</span>';
+    main.appendChild(head);
+    main.appendChild(el('div','row-snippet',item.text));
+  }
+  var tags=el('div','row-tags');
+  item.tags.forEach(function(path){
+    var chip=el('button','tag-chip',tagLabel(path));
+    chip.type='button';chip.title=displayPath(path);
+    chip.onclick=function(event){event.stopPropagation();chooseTag(path);};
+    tags.appendChild(chip);
+  });
+  main.appendChild(tags);
+  row.appendChild(main);
+  row.onclick=function(){
+    var scroller=document.querySelector('.list-scroll');
+    var top=scroller?scroller.scrollTop:0;
+    state.activeId=item.id;render();
+    var next=document.querySelector('.list-scroll');if(next)next.scrollTop=top;
+  };
+  return row;
+}
+
+/* ── detail ── */
+function renderDetailPane(){
+  var pane=el('div','detail');
+  var item=state.items.find(function(i){return i.id===state.activeId;});
+  if(!item){
+    pane.innerHTML='<div class="detail-empty">选择一条素材查看详情</div>';
+    return pane;
+  }
+  var head=el('div','detail-head');
+  if(item.type==='image'){
+    head.innerHTML='<div class="detail-kicker">'+(item.source==='pdf'?'图片 · PDF 截图':'图片 · 外部图片')+'</div>'+
+      '<div class="detail-title">'+esc(item.note||item.file||'未命名图片')+'</div>'+
+      '<div class="detail-sub">'+esc(item.source==='pdf'?('《'+item.book+'》 · 第 '+item.printed+' 页'):'加入于 '+item.date)+'</div>';
+  }else{
+    head.innerHTML='<div class="detail-kicker">文字 · 原文摘录</div>'+
+      '<div class="detail-title">'+esc('《'+item.book+'》')+'</div>'+
+      '<div class="detail-sub">'+esc(item.author+' · '+item.page)+'</div>';
+  }
+  pane.appendChild(head);
+  if(item.type==='image'&&item.source==='pdf'&&state.sourceMissing){
+    var warn=el('div','warn-bar');
+    warn.innerHTML=icon('alert')+'<span>原书已删除或文件已变化。图片、说明和出处仍保留；「打开原文」暂不可用。</span>';
+    pane.appendChild(warn);
+  }
+
+  var body=el('div','detail-body');
+  if(item.type==='image'){
+    var frame=el('div','detail-image');
+    var img=el('img');img.src=item.crop||item.cropSrc;img.alt=item.note||'图片素材';
+    frame.appendChild(img);
+    frame.onclick=function(){openLightbox(item.crop||item.cropSrc);};
+    body.appendChild(frame);
+
+    var note=el('div','detail-section');
+    note.innerHTML='<div class="detail-label">说明</div>';
+    note.appendChild(el('div','detail-note'+(item.note?'':' empty'),item.note||'没有说明'));
+    body.appendChild(note);
+
+    var tags=el('div','detail-section');
+    tags.innerHTML='<div class="detail-label">标签</div>';
+    var row=el('div','row-tags');
+    item.tags.forEach(function(path){row.appendChild(detailChip(path));});
+    tags.appendChild(row);body.appendChild(tags);
+
+    var details=document.createElement('details');details.className='source-details';
+    var summary=document.createElement('summary');
+    summary.innerHTML=icon('chevron')+'来源详情';
+    details.appendChild(summary);
+    var dl=el('dl','meta-list');
+    if(item.source==='pdf'){
+      dl.innerHTML='<dt>书名</dt><dd>《'+esc(item.book)+'》</dd>'+
+        '<dt>印刷页码</dt><dd>第 '+esc(item.printed)+' 页</dd>'+
+        '<dt>PDF 物理页</dt><dd>第 '+esc(item.pdfPage)+' 页</dd>'+
+        '<dt>框选区域</dt><dd>'+esc(item.dims)+' px · 原图坐标</dd>'+
+        '<dt>原文件</dt><dd>指纹 '+esc(item.fingerprint||'—')+'</dd>'+
+        '<dt>加入时间</dt><dd>'+esc(item.date)+'</dd>';
+    }else{
+      dl.innerHTML='<dt>来源</dt><dd>本地图片 · '+esc(item.file||'')+'</dd>'+
+        '<dt>尺寸</dt><dd>'+esc(item.dims)+'</dd>'+
+        '<dt>加入时间</dt><dd>'+esc(item.date)+'</dd>';
+    }
+    details.appendChild(dl);
+    body.appendChild(details);
+  }else{
+    body.appendChild(el('div','detail-text',item.text));
+    var note=el('div','detail-section');
+    note.innerHTML='<div class="detail-label">备注</div>';
+    note.appendChild(el('div','detail-note'+(item.note?'':' empty'),item.note||'没有备注'));
+    body.appendChild(note);
+    var tags=el('div','detail-section');
+    tags.innerHTML='<div class="detail-label">标签</div>';
+    var row=el('div','row-tags');
+    item.tags.forEach(function(path){row.appendChild(detailChip(path));});
+    tags.appendChild(row);body.appendChild(tags);
+    var details=document.createElement('details');details.className='source-details';
+    var summary=document.createElement('summary');summary.innerHTML=icon('chevron')+'来源详情';
+    details.appendChild(summary);
+    var dl=el('dl','meta-list');
+    dl.innerHTML='<dt>作者</dt><dd>'+esc(item.author)+'</dd><dt>引用页</dt><dd>'+esc(item.page)+'</dd><dt>加入时间</dt><dd>'+esc(item.date)+'</dd>';
+    details.appendChild(dl);body.appendChild(details);
+  }
+  pane.appendChild(body);
+
+  var actions=el('div','detail-actions');
+  if(item.type==='image'){
+    if(item.source==='pdf'){
+      var open=el('button','btn primary','打开原文');
+      open.type='button';open.disabled=state.sourceMissing;
+      open.title=state.sourceMissing?'原书不可用':'回到同一页并显示原框';
+      open.onclick=function(){openCapture({mode:'locate',item:item});};
+      actions.appendChild(open);
+    }else{
+      var openImg=el('button','btn primary','打开原图');
+      openImg.type='button';openImg.onclick=function(){openLightbox(item.crop||item.cropSrc);};
+      actions.appendChild(openImg);
+    }
+    actions.appendChild(actionBtn('编辑说明','pencil',function(){editNote(item);}));
+    actions.appendChild(actionBtn('编辑标签','tag',function(){openTagEditor(item);}));
+    var spacer=el('span','spacer');actions.appendChild(spacer);
+    var del=el('button','icon-btn');del.type='button';del.title='删除图片';del.setAttribute('aria-label','删除图片');del.innerHTML=icon('trash');
+    del.onclick=function(){deleteItem(item);};actions.appendChild(del);
+  }else{
+    actions.appendChild(actionBtn('复制出处','external',function(){toast('出处已复制（原型）');}));
+    actions.appendChild(actionBtn('编辑标签','tag',function(){openTagEditor(item);}));
+    var spacer=el('span','spacer');actions.appendChild(spacer);
+    var open=el('button','btn primary','打开原文');
+    open.type='button';open.onclick=function(){toast('打开原文（原型）');};
+    actions.appendChild(open);
+  }
+  pane.appendChild(actions);
+  return pane;
+}
+function detailChip(path){
+  var chip=el('button','tag-chip',displayPath(path));chip.type='button';
+  chip.onclick=function(){chooseTag(path);};return chip;
+}
+function actionBtn(label,iconName,fn){
+  var btn=el('button','btn');btn.type='button';btn.innerHTML=icon(iconName)+esc(label);btn.onclick=fn;return btn;
+}
+function editNote(item){
+  var next=window.prompt('图片说明（留空可清除）',item.note||'');
+  if(next===null)return;
+  item.note=next.trim();render();toast('说明已更新');
+}
+function deleteItem(item){
+  if(!window.confirm('从素材库删除这张图片？原书和原文件不会被删除。'))return;
+  state.items=state.items.filter(function(i){return i.id!==item.id;});
+  state.activeId=null;render();toast('已从素材库删除');
+}
+
+/* ── tag editor ── */
+var tagTarget=null;
+function openTagEditor(item){
+  tagTarget=item;
+  var box=document.getElementById('tag-dialog-checks');box.innerHTML='';
+  state.tags.slice().sort(function(a,b){return a.localeCompare(b,'zh-CN');}).forEach(function(path){
+    var label=el('label','tag-check');
+    var cb=el('input');cb.type='checkbox';cb.value=path;cb.checked=item.tags.indexOf(path)>=0;
+    label.appendChild(cb);label.appendChild(el('span',null,displayPath(path)));
+    box.appendChild(label);
+  });
+  document.getElementById('tag-dialog-new').value='';
+  document.getElementById('tag-dialog').hidden=false;
+}
+function closeTagDialog(){document.getElementById('tag-dialog').hidden=true;tagTarget=null;}
+function addTagFromDialog(){
+  var input=document.getElementById('tag-dialog-new');
+  var parts=splitPath(input.value);
+  if(!parts.length)return;
+  if(parts.length>3||parts.some(function(p){return p.length>30;})){toast('标签最多三级，每级 1–30 个字符');return;}
+  var path=parts.join('/');
+  if(state.tags.indexOf(path)<0)state.tags.push(path);
+  var box=document.getElementById('tag-dialog-checks');
+  var existing=Array.from(box.querySelectorAll('input')).find(function(cb){return cb.value===path;});
+  if(existing){existing.checked=true;}else{
+    var label=el('label','tag-check');
+    var cb=el('input');cb.type='checkbox';cb.value=path;cb.checked=true;
+    label.appendChild(cb);label.appendChild(el('span',null,displayPath(path)));
+    box.appendChild(label);
+  }
+  input.value='';
+}
+function saveTagDialog(){
+  if(!tagTarget)return;
+  var checked=Array.from(document.querySelectorAll('#tag-dialog-checks input:checked')).map(function(cb){return cb.value;});
+  if(!checked.length){toast('至少保留一个标签');return;}
+  tagTarget.tags=checked;
+  if(!itemHasTag(tagTarget,state.activeTag))state.activeTag='';
+  closeTagDialog();render();toast('标签已更新');
+}
+
+/* ── import view ── */
+function defaultImport(extra){
+  var base={
+    dataUrl:'',name:'',dims:'',file:'',source:null,note:'',
+    tags:new Set([state.activeTag||'未整理']),error:''
+  };
+  return Object.assign(base,extra||{});
+}
+function openImport(extra){
+  state.view='import';
+  state.importData=defaultImport(extra);
+  render();
+}
+function renderImport(){
+  var main=document.getElementById('main');main.innerHTML='';
+  var imp=state.importData||defaultImport();
+  var head=el('div','page-head');
+  var text=el('div','head-text');
+  text.innerHTML='<div class="page-title">添加图片</div><div class="page-subtitle">拖入、粘贴，或从文件里选一张</div>';
+  head.appendChild(text);
+  var actions=el('div','head-actions');
+  var back=el('button','btn ghost');
+  back.type='button';back.innerHTML=icon('back')+'返回素材库';
+  back.onclick=function(){
+    if(imp.dataUrl&&!window.confirm('放弃这张图片？'))return;
+    state.view='materials';state.importData=null;render();
+  };
+  actions.appendChild(back);head.appendChild(actions);
+  main.appendChild(head);
+
+  var shell=el('div','import-shell');
+  var inner=el('div','import-inner');
+
+  var left=el('div','import-main');
+  var drop;
+  if(imp.dataUrl){
+    drop=el('div','dropzone has-image');
+    drop.id='dropzone';
+    var img=el('img','preview-img');img.src=imp.dataUrl;img.alt=imp.name||'待保存图片';
+    drop.appendChild(img);
+  }else{
+    drop=el('div','dropzone');
+    drop.id='dropzone';drop.tabIndex=0;drop.setAttribute('role','button');
+    drop.setAttribute('aria-label','选择图片文件');
+    drop.innerHTML=icon('image')+
+      '<div class="drop-title">拖入图片，或按 ⌘V 粘贴</div>'+
+      '<div class="drop-hint">PNG / JPEG · 单张不超过 25 MB</div>'+
+      '<button class="btn" type="button" id="import-choose">选择文件</button>';
+  }
+  if(!imp.dataUrl){
+    drop.onclick=function(){document.getElementById('file-input').click();};
+    drop.onkeydown=function(event){if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('file-input').click();}};
+  }
+  left.appendChild(drop);
+
+  if(imp.dataUrl){
+    var meta=el('div','preview-meta');
+    var file=el('div','file');
+    file.innerHTML='<b>'+esc(imp.name||'待保存图片')+'</b><span>'+esc(imp.dims||'')+'</span>';
+    meta.appendChild(file);
+    var acts=el('div','actions');
+    var change=el('button','text-btn','更换');change.type='button';change.onclick=function(){document.getElementById('file-input').click();};
+    var remove=el('button','text-btn','移除');remove.type='button';remove.onclick=function(){var imp=state.importData;imp.dataUrl='';imp.name='';imp.dims='';imp.file='';imp.source=null;render();};
+    acts.appendChild(change);acts.appendChild(remove);
+    meta.appendChild(acts);left.appendChild(meta);
+  }
+
+  var secondary=el('div','import-secondary');
+  secondary.appendChild(el('span','also','也可以'));
+  var pdf=el('button','btn');
+  pdf.type='button';pdf.innerHTML=icon('crop')+'从库内 PDF 截图…';
+  pdf.onclick=function(){openCapture({mode:'capture'});};
+  secondary.appendChild(pdf);
+  secondary.appendChild(el('span','hint','只对已入库的 PDF 文献可用'));
+  left.appendChild(secondary);
+  inner.appendChild(left);
+
+  var form=el('aside','import-form');
+  var source=el('div','form-source');source.id='import-source';
+  source.innerHTML=imp.dataUrl
+    ? (imp.source&&imp.source.kind==='pdf'
+      ? '<b>《'+esc(imp.source.book)+'》</b> · 印刷页 '+esc(imp.source.printed)+' · PDF 第 '+esc(imp.source.pdfPage)+' 页'
+      : '<b>外部图片</b>')
+    : '还没有选择图片';
+  form.appendChild(source);
+
+  var note=el('div','field');
+  note.innerHTML='<label for="import-note">说明（可选）</label>';
+  var ta=el('textarea');ta.id='import-note';ta.maxLength=200;ta.placeholder='写一句说明，之后可按关键词找到这张图';
+  ta.value=imp.note||'';
+  ta.oninput=function(){state.importData.note=ta.value;};
+  note.appendChild(ta);form.appendChild(note);
+
+  var tags=el('div','field');
+  tags.innerHTML='<span class="field-label">标签</span>';
+  var checks=el('div','tag-checks');checks.id='import-tags';
+  state.tags.slice().sort(function(a,b){return a.localeCompare(b,'zh-CN');}).forEach(function(path){
+    checks.appendChild(tagCheck(path,imp.tags.has(path)));
+  });
+  tags.appendChild(checks);
+  var newTag=el('div','new-tag');
+  var input=el('input');input.type='text';input.id='import-new-tag';input.placeholder='新建标签，例如 理论/异化';input.maxLength=100;
+  var addBtn=el('button','btn','新建');addBtn.type='button';
+  newTag.appendChild(input);newTag.appendChild(addBtn);
+  tags.appendChild(newTag);form.appendChild(tags);
+
+  var saveBlock=el('div','save-block');
+  var save=el('button','btn primary','保存到素材库');save.type='button';save.id='import-save';
+  save.onclick=saveImport;
+  var hint=el('div','form-hint');hint.id='import-hint';
+  saveBlock.appendChild(save);saveBlock.appendChild(hint);
+  form.appendChild(saveBlock);
+  inner.appendChild(form);
+  shell.appendChild(inner);main.appendChild(shell);
+
+  function tagCheck(path,checked){
+    var label=el('label','tag-check');
+    var cb=el('input');cb.type='checkbox';cb.value=path;cb.checked=checked;
+    cb.onchange=function(){
+      if(cb.checked)state.importData.tags.add(path);else state.importData.tags.delete(path);
+      updateImportFooter();
+    };
+    label.appendChild(cb);label.appendChild(el('span',null,displayPath(path)));
+    return label;
+  }
+  addBtn.onclick=function(){
+    var parts=splitPath(input.value);
+    if(!parts.length)return;
+    if(parts.length>3||parts.some(function(p){return p.length>30;})){toast('标签最多三级，每级 1–30 个字符');return;}
+    var path=parts.join('/');
+    if(state.tags.indexOf(path)<0)state.tags.push(path);
+    state.importData.tags.add(path);
+    var existing=Array.from(checks.querySelectorAll('input')).find(function(cb){return cb.value===path;});
+    if(existing){existing.checked=true;}else{checks.appendChild(tagCheck(path,true));}
+    input.value='';
+    updateImportFooter();
+  };
+  input.onkeydown=function(event){if(event.key==='Enter'){event.preventDefault();addBtn.click();}};
+  updateImportFooter();
+}
+function updateImportFooter(){
+  var imp=state.importData;if(!imp)return;
+  var save=document.getElementById('import-save');
+  var hint=document.getElementById('import-hint');
+  if(!save||!hint)return;
+  var ready=!!imp.dataUrl&&imp.tags.size>0;
+  save.disabled=!ready;
+  hint.className='form-hint';
+  if(!imp.dataUrl)hint.textContent='先选择一张图片';
+  else if(!imp.tags.size){hint.textContent='至少选择一个标签';hint.className='form-hint error';}
+  else{
+    var under=state.activeTag&&Array.from(imp.tags).some(function(t){return t===state.activeTag||t.indexOf(state.activeTag+'/')===0;});
+    hint.textContent=under?'保存后会出现在「'+displayPath(state.activeTag)+'」下':'保存后会出现在素材库';
+  }
+}
+function saveImport(){
+  var imp=state.importData;
+  if(!imp||!imp.dataUrl){toast('先选择一张图片');return;}
+  if(!imp.tags.size){toast('至少选择一个标签');return;}
+  var duplicate=state.items.some(function(i){return i.type==='image'&&(i.crop===imp.dataUrl||i.cropSrc===imp.dataUrl);});
+  if(duplicate){toast('这张图已经在素材库里');return;}
+  var tags=Array.from(imp.tags);
+  var item;
+  if(imp.source&&imp.source.kind==='pdf'){
+    item={id:'i'+Date.now(),type:'image',source:'pdf',book:imp.source.book,author:imp.source.author,
+      printed:imp.source.printed,pdfPage:imp.source.pdfPage,asset:imp.source.asset,box:Object.assign({},imp.source.box),
+      crop:imp.dataUrl,dims:imp.dims,note:(imp.note||'').trim(),tags:tags,date:today(),fingerprint:'8f3a2c…'};
+  }else{
+    item={id:'i'+Date.now(),type:'image',source:'local',file:imp.name,cropSrc:imp.dataUrl,dims:imp.dims,
+      note:(imp.note||'').trim(),tags:tags,date:today()};
+    item.crop=imp.dataUrl;
+  }
+  state.items.unshift(item);
+  state.activeId=item.id;state.view='materials';state.filter='all';state.importData=null;
+  if(!itemHasTag(item,state.activeTag))state.activeTag='';
+  render();toast('已保存到素材库');
+}
+
+/* ── file input / drop / paste ── */
+function readAsDataUrl(file){
+  return new Promise(function(resolve,reject){
+    var r=new FileReader();r.onload=function(){resolve(r.result);};r.onerror=reject;r.readAsDataURL(file);
+  });
+}
+function imageFileFrom(files){
+  var list=Array.from(files||[]);
+  var file=list.find(function(f){return /^image\/(png|jpeg)$/.test(f.type);});
+  if(!file){toast('只支持 PNG / JPEG 图片');return null;}
+  if(list.length>1)toast('一次先收一张，已放入第一张');
+  if(file.size>25*1024*1024){toast('单张图片不超过 25 MB');return null;}
+  return file;
+}
+function applyImageFile(file){
+  readAsDataUrl(file).then(function(src){
+    return loadImage(src).then(function(img){
+      var extra={dataUrl:src,name:file.name,file:file.name,dims:img.naturalWidth+' × '+img.naturalHeight,source:{kind:'local'}};
+      if(state.view==='import'&&state.importData){
+        Object.assign(state.importData,extra);state.importData.error='';render();
+      }else{
+        openImport(extra);
+      }
+    });
+  }).catch(function(){toast('读取图片失败');});
+}
+function handleFiles(files){
+  var file=imageFileFrom(files);
+  if(file)applyImageFile(file);
+}
+
+/* ── capture ── */
+var cap={open:false,mode:'capture',bookId:'b1',pageIndex:0,box:null,item:null,preview:null,dragging:false,start:null,pending:null};
+function currentBook(){return books.find(function(b){return b.id===cap.bookId;});}
+function currentPage(){var b=currentBook();return b?b.pages[cap.pageIndex]:null;}
+function openCapture(options){
+  options=options||{};
+  cap.open=true;cap.mode=options.mode||'capture';cap.item=options.item||null;
+  if(cap.mode==='locate'&&cap.item){
+    var book=books.find(function(b){return b.title===cap.item.book;})||books[0];
+    cap.bookId=book.id;
+    var idx=book.pages.findIndex(function(p){return p.printed===cap.item.printed;});
+    cap.pageIndex=Math.max(0,idx);
+    cap.box=cap.item.box?Object.assign({},cap.item.box):null;
+    cap.preview=cap.item.crop||cap.item.cropSrc||null;
+  }else{
+    cap.bookId=options.bookId||'b1';
+    var b=currentBook();
+    var target=options.printed?b.pages.findIndex(function(p){return p.printed===options.printed;}):0;
+    cap.pageIndex=Math.max(0,target);
+    cap.box=null;cap.preview=null;
+  }
+  document.getElementById('cap-dialog').hidden=false;
+  document.getElementById('cap-book-menu').hidden=true;
+  renderCapture();
+}
+function closeCapture(){
+  cap.open=false;cap.dragging=false;
+  document.getElementById('cap-dialog').hidden=true;
+  document.getElementById('cap-book-menu').hidden=true;
+}
+function renderCapture(){
+  if(!cap.open)return;
+  var book=currentBook(),page=currentPage();
+  if(!book||!page){closeCapture();return;}
+  var locate=cap.mode==='locate';
+  document.getElementById('cap-title').textContent=locate?'图片出处':'从 PDF 截图';
+  document.getElementById('cap-sub').textContent=locate?'这是保存图片时的来源页与原框位置':'在页面上拖出一个框，只保留框内区域';
+  document.getElementById('cap-tool-note').textContent=locate?'原框位置 · 只读':'拖动框选';
+  document.getElementById('cap-book-label').textContent=book.title;
+  var menu=document.getElementById('cap-book-menu');menu.innerHTML='';
+  books.forEach(function(b){
+    var btn=el('button',b.id===cap.bookId?'on':'',b.title);btn.type='button';
+    btn.onclick=function(){cap.bookId=b.id;cap.pageIndex=0;cap.box=null;cap.preview=null;menu.hidden=true;renderCapture();};
+    menu.appendChild(btn);
+  });
+  document.getElementById('cap-page-label').textContent='第 '+page.printed+' 页 · PDF '+page.pdf;
+  document.getElementById('cap-prev').disabled=cap.pageIndex<=0;
+  document.getElementById('cap-next').disabled=cap.pageIndex>=book.pages.length-1;
+  var img=document.getElementById('cap-page-img');
+  img.src=page.img;img.alt=book.title+' 第 '+page.printed+' 页';
+  document.getElementById('cap-page-wrap').classList.toggle('drawable',!locate);
+  var box=document.getElementById('cap-box');
+  box.classList.toggle('locate',locate);
+  document.getElementById('cap-box-label').textContent=locate?'保存时的原框':'框选区域';
+  box.hidden=!cap.box;
+  document.getElementById('cap-source').innerHTML='<b>《'+esc(book.title)+'》</b> · 印刷页 '+esc(page.printed)+' · PDF 第 '+esc(page.pdf)+' 页';
+  var use=document.getElementById('cap-use');
+  use.textContent=locate?'关闭':'使用这张图';
+  use.disabled=locate?false:!cap.box;
+  document.getElementById('cap-cancel').hidden=locate;
+  document.getElementById('cap-hint').textContent=locate
+    ? '这是这张图片保存时的来源页和原框。图片与出处会一直保留，原书变动时也不会删除。'
+    : '框选后只保存框内区域；说明和标签在下一步填写。';
+  if(locate&&cap.preview)setCapPreview(cap.preview);
+  else if(!cap.box)clearCapPreview();
+  if(cap.box)requestAnimationFrame(function(){drawBoxPixels();if(!locate)updateCapPreview();});
+}
+function setCapPreview(src){
+  if(!src){clearCapPreview();return;}
+  document.getElementById('cap-preview').innerHTML='<img src="'+src+'" alt="裁切预览">';
+}
+function clearCapPreview(){
+  document.getElementById('cap-preview').innerHTML='<div class="placeholder">在页面上拖出一个框<br>这里会出现裁切预览</div>';
+}
+function drawBoxPixels(){
+  if(!cap.box||!cap.open)return;
+  var wrap=document.getElementById('cap-page-wrap');
+  var img=document.getElementById('cap-page-img');
+  var rect=img.getBoundingClientRect();
+  if(!rect.width||!img.naturalWidth)return;
+  var scale=rect.width/img.naturalWidth;
+  var box=document.getElementById('cap-box');
+  box.hidden=false;
+  box.style.left=(cap.box.x*scale)+'px';
+  box.style.top=(cap.box.y*scale)+'px';
+  box.style.width=(cap.box.w*scale)+'px';
+  box.style.height=(cap.box.h*scale)+'px';
+}
+function updateCapPreview(){
+  if(!cap.box){clearCapPreview();return;}
+  loadImage(currentPage().img).then(function(img){
+    cap.preview=cropToDataUrl(img,cap.box);
+    setCapPreview(cap.preview);
+    var use=document.getElementById('cap-use');if(use)use.disabled=cap.mode==='locate'?false:!cap.box;
+  }).catch(function(){});
+}
+function beginDraw(event){
+  if(cap.mode==='locate')return;
+  if(event.button!==undefined&&event.button!==0)return;
+  var img=document.getElementById('cap-page-img');
+  var rect=img.getBoundingClientRect();
+  var x=Math.min(Math.max(event.clientX-rect.left,0),rect.width);
+  var y=Math.min(Math.max(event.clientY-rect.top,0),rect.height);
+  cap.dragging=true;cap.start={x:x,y:y,rect:rect};cap.box=null;cap.preview=null;
+  clearCapPreview();event.preventDefault();
+  try{document.getElementById('cap-page-wrap').setPointerCapture(event.pointerId);}catch(_e){}
+}
+function moveDraw(event){
+  if(!cap.dragging||!cap.start)return;
+  var s=cap.start;
+  var x=Math.min(Math.max(event.clientX-s.rect.left,0),s.rect.width);
+  var y=Math.min(Math.max(event.clientY-s.rect.top,0),s.rect.height);
+  var left=Math.min(x,s.x),top=Math.min(y,s.y),w=Math.abs(x-s.x),h=Math.abs(y-s.y);
+  var img=document.getElementById('cap-page-img');
+  var scale=img.naturalWidth/s.rect.width;
+  var box=document.getElementById('cap-box');
+  box.hidden=false;box.classList.remove('locate');
+  box.style.left=left+'px';box.style.top=top+'px';box.style.width=w+'px';box.style.height=h+'px';
+  cap.pending={x:left*scale,y:top*scale,w:w*scale,h:h*scale};
+}
+function endDraw(){
+  if(!cap.dragging)return;
+  cap.dragging=false;
+  if(!cap.pending||cap.pending.w<8||cap.pending.h<8){
+    cap.pending=null;cap.box=null;document.getElementById('cap-box').hidden=true;
+    var use=document.getElementById('cap-use');if(use)use.disabled=cap.mode==='locate'?false:true;
+    return;
+  }
+  var img=document.getElementById('cap-page-img');
+  var box=cap.pending;
+  box.x=Math.max(0,Math.min(box.x,img.naturalWidth-1));
+  box.y=Math.max(0,Math.min(box.y,img.naturalHeight-1));
+  box.w=Math.min(box.w,img.naturalWidth-box.x);
+  box.h=Math.min(box.h,img.naturalHeight-box.y);
+  cap.box=box;cap.pending=null;
+  drawBoxPixels();updateCapPreview();
+  var use=document.getElementById('cap-use');if(use)use.disabled=false;
+}
+function useCapture(){
+  if(cap.mode==='locate'){closeCapture();return;}
+  if(!cap.box)return;
+  var book=currentBook(),page=currentPage();
+  var img=document.getElementById('cap-page-img');
+  var dataUrl=cap.preview||cropToDataUrl(img,cap.box);
+  var capture={dataUrl:dataUrl,name:book.title+' 第 '+page.printed+' 页.png',file:'',
+    dims:Math.round(cap.box.w)+' × '+Math.round(cap.box.h),
+    source:{kind:'pdf',book:book.title,author:book.author,printed:page.printed,pdfPage:page.pdf,asset:page.img,box:Object.assign({},cap.box)}};
+  closeCapture();
+  if(state.view==='import'&&state.importData){
+    Object.assign(state.importData,capture);state.importData.error='';render();
+  }else{
+    openImport(capture);
+  }
+}
+
+/* ── lightbox ── */
+function openLightbox(src){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').hidden=false;}
+function closeLightbox(){document.getElementById('lightbox').hidden=true;}
+
+/* ── reader ── */
+function renderReader(){
+  var main=document.getElementById('main');main.innerHTML='';
+  var head=el('div','page-head');
+  head.innerHTML='<div class="head-text"><div class="page-title">阅读</div><div class="page-subtitle">1844年经济学哲学手稿 · 马克思</div></div>';
+  var actions=el('div','head-actions');
+  var back=el('button','btn ghost');back.type='button';back.innerHTML=icon('back')+'返回素材库';
+  back.onclick=function(){state.view='materials';render();};
+  actions.appendChild(back);head.appendChild(actions);main.appendChild(head);
+  var wrap=el('div','reader-wrap');
+  var toolbar=el('div','reader-toolbar');
+  toolbar.innerHTML='<span class="page-chip">第 57 页</span><span class="hint" style="font-size:12px;color:var(--text-tertiary)">PDF 第 62 页 · 本地文件</span><span class="spacer"></span>';
+  var capBtn=el('button','btn');capBtn.type='button';capBtn.innerHTML=icon('crop')+'截取本页';
+  capBtn.onclick=function(){openCapture({mode:'capture',bookId:'b1',printed:'57'});};
+  toolbar.appendChild(capBtn);wrap.appendChild(toolbar);
+  var scroll=el('div','reader-scroll');
+  var hint=el('div','reader-hint');hint.innerHTML=icon('crop')+'<span>看到想收的图，点「截取本页」；截取后回到添加图片，填写说明和标签</span>';
+  scroll.appendChild(hint);
+  var paper=el('div','reader-paper');
+  paper.innerHTML='<h2>异化劳动和私有财产</h2>'+
+    '<p>劳动首先是人和自然之间的过程。人通过劳动把自己的目的放进对象之中，对象因此成为人的作品；可是，一旦产品离开生产者而独立存在，这种对象化就可能转变为相反的东西。</p>'+
+    '<p>产品越是积累起来，生产者同产品之间的距离就越是明显。人创造的对象越有力量，人自身在对象面前就显得越无力。这不是某一个工人的偶然遭遇，而是整个生产过程所具有的形式。</p>'+
+    '<p>劳动所生产的对象，作为不依赖于生产者的力量，同劳动相对立。劳动的产品固定在某个对象中，这就是劳动的对象化；在国民经济学假定的状况中，劳动的这种现实化表现为工人的非现实化。</p>'+
+    '<p>因此，异化不是从观念中产生的关系，它就在生产活动本身之中。工人同自己的活动、同自己的产品、同他人之间的关系，都采取了异己的形式。</p>';
+  scroll.appendChild(paper);wrap.appendChild(scroll);main.appendChild(wrap);
+}
+
+/* ── render ── */
+function render(){
+  renderNav();
+  if(state.view==='materials')renderMaterials();
+  else if(state.view==='import')renderImport();
+  else renderReader();
+  document.querySelectorAll('[data-demo-view]').forEach(function(btn){
+    btn.setAttribute('aria-pressed',String((state.view==='import'?'materials':state.view)===btn.dataset.demoView));
+  });
+}
+
+/* ── global events ── */
+document.querySelectorAll('[data-demo-view]').forEach(function(btn){
+  btn.onclick=function(){
+    state.view=btn.dataset.demoView;
+    if(state.view==='materials')state.importData=null;
+    render();
+  };
+});
+document.getElementById('demo-theme').onclick=function(){
+  var dark=document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme',dark?'light':'dark');
+  this.textContent=dark?'深色预览':'浅色预览';
+};
+document.getElementById('demo-missing').onchange=function(){state.sourceMissing=this.checked;render();};
+document.getElementById('demo-sample').onclick=function(){
+  openImport({dataUrl:'assets/page-112.png',name:'承认理论 第112页.png',file:'承认理论 第112页.png',dims:'1190 × 1684',source:{kind:'local'}});
+};
+document.getElementById('file-input').onchange=function(){handleFiles(this.files);this.value='';};
+
+/* drop */
+var dragDepth=0;
+function isFileDrag(event){return event.dataTransfer&&Array.from(event.dataTransfer.types).indexOf('Files')>=0;}
+window.addEventListener('dragenter',function(event){
+  if(!isFileDrag(event)||cap.open||!document.getElementById('lightbox').hidden)return;
+  dragDepth++;document.getElementById('drop-overlay').hidden=false;
+});
+window.addEventListener('dragover',function(event){if(isFileDrag(event))event.preventDefault();});
+window.addEventListener('dragleave',function(event){
+  if(!isFileDrag(event))return;
+  dragDepth=Math.max(0,dragDepth-1);
+  if(dragDepth===0)document.getElementById('drop-overlay').hidden=true;
+});
+window.addEventListener('drop',function(event){
+  if(!isFileDrag(event))return;
+  event.preventDefault();dragDepth=0;document.getElementById('drop-overlay').hidden=true;
+  if(cap.open)return;
+  handleFiles(event.dataTransfer.files);
+});
+/* paste */
+document.addEventListener('paste',function(event){
+  if(cap.open)return;
+  var target=event.target;
+  if(target&&/^(INPUT|TEXTAREA)$/.test(target.tagName))return;
+  var files=Array.from(event.clipboardData&&event.clipboardData.files||[]);
+  if(!files.length)return;
+  event.preventDefault();
+  handleFiles(files);
+});
+
+/* capture wiring */
+document.getElementById('cap-close').onclick=closeCapture;
+document.getElementById('cap-cancel').onclick=closeCapture;
+document.getElementById('cap-use').onclick=useCapture;
+document.getElementById('cap-book-btn').onclick=function(event){
+  event.stopPropagation();
+  var menu=document.getElementById('cap-book-menu');
+  menu.hidden=!menu.hidden;
+  this.setAttribute('aria-expanded',String(!menu.hidden));
+};
+document.addEventListener('click',function(event){
+  if(!event.target.closest('.cap-select')){var menu=document.getElementById('cap-book-menu');if(menu)menu.hidden=true;}
+});
+document.getElementById('cap-prev').onclick=function(){if(cap.pageIndex>0){cap.pageIndex--;cap.box=null;cap.preview=null;renderCapture();}};
+document.getElementById('cap-next').onclick=function(){var b=currentBook();if(cap.pageIndex<b.pages.length-1){cap.pageIndex++;cap.box=null;cap.preview=null;renderCapture();}else toast('样稿只载入了这两页');};
+document.getElementById('cap-page-wrap').addEventListener('pointerdown',beginDraw);
+document.getElementById('cap-page-wrap').addEventListener('pointermove',moveDraw);
+document.getElementById('cap-page-wrap').addEventListener('pointerup',endDraw);
+document.getElementById('cap-page-wrap').addEventListener('pointercancel',endDraw);
+document.getElementById('cap-page-img').addEventListener('load',function(){if(cap.open&&cap.box)drawBoxPixels();});
+window.addEventListener('resize',function(){if(cap.open&&cap.box)drawBoxPixels();});
+
+/* tag dialog wiring */
+document.getElementById('tag-close').onclick=closeTagDialog;
+document.getElementById('tag-dialog-cancel').onclick=closeTagDialog;
+document.getElementById('tag-dialog-save').onclick=saveTagDialog;
+document.getElementById('tag-dialog-add').onclick=addTagFromDialog;
+document.getElementById('tag-dialog-new').onkeydown=function(event){if(event.key==='Enter'){event.preventDefault();addTagFromDialog();}};
+document.getElementById('tag-dialog').onclick=function(event){if(event.target===this)closeTagDialog();};
+
+/* lightbox */
+document.getElementById('lightbox-close').onclick=closeLightbox;
+document.getElementById('lightbox').onclick=function(event){if(event.target===this)closeLightbox();};
+
+/* keyboard */
+document.addEventListener('keydown',function(event){
+  if(event.key!=='Escape')return;
+  if(!document.getElementById('lightbox').hidden){closeLightbox();return;}
+  if(!document.getElementById('tag-dialog').hidden){closeTagDialog();return;}
+  if(cap.open){closeCapture();return;}
+});
+
+/* boot */
+prepareImages().then(function(){render();});
+})();
+</script>
+</body>
+</html>

@@ -25,6 +25,8 @@ from contextlib import closing
 from typing import Callable, List
 from unittest import mock
 
+import fitz
+
 from src.me_finder.app_context import AppContext
 from src.me_finder.structured_reader import get_document_window
 from src.me_finder.alignment.text_alignment import generate_alignment
@@ -98,6 +100,15 @@ class BrowserRegressionTests(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
         generate_alignment(self.fixture.db, "work-one", "pdf-de", "pdf-zh")
+        with fitz.open() as pdf:
+            original = pdf.new_page(width=160, height=100)
+            original.draw_rect(fitz.Rect(0, 0, 80, 100), fill=(0, 0, 1), color=None)
+            pdf.save(root / "material-source.pdf")
+        with closing(sqlite3.connect(self.fixture.db)) as connection, connection:
+            connection.execute(
+                "UPDATE source_files SET relative_path=?, payload_json=json_set(payload_json, '$.relative_path', ?) "
+                "WHERE source_file_id='pdf-de'", ("material-source.pdf", "material-source.pdf")
+            )
 
         handler = make_handler(self.fixture.db, app_context=AppContext.create(root, index_path=self.fixture.db))
         handler.log_message = lambda *args: None
@@ -235,6 +246,209 @@ class BrowserRegressionTests(unittest.TestCase):
               return clipboardData.getData('text/plain');
             }""")
             self.assertEqual(copied, texts[index])
+
+    def test_mineru_accounts_can_be_deleted_directly_from_their_rows(self) -> None:
+        url = self.base_url + "/api/mineru-accounts"
+        for account_id, name, enabled in (("work", "工作账号", True), ("spare", "备用账号", False)):
+            reply = self.context.request.post(url, data={
+                "account_id": account_id, "display_name": name, "token": "fixture-token",
+                "enabled": enabled,
+            })
+            self.assertEqual(reply.status, 200, reply.text())
+
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="MinerU API").click()
+        spare = self.page.get_by_role("button", name="删除备用账号")
+        work = self.page.get_by_role("button", name="删除工作账号")
+        editor = self.page.locator("#mineru-editor-card")
+        dialog = self.page.locator("#app-dialog")
+        cancel = dialog.get_by_role("button", name="取消", exact=True)
+        confirm = dialog.get_by_role("button", name="删除", exact=True)
+
+        spare.click()
+        dialog.wait_for()
+        self.assertEqual(dialog.locator("#app-dialog-title").inner_text(), "删除「备用账号」？")
+        self.assertFalse(editor.is_visible())
+        self.wait_until(lambda: cancel.evaluate("node => node === document.activeElement"),
+                        "the confirmation should focus Cancel")
+        self.page.keyboard.press("Enter")
+        dialog.wait_for(state="hidden")
+        self.assertTrue(spare.evaluate("node => node === document.activeElement"))
+        self.assertTrue(spare.is_visible())
+        self.assertEqual(len(self.context.request.get(url).json()["accounts"]), 2)
+
+        spare.click()
+        self.page.keyboard.press("Escape")
+        dialog.wait_for(state="hidden")
+        self.assertTrue(spare.is_visible())
+
+        def block_delete(route: Route) -> None:
+            if route.request.method == "POST":
+                route.fulfill(status=400, json={"error": "该账号仍有未完成的解析任务"})
+            else:
+                route.continue_()
+
+        self.page.route(url, block_delete)
+        spare.click()
+        confirm.click()
+        self.page.get_by_text("删除 MinerU 账号失败：该账号仍有未完成的解析任务").wait_for()
+        self.assertTrue(spare.is_enabled())
+        self.assertTrue(spare.evaluate("node => node === document.activeElement"))
+        self.page.unroute(url, block_delete)
+
+        spare.click()
+        confirm.click()
+        spare.wait_for(state="detached")
+        self.wait_until(lambda: work.evaluate("node => node === document.activeElement"),
+                        "focus should move to the remaining account row")
+        self.assertFalse(editor.is_visible())
+        self.assertEqual([item["account_id"] for item in self.context.request.get(url).json()["accounts"]], ["work"])
+
+        work.click()
+        confirm.click()
+        work.wait_for(state="detached")
+        editor.wait_for()
+        self.assertEqual(self.page.locator("#mineru-editor-title").inner_text(), "添加账号")
+        self.assertEqual(self.context.request.get(url).json()["accounts"], [])
+
+    def test_vision_provider_editor_expands_in_place_and_delete_preserves_other_draft(self) -> None:
+        url = self.base_url + "/api/vision-providers"
+        for provider_id, name in (("work", "工作接口"), ("spare", "备用接口")):
+            reply = self.context.request.post(url, data={
+                "action": "save_provider", "provider": {
+                    "id": provider_id, "name": name, "api_base": "https://example.com/v1",
+                    "model": "test-model", "api_key": "fixture-key", "enabled": True,
+                },
+            })
+            self.assertEqual(reply.status, 200, reply.text())
+        self.page.route("**/api/vision-providers/models", lambda route: route.fulfill(json={"models": []}))
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="其他解析 API").click()
+        self.page.get_by_role("button", name="删除备用接口").wait_for()
+        panel = self.page.locator("#vision-api-settings")
+        editor = panel.locator("#vision-editor-card")
+        self.assertFalse(editor.is_visible())
+
+        add = panel.get_by_role("button", name="添加接口")
+        add.click()
+        self.assertEqual(editor.locator("#vision-editor-title").inner_text(), "添加接口")
+        editor.get_by_role("button", name="取消").click()
+        self.assertFalse(editor.is_visible())
+        self.assertTrue(add.evaluate("node => document.activeElement === node"))
+
+        edit = panel.get_by_role("button", name="编辑工作接口")
+        edit.click()
+        edit_row = panel.locator('.vision-ledger-row[data-provider-id="work"]')
+        self.assertTrue(edit_row.locator("#vision-editor-card").is_visible())
+        self.assertEqual(edit.get_attribute("aria-expanded"), "true")
+        self.assertEqual(editor.locator("#vision-api-key").input_value(), "")
+        fields = editor.locator(".settings-input, #vision-model-refresh")
+        self.assertEqual(fields.evaluate_all(
+            "nodes => nodes.map(node => node.getBoundingClientRect().height)"
+        ), [36] * 5)
+        empty_models = editor.get_by_text("接口未返回模型，请手动填写模型名")
+        empty_models.wait_for()
+        self.assertNotIn("is-ready", empty_models.get_attribute("class"))
+        name = editor.locator("#vision-provider-name")
+        name.fill("修改中的接口")
+
+        delete = panel.get_by_role("button", name="删除备用接口")
+        delete.click()
+        dialog = self.page.locator("#app-dialog")
+        self.assertEqual(dialog.locator("#app-dialog-title").inner_text(), "删除「备用接口」？")
+        cancel = dialog.get_by_role("button", name="取消")
+        self.wait_until(lambda: cancel.evaluate("node => node === document.activeElement"),
+                        "delete confirmation should focus Cancel")
+        self.page.keyboard.press("Shift+Tab")
+        self.assertTrue(dialog.get_by_role("button", name="删除").evaluate("node => node === document.activeElement"))
+        self.page.keyboard.press("Escape")
+        self.assertTrue(delete.evaluate("node => node === document.activeElement"))
+        self.assertTrue(delete.is_visible())
+
+        delete.click()
+        dialog.get_by_role("button", name="删除").click()
+        delete.wait_for(state="detached")
+        self.assertEqual(name.input_value(), "修改中的接口")
+        self.assertTrue(edit_row.locator("#vision-editor-card").is_visible())
+        editor.get_by_role("button", name="保存接口").click()
+        panel.get_by_role("button", name="编辑修改中的接口").wait_for()
+        self.assertFalse(editor.is_visible())
+        saved = self.context.request.get(url).json()["providers"]
+        self.assertEqual([(item["id"], item["name"], item["has_api_key"]) for item in saved],
+                         [("work", "修改中的接口", True)])
+
+        add.click()
+        editor.locator("#vision-api-base").fill("https://new.example.com/v1")
+        editor.locator("#vision-api-key").fill("new-fixture-key")
+        editor.locator("#vision-provider-name").fill("新增接口")
+        editor.locator("#vision-model").fill("demo-model")
+        editor.get_by_role("button", name="保存接口").click()
+        panel.get_by_role("button", name="编辑新增接口").wait_for()
+        self.assertFalse(editor.is_visible())
+
+    def test_local_ocr_switch_saves_only_enabled_and_paths_save_separately(self) -> None:
+        url = self.base_url + "/api/local-ocr"
+        root = self.fixture.db.parent
+        files = [root / name for name in ("python", "ocr.py", "other_ocr.py")]
+        for file in files:
+            file.touch()
+        python, script, replacement = map(str, files)
+        engine = {"enabled": True, "python_path": python, "script_path": script}
+        reply = self.context.request.post(url, data={
+            "engines": {"ndlocr-lite": engine, "ndlkotenocr-lite": {"enabled": False}},
+        })
+        self.assertEqual(reply.status, 200, reply.text())
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="本地 OCR").click()
+        panel = self.page.locator("#local-ocr-settings")
+        row = panel.locator('[data-local-ocr-engine="ndlocr-lite"]')
+        row.get_by_text("手动配置", exact=True).wait_for()
+        self.assertFalse(panel.locator("#local-ocr-save").count())
+        row.get_by_text("手动指定运行时").click()
+        field = row.locator("#local-ocr-modern-script")
+        field.fill(replacement)
+        switch = row.locator('label.ui-switch')
+        with self.page.expect_request(lambda request: request.url == url and request.method == "POST") as sent:
+            switch.click()
+        self.assertEqual(sent.value.post_data_json, {
+            "action": "update_engine", "provider_id": "ndlocr-lite", "enabled": False,
+        })
+        row.get_by_text("已保存", exact=True).wait_for()
+        self.assertEqual(field.input_value(), replacement)
+        saved = self.context.request.get(url).json()["engines"][0]
+        self.assertFalse(saved["enabled"])
+        self.assertEqual(saved["script_path"], script)
+
+        row.get_by_role("button", name="保存路径").click()
+        row.get_by_text("路径已保存", exact=True).wait_for()
+        saved = self.context.request.get(url).json()["engines"][0]
+        self.assertFalse(saved["enabled"])
+        self.assertEqual(saved["script_path"], replacement)
+
+        def reject_save(route: Route) -> None:
+            if route.request.method == "POST":
+                route.fulfill(status=400, json={"error": "测试保存失败"})
+            else:
+                route.continue_()
+
+        self.page.route(url, reject_save)
+        switch.click()
+        row.get_by_text("未能保存，已恢复原设置：测试保存失败").wait_for()
+        self.assertFalse(row.get_by_role("switch").is_checked())
+        self.assertEqual(switch.inner_text(), "关闭")
+
+    def test_custom_appearance_controls_start_collapsed(self) -> None:
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="外观").click()
+        toggle = self.page.get_by_role("button", name=re.compile("自定义配色"))
+        body = self.page.locator("#appearance-custom-body")
+        self.assertEqual(toggle.get_attribute("aria-expanded"), "false")
+        self.assertFalse(body.is_visible())
+        self.assertEqual(self.page.locator("#appearance-mode-seg button").count(), 3)
+        self.assertTrue(self.page.locator("#theme-options").is_visible())
+        toggle.click()
+        self.assertEqual(toggle.get_attribute("aria-expanded"), "true")
+        self.assertTrue(body.is_visible())
 
     def test_about_links_homebrew_and_platform_visibility(self) -> None:
         self.page.add_init_script("""localStorage.removeItem('meFinderSidebarCollapsed');
@@ -628,6 +842,175 @@ class BrowserRegressionTests(unittest.TestCase):
         menu.get_by_role("option", name="精神现象学").click()
         self.assertEqual(trigger.inner_text().strip(), "精神现象学")
         self.assertEqual(trigger.get_attribute("aria-expanded"), "false")
+
+    def test_settings_search_keeps_original_controls_and_restores_category(self) -> None:
+        page = self.page
+        self.navigate("设置")
+        page.get_by_role("tab", name="外观").click()
+        page.wait_for_load_state("networkidle")
+        settings_posts = []
+        page.on("request", lambda request: settings_posts.append(request.url) if request.method == "POST" else None)
+        search = page.get_by_role("searchbox", name="搜索设置")
+        apa = page.locator('input[name="citation-format"][value="apa"]')
+        apa.evaluate("control => { window.originalCitationOption = control; }")
+        search.fill("引文 APA")
+        apa.locator("..").wait_for()
+        self.assertTrue(apa.evaluate("control => control === window.originalCitationOption"))
+        self.assertFalse(page.locator('[data-citation-style="mla"]').is_visible())
+        with page.expect_request(lambda request: request.method == "POST" and request.url.endswith("/api/preferences")):
+            page.locator('[data-citation-style="apa"]').click()
+        self.assertTrue(apa.is_checked())
+        post_count = len(settings_posts)
+        search.fill("打开 PDF 原文")
+        self.assertFalse(page.locator("#pdf-reader-settings").is_visible())
+        search.fill("唯一无结果测试")
+        page.get_by_text("没有匹配的设置", exact=True).wait_for()
+        page.evaluate("""() => {
+            const row = document.createElement('div');
+            row.className = 'settings-choice-row';
+            row.textContent = '唯一无结果测试';
+            document.getElementById('backup-settings-body').append(row);
+        }""")
+        page.get_by_text("唯一无结果测试", exact=True).wait_for()
+        page.set_viewport_size({"width": 375, "height": 680})
+        self.assertTrue(search.is_visible())
+        self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+        search.press("Escape")
+        self.assertEqual(search.input_value(), "")
+        self.assertTrue(page.get_by_role("tab", name="外观").get_attribute("aria-selected") == "true")
+        self.assertTrue(page.locator("#appearance-card").is_visible())
+        self.assertEqual(len(settings_posts), post_count)
+
+    def test_material_image_file_drop_and_paste_share_the_import_page(self) -> None:
+        page = self.page
+        page.locator("#materials-nav").click()
+        page.locator("#materials-filter").fill("会隐藏新图片")
+        type_trigger = page.get_by_role("button", name="素材类型：全部")
+        type_trigger.focus()
+        type_trigger.press("ArrowDown")
+        page.wait_for_function("document.activeElement?.matches('#materials-type [data-value=all]')")
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+        self.assertTrue(page.get_by_role("button", name="素材类型：文字").evaluate(
+            "button => document.activeElement === button"
+        ))
+        page.locator("#materials-add-image").click()
+        with fitz.open() as pdf:
+            pdf.new_page(width=720, height=540)
+            png = pdf[0].get_pixmap().tobytes("png")
+        page.locator("#materials-image-import input[type=file]").set_input_files(
+            {"name": "diagram.png", "mimeType": "image/png", "buffer": png}
+        )
+        page.get_by_role("textbox", name="说明（可选）").fill("可检索图片说明")
+        page.get_by_role("button", name="保存到素材库").click()
+        image = page.locator("#materials-detail img")
+        image.wait_for(state="visible")
+        page.wait_for_function("document.querySelector('#materials-detail img').naturalWidth === 720")
+        zoom = page.get_by_role("button", name="按原尺寸查看图片")
+        self.assertEqual(zoom.get_attribute("aria-expanded"), "false")
+        preview_width = image.bounding_box()["width"]
+        self.assertLess(preview_width, 720)
+        zoom.press("Enter")
+        shrink = page.get_by_role("button", name="缩回图片预览")
+        self.assertEqual(shrink.get_attribute("aria-expanded"), "true")
+        self.assertEqual(image.bounding_box()["width"], 720)
+        self.assertTrue(image.locator("../..").evaluate("pane => pane.scrollWidth > pane.clientWidth"))
+        shrink.press("Space")
+        self.assertEqual(zoom.get_attribute("aria-expanded"), "false")
+        self.assertEqual(image.bounding_box()["width"], preview_width)
+        self.assertEqual(page.locator("#materials-filter").input_value(), "")
+        self.assertTrue(type_trigger.is_visible())
+        type_trigger.click()
+        page.get_by_role("option", name="文字").click()
+        self.assertFalse(page.locator("#materials-excerpts img").is_visible())
+        page.get_by_role("button", name="素材类型：文字").click()
+        page.get_by_role("option", name="图片").click()
+        self.assertTrue(page.locator("#materials-excerpts img").is_visible())
+        self.assertTrue(page.get_by_role("button", name="导出").is_disabled())
+        image_trigger = page.get_by_role("button", name="素材类型：图片")
+        image_trigger.press("ArrowDown")
+        page.get_by_role("option", name="图片").wait_for()
+        page.keyboard.press("Escape")
+        self.assertFalse(page.get_by_role("listbox", name="素材类型").is_visible())
+        self.assertTrue(image_trigger.evaluate("button => document.activeElement === button"))
+        self.assertIn("未整理", page.locator("#materials-detail").inner_text())
+
+        for event_name in ("drop", "paste"):
+            page.locator("#materials-layout").evaluate(
+                """(target, {name, bytes}) => {
+                  const transfer = new DataTransfer();
+                  transfer.items.add(new File([new Uint8Array(bytes)], 'external.png', {type: 'image/png'}));
+                  const event = name === 'drop' ? new DragEvent(name, {dataTransfer: transfer, bubbles: true})
+                    : new ClipboardEvent(name, {clipboardData: transfer, bubbles: true});
+                  target.dispatchEvent(event);
+                }""",
+                {"name": event_name, "bytes": list(png)},
+            )
+            page.locator(".materials-image-preview").wait_for(state="visible")
+            page.get_by_role("button", name="移除", exact=True).click()
+            page.get_by_role("button", name="返回素材库").click()
+        page.get_by_role("button", name="新建标签").click()
+        tag_dialog = page.get_by_role("dialog", name="新建标签")
+        tag_dialog.wait_for()
+        tag_bounds = tag_dialog.bounding_box()
+        viewport = page.viewport_size
+        self.assertAlmostEqual(tag_bounds["x"] + tag_bounds["width"] / 2, viewport["width"] / 2, delta=1)
+        self.assertAlmostEqual(tag_bounds["y"] + tag_bounds["height"] / 2, viewport["height"] / 2, delta=1)
+        tag_dialog.get_by_role("button", name="取消").click()
+
+        for width in (1000, 535, 375):
+            page.set_viewport_size({"width": width, "height": 700})
+            page.locator("#materials-add-image").click()
+            self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+            screenshot = page.get_by_role("button", name="从库内 PDF 截图…")
+            self.assertEqual(screenshot.bounding_box()["height"], 34)
+            self.assertEqual(page.get_by_role("button", name="选择文件").bounding_box()["height"], 34)
+            screenshot.click()
+            crop_dialog = page.get_by_role("dialog", name="从 PDF 截图")
+            crop_dialog.wait_for()
+            crop_bounds = crop_dialog.bounding_box()
+            self.assertAlmostEqual(crop_bounds["x"] + crop_bounds["width"] / 2, width / 2, delta=1)
+            self.assertAlmostEqual(crop_bounds["y"] + crop_bounds["height"] / 2, 350, delta=1)
+            crop_dialog.get_by_role("button", name="PDF 文献", exact=False).click()
+            pdf_list = crop_dialog.get_by_role("listbox", name="PDF 文献")
+            pdf_list.wait_for()
+            options_bounds = pdf_list.bounding_box()
+            self.assertGreaterEqual(options_bounds["x"], 0)
+            self.assertLessEqual(options_bounds["x"] + options_bounds["width"], width)
+            page.keyboard.press("Escape")
+            self.assertFalse(pdf_list.is_visible())
+            self.assertTrue(crop_dialog.is_visible())
+            crop_dialog.get_by_role("button", name="取消", exact=True).click()
+            page.get_by_role("button", name="返回素材库").click()
+
+        page.locator("#materials-add-image").click()
+        page.get_by_role("button", name="从库内 PDF 截图…").click()
+        trigger = page.get_by_role("button", name=re.compile("^PDF 文献："))
+        trigger.wait_for()
+        trigger.press("ArrowDown")
+        alternative = page.locator('#materials-pdf-options [data-value="pdf-zh"]')
+        alternative.click()
+        page.get_by_role("spinbutton", name="PDF 页码").fill("2")
+        trigger.click()
+        page.wait_for_function("document.activeElement?.matches('#materials-pdf-options .is-selected')")
+        page.keyboard.press("p")
+        target = page.locator('#materials-pdf-options [data-value="pdf-de"]')
+        self.assertTrue(target.evaluate("element => document.activeElement === element"))
+        page.keyboard.press("Enter")
+        self.assertEqual(page.get_by_role("spinbutton", name="PDF 页码").input_value(), "1")
+        self.assertTrue(trigger.evaluate("element => document.activeElement === element"))
+        page.get_by_role("button", name="预览", exact=True).click()
+        canvas = page.locator(".materials-crop-canvas")
+        canvas.wait_for(state="visible")
+        bounds = canvas.bounding_box()
+        page.mouse.move(bounds["x"] + bounds["width"] * .10, bounds["y"] + bounds["height"] * .10)
+        page.mouse.down()
+        page.mouse.move(bounds["x"] + bounds["width"] * .40, bounds["y"] + bounds["height"] * .70)
+        page.mouse.up()
+        page.get_by_role("button", name="使用这张图").click()
+        page.get_by_role("button", name="保存到素材库").click()
+        page.get_by_role("button", name="打开原文").wait_for()
+        page.wait_for_function("document.querySelector('#materials-detail img')?.naturalWidth > 100")
 
     def test_every_main_view_keeps_hidden_elements_off_screen(self) -> None:
         for label in ("文献检索", "文献库", "译本对照", "文献导入", "设置"):

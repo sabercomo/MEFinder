@@ -463,9 +463,120 @@
     });
   }
 
+  // Adapted from Magpie findSettings/searchSettings (MIT, © 2026 yetone).
+  function setupSettingsSearch(input) {
+    const view = input.closest('.page');
+    const content = view.querySelector('.settings-content');
+    const empty = view.querySelector('#settings-search-empty');
+    const categories = [...view.querySelectorAll('.settings-nav-item[data-target]')];
+    // Descend into lists of independent controls. Keep forms, cards and save
+    // actions together so each result remains usable in its original context.
+    const groups = '.citation-format-options, .document-export-options, .local-ocr-component-list, '
+      + '.appearance-engine, .data-location-actions, .about-update-card';
+    let query = '';
+    let originalScroll = 0;
+    let frame = 0;
+
+    function findSettings() {
+      const words = query.split(/\s+/);
+      const match = value => words.every(word => value.toLowerCase().includes(word));
+      for (const node of content.querySelectorAll('.settings-search-miss')) {
+        node.classList.remove('settings-search-miss');
+      }
+
+      function findRows(container, context) {
+        let heading = null;
+        let sectionHits = 0;
+        let hits = 0;
+        for (const row of container.children) {
+          if (row.matches('.settings-subhead')) {
+            if (heading) heading.classList.toggle('settings-search-miss', !sectionHits);
+            heading = row;
+            sectionHits = 0;
+            continue;
+          }
+          if (row.hidden || getComputedStyle(row).display === 'none') continue;
+          const scope = context + ' ' + (heading?.textContent || '');
+          const hit = row.matches(groups)
+            ? findRows(row, scope) > 0
+            : match(scope + ' ' + row.textContent);
+          row.classList.toggle('settings-search-miss', !hit);
+          if (hit) {
+            sectionHits++;
+            hits++;
+          }
+        }
+        if (heading) heading.classList.toggle('settings-search-miss', !sectionHits);
+        return hits;
+      }
+
+      let found = false;
+      for (const tab of categories) {
+        const section = document.getElementById(tab.dataset.target);
+        const body = section.querySelector('.settings-collapse-body');
+        const title = section.querySelector('.settings-section-heading-copy').textContent;
+        const available = !tab.hidden && getComputedStyle(tab).display !== 'none' && !body.hidden;
+        const hit = available && (findRows(body, title) > 0 || match(title));
+        section.classList.toggle('settings-search-hit', hit);
+        found ||= hit;
+      }
+      empty.hidden = found;
+      syncAllRangeFills();
+    }
+
+    function searchSettings() {
+      const next = input.value.trim().toLowerCase();
+      if (!query && !next) return;
+      if (!query) originalScroll = content.scrollTop;
+      query = next;
+      view.classList.toggle('settings-searching', Boolean(query));
+      if (query) {
+        closeAppSelects();
+        findSettings();
+        content.scrollTop = 0;
+        return;
+      }
+      for (const node of content.querySelectorAll('.settings-search-hit, .settings-search-miss')) {
+        node.classList.remove('settings-search-hit', 'settings-search-miss');
+      }
+      empty.hidden = true;
+      content.scrollTop = originalScroll;
+    }
+
+    input.addEventListener('input', searchSettings);
+    view.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !query
+          || document.querySelector('.app-select.is-open, dialog[open], .app-dialog-backdrop.open')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      input.value = '';
+      searchSettings();
+      input.focus({preventScroll: true});
+    });
+    const refresh = () => {
+      if (!query || frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (query) findSettings();
+      });
+    };
+    const observer = new MutationObserver(refresh);
+    for (const section of content.querySelectorAll('.settings-section')) {
+      observer.observe(section, {subtree: true, childList: true, characterData: true, attributes: true,
+        attributeFilter: ['hidden']});
+    }
+    observer.observe(document.documentElement, {attributes: true,
+      attributeFilter: ['data-desktop-shell', 'data-data-location-available']});
+  }
+
   function showSettingsCategory(sectionId) {
     var section = document.getElementById(sectionId);
     if (!section) return;
+    const search = document.getElementById('settings-search');
+    if (search?.value) {
+      search.value = '';
+      search.dispatchEvent(new Event('input'));
+    }
     document.querySelectorAll('.settings-content .settings-section').forEach(function(s) {
       s.classList.toggle('active', s === section);
     });
@@ -1177,6 +1288,8 @@
   }
 
   // 首帧后先按当前 data-theme 渲染一份，偏好载入后再校正。
+  const settingsSearch = document.getElementById?.('settings-search');
+  if (settingsSearch) setupSettingsSearch(settingsSearch);
   initAppearanceSystemWatch();
   renderThemeOptions();
   syncAppearanceControls();

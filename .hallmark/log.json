@@ -1,5 +1,12 @@
 [
   {
+    "date": "2026-09-11",
+    "macrostructure": "Settings Ledger",
+    "theme": "existing MEFinder theme system",
+    "enrichment": "none",
+    "brief": "Settings page anti-slop redesign: ledger rows + hairline groups, per-row icon chips and triple-deck headings removed"
+  },
+  {
     "date": "2026-08-23",
     "macrostructure": "Settings Control Plane",
     "theme": "existing MEFinder theme system",

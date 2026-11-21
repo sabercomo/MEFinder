@@ -119,6 +119,10 @@ TOOLS = _tool_definitions()
 
 
 def _success_text(tool_name: str, result: Mapping[str, object]) -> str:
+    if tool_name == "list_material_tags":
+        return f"找到 {result['total']} 个素材标签。"
+    if tool_name == "read_tag_excerpts":
+        return f"找到 {result['total']} 条文字摘录。"
     if tool_name == "list_documents":
         return f"找到 {result['total']} 篇文献。"
     if tool_name == "locate_quote":
@@ -231,6 +235,10 @@ TOOL_HANDLERS: dict[
     str,
     Callable[[LiteratureVerificationService, Mapping[str, object]], dict[str, object]],
 ] = {
+    "list_material_tags": lambda service, arguments: service.list_material_tags(),
+    "read_tag_excerpts": lambda service, arguments: service.read_tag_excerpts(
+        arguments["tag"], limit=arguments.get("limit", 20), offset=arguments.get("offset", 0),
+    ),
     "list_documents": lambda service, arguments: service.list_documents(
         query=arguments.get("query"),
         source_type=arguments.get("source_type", "all"),

@@ -3,21 +3,26 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from ..errors import UserFacingError
 from ..persistence.materials_store import IDENTITY, TABLES
 from .excerpts import validate_selection
 from .service import tag_path
+from .images import IMAGE_TYPES, image_path
 
 
 def decode_materials_snapshot(data: bytes) -> dict[str, list]:
     """Decode a complete snapshot, including valid hierarchy and assignments."""
     try:
         snapshot = json.loads(data)
-        if not isinstance(snapshot, dict) or set(snapshot) != set(TABLES):
+        if not isinstance(snapshot, dict):
             raise ValueError
-        for table, columns in TABLES.items():
-            rows = snapshot[table]
+        legacy = set(TABLES) - {"material_images", "material_image_tags"}
+        if set(snapshot) not in (legacy, set(TABLES)):
+            raise ValueError
+        for table, rows in snapshot.items():
+            columns = TABLES[table]
             if not isinstance(rows, list) or any(
                 not isinstance(row, dict) or set(row) != set(columns) for row in rows
             ):
@@ -53,6 +58,22 @@ def decode_materials_snapshot(data: bytes) -> dict[str, list]:
                     or not isinstance(path, str) or path not in paths or (excerpt_id, path) in assignments):
                 raise ValueError
             assignments.add((excerpt_id, path))
+        digests = set()
+        for row in snapshot.get("material_images", []):
+            digest = row["digest"]
+            image_path(Path("."), digest)
+            if digest in digests or any(not isinstance(value, str) for value in row.values()):
+                raise ValueError
+            if row["mime"] not in IMAGE_TYPES or not isinstance(json.loads(row["origin"]), dict):
+                raise ValueError
+            digests.add(digest)
+        image_assignments = set()
+        for row in snapshot.get("material_image_tags", []):
+            digest, path = row["digest"], row["path"]
+            if (not isinstance(digest, str) or digest not in digests or not isinstance(path, str)
+                    or path not in paths or (digest, path) in image_assignments):
+                raise ValueError
+            image_assignments.add((digest, path))
     except (ValueError, UserFacingError) as exc:
         raise ValueError("素材库快照格式无效") from exc
     return snapshot

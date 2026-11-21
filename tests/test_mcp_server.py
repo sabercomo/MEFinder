@@ -108,6 +108,8 @@ class MCPServerProtocolTests(unittest.TestCase):
                             item["name"]: item for item in CONTRACT["tools"]
                         }
                         expected_defs = {
+                            "list_material_tags": set(),
+                            "read_tag_excerpts": set(),
                             "list_documents": {
                                 "document",
                                 "document_work",
@@ -306,6 +308,52 @@ class MCPServerProtocolTests(unittest.TestCase):
                 self.assertEqual(errlog.read(), "")
 
         anyio.run(scenario)
+
+    def test_reads_saved_tag_tree_and_excerpts_over_stdio(self) -> None:
+        from src.me_finder.database import build_database, delete_source_from_database
+        from src.me_finder.materials.service import mutate_materials
+        from tests.test_materials import SOURCE_ID, TEXTS, document, selection
+
+        db = self.runtime_root / "data" / "index.sqlite3"
+        build_database(document(TEXTS), db)
+        mutate_materials(db, {"action": "collect", "tags": ["研究", "研究/光谱"],
+                              "selections": [selection(TEXTS[0])]})
+        mutate_materials(db, {"action": "collect", "tags": ["研究/制备"],
+                              "selections": [selection(TEXTS[1], index=1)]})
+        delete_source_from_database(SOURCE_ID, db, backup_existing=False)
+        before = db.read_bytes()
+
+        async def scenario() -> None:
+            async with stdio_client(self.server_parameters()) as streams:
+                async with ClientSession(*streams) as session:
+                    await session.initialize()
+                    tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+
+                    async def read(name: str, arguments: dict) -> dict:
+                        result = await session.call_tool(name, arguments)
+                        self.assertFalse(result.is_error)
+                        Draft202012Validator(tools[name].output_schema).validate(result.structured_content)
+                        return result.structured_content
+
+                    tags = await read("list_material_tags", {})
+                    self.assertEqual(tags["total"], 3)
+                    self.assertEqual(tags["tags"][0], {"path": "研究", "excerpt_count": 2})
+                    first = await read("read_tag_excerpts", {"tag": "研究", "limit": 1})
+                    self.assertEqual(first["total"], 2)
+                    self.assertTrue(first["has_more"])
+                    self.assertEqual(first["excerpts"][0]["text"], TEXTS[1])
+                    next_page = await read("read_tag_excerpts", {"tag": "研究", "limit": 1, "offset": 1})
+                    excerpt = next_page["excerpts"][0]
+                    self.assertFalse(next_page["has_more"])
+                    self.assertEqual(excerpt["text"], TEXTS[0])
+                    self.assertEqual(excerpt["tags"], ["研究", "研究/光谱"])
+                    self.assertEqual(excerpt["citation_start"], "38")
+                    self.assertEqual(excerpt["start_anchor"], selection(TEXTS[0])["start_anchor"])
+                    empty = await read("read_tag_excerpts", {"tag": "不存在"})
+                    self.assertEqual(empty["excerpts"], [])
+
+        anyio.run(scenario)
+        self.assertEqual(db.read_bytes(), before)
 
     def test_missing_index_initializes_and_returns_known_error(self) -> None:
         async def scenario() -> None:

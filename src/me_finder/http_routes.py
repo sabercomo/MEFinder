@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .http_route_table import CNKI_CITATION_BODY, CNKI_LOOKUP_BODY, RoutePair, mutating, route
+from .http_route_table import CNKI_CITATION_BODY, CNKI_LOOKUP_BODY, MATERIALS_BODY, RoutePair, mutating, route
 
 
 def assemble_library_routes(
@@ -32,7 +32,7 @@ def assemble_library_routes(
         "/api/document-groups": lambda _params: document_group_controller.list(),
     }
     post_routes = {
-        "/api/materials": mutating(materials_controller.mutate),
+        "/api/materials": route(materials_controller.mutate, **MATERIALS_BODY),
         "/api/document-groups/create": mutating(document_group_controller.create),
         "/api/document-groups/combine": document_group_controller.combine,
         "/api/document-groups/rename": mutating(document_group_controller.rename),

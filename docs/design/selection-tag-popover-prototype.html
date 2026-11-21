@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="frost-blue">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEFinder · 划选原句加标签样稿</title>
+<style>
+/* Hallmark · component: selection toolbar + anchored tag picker · genre: utilitarian desktop reader · theme: MEFinder frost-blue
+ * scope: select an original sentence → tag it beside the text → collect it; existing three-level tags preserved
+ * states: default · hover · focus-visible · active · disabled · loading · error · success
+ * pre-emit critique: P5 H5 E4 S5 R5 V4 · independent prototype, no production code or user data
+ */
+:root{
+  --paper:#FFFFFF;--paper-secondary:#F8FAFD;--paper-hover:#F1F5FA;--app:#F5F8FC;--sidebar:#F1F5FA;
+  --ink:#172033;--ink-secondary:#414D61;--muted:#667085;--faint:#98A2B3;--rule:#DDE5EF;--rule-subtle:#EDF1F6;--control:#828CA0;
+  --accent:#0F62E6;--accent-hover:#0B54C9;--accent-text:#0B5EC7;--accent-soft:#EAF3FF;--accent-ink:#FFFFFF;--focus:#0F62E6;
+  --danger:#C8322B;--danger-soft:#FFF1F0;--success:#168A46;--match-bg:#FFF8E6;--match-border:#E9B644;--match-text:#30240A;
+  --shadow-popover:0 12px 32px rgba(23,32,51,.14);--shadow-toolbar:0 4px 16px rgba(23,32,51,.10);
+  --font-ui:"PingFang SC","Microsoft YaHei UI","Segoe UI Variable",-apple-system,system-ui,sans-serif;
+  --font-reading:"Noto Serif SC","Songti SC","STSong",Georgia,serif;
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-pill:999px;
+  --ease-out:cubic-bezier(.23,1,.32,1);--dur-pop:180ms;--z-float:100;--z-toast:500;
+}
+*{box-sizing:border-box}html,body{overflow-x:clip;min-width:0}body{margin:0;min-height:100dvh;background:var(--app);color:var(--ink);font:14px/1.55 var(--font-ui)}
+button,input{font:inherit}button{cursor:pointer;color:var(--ink);border:1px solid var(--rule);background:var(--paper);border-radius:var(--radius-md)}
+button:disabled{cursor:not-allowed;opacity:.5}button:active:not(:disabled){transform:translateY(1px)}
+button:focus-visible,input:focus-visible,label:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+[hidden]{display:none!important}@media(hover:hover) and (pointer:fine){button:hover:not(:disabled){background:var(--paper-hover)}}
+.demo-head{padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:1400px;margin:auto}
+.demo-head h1{margin:0;font-size:15px;font-weight:650;min-width:0;overflow-wrap:anywhere}.demo-note{font-size:12px;color:var(--muted)}
+.demo-head button{height:30px;padding:0 10px;font-size:12px;white-space:nowrap}.demo-actions{display:flex;gap:8px;margin-inline-start:auto}
+.reader-shell{max-width:1400px;min-height:750px;margin:0 20px 20px;border:1px solid var(--rule);border-radius:var(--radius-lg);background:var(--paper);overflow:hidden;display:flex;flex-direction:column}
+.reader-top{min-height:54px;display:flex;align-items:center;gap:10px;padding:8px 16px;border-block-end:1px solid var(--rule-subtle)}
+.back-btn{border:0;background:transparent;color:var(--ink-secondary);padding:7px 4px;white-space:nowrap}.book-title{font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.book-meta{font-size:12px;color:var(--muted);white-space:nowrap}.top-spacer{flex:1}
+.outline-btn{padding:7px 10px;font-size:12px;white-space:nowrap}.reading-area{flex:1;min-height:0;display:flex;justify-content:center}.reading-column{width:min(760px,100%);padding:30px 44px 64px;min-width:0}
+.reading-heading{margin:0 0 8px;font-size:24px;line-height:1.4;font-weight:650;overflow-wrap:anywhere}.reading-location{font-size:12px;color:var(--muted);margin:0 0 30px}
+.reader-paragraph{font:18px/2 var(--font-reading);margin:0 0 24px;text-align:justify;overflow-wrap:anywhere;cursor:text;position:relative}
+.selection-note{margin:0 0 20px;padding:10px 0;border-block-end:1px solid var(--rule-subtle);font-size:12px;color:var(--muted)}
+.collected{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-12px 0 24px;padding:8px 0;border-block-end:1px solid var(--rule-subtle);color:var(--muted);font:12px/1.6 var(--font-ui)}
+.collected-mark{display:inline-block;width:6px;height:6px;background:var(--success);border-radius:50%;flex:0 0 auto}.collected-tag{color:var(--accent-text);white-space:nowrap}.saved-sentence{background:var(--match-bg);color:var(--match-text);border-radius:2px;box-shadow:0 0 0 1px var(--match-border)}
+.selection-toolbar,.tag-picker{position:fixed;z-index:var(--z-float);background:var(--paper);color:var(--ink);border:1px solid var(--rule);box-shadow:var(--shadow-popover);border-radius:var(--radius-lg)}
+.selection-toolbar{display:flex;align-items:center;gap:4px;padding:5px;box-shadow:var(--shadow-toolbar);max-width:calc(100% - 24px);width:max-content;min-width:210px;animation:float-in var(--dur-pop) var(--ease-out)}
+.selection-toolbar button{height:32px;padding:0 10px;font-size:12px;white-space:nowrap;flex:0 0 auto}.selection-toolbar .tag-action{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}.selection-toolbar .clear-action{width:30px;padding:0;font-size:18px}
+.tag-picker{width:min(336px,calc(100% - 24px));max-height:min(calc(100dvh - 24px),440px);display:flex;flex-direction:column;padding:12px;animation:float-in var(--dur-pop) var(--ease-out)}
+@keyframes float-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.picker-title{font-size:14px;font-weight:650;margin:0}.picker-subtitle{font-size:12px;color:var(--muted);margin:2px 0 12px}.tag-label{display:block;font-size:12px;font-weight:600;margin-block-end:6px}
+.tag-input{height:34px;width:100%;padding:0 10px;border:1px solid var(--control);border-radius:var(--radius-md);background:var(--paper);color:var(--ink);outline:2px solid transparent;outline-offset:1px;min-width:0}.tag-input::placeholder{color:var(--muted)}.tag-input[aria-invalid=true]{border-color:var(--danger);background:var(--danger-soft)}
+.picker-hint{font-size:12px;color:var(--muted);min-height:1lh;margin:5px 0 10px}.picker-error{color:var(--danger)}
+.tag-options{overflow:auto;min-height:0;max-height:min(168px,calc(100dvh - 282px));border-block-start:1px solid var(--rule-subtle);padding-block-start:4px}.options-label{font-size:12px;color:var(--muted);padding:6px 8px 4px}
+.tag-option{min-height:36px;display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;min-width:0}.tag-option.active{background:var(--accent-soft)}.tag-option .check{width:16px;height:16px;flex:0 0 auto}.tag-name{min-width:0;overflow-wrap:anywhere;flex:1}.tag-path{font-size:11px;color:var(--muted);white-space:nowrap;max-width:42%;overflow:hidden;text-overflow:ellipsis}
+.check{accent-color:var(--accent);margin:0;cursor:pointer}.new-option{display:flex;align-items:center;gap:8px;width:100%;padding:8px;border:0;background:transparent;text-align:start;white-space:normal;overflow-wrap:anywhere;min-width:0}.new-option.active{background:var(--accent-soft)}
+.picker-foot{padding-block-start:10px;margin-block-start:4px;border-block-start:1px solid var(--rule-subtle);display:flex;align-items:center;gap:10px;min-width:0}.picker-selection{font-size:12px;color:var(--muted);min-width:0;flex:1}.picker-actions{display:flex;gap:8px}.picker-actions button{height:34px;padding:0 12px;white-space:nowrap}.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}@media(hover:hover) and (pointer:fine){.primary:hover:not(:disabled),.tag-action:hover:not(:disabled){background:var(--accent-hover);color:var(--accent-ink)}}
+.toast{position:fixed;z-index:var(--z-toast);inset-block-end:24px;inset-inline-start:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:var(--radius-md);box-shadow:var(--shadow-popover);max-width:calc(100% - 24px);font-size:13px}
+.loading-dot{display:inline-block;width:12px;height:12px;border:1.5px solid var(--accent-ink);border-inline-end-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-inline-end:5px}@keyframes spin{to{transform:rotate(360deg)}}
+[data-theme=dark]{--paper:#1D2733;--paper-secondary:#1A232F;--paper-hover:#1F2937;--app:#0F141C;--sidebar:#131A24;--ink:#E7ECF3;--ink-secondary:#BAC4D2;--muted:#8E99AA;--faint:#667085;--rule:#2C3847;--rule-subtle:#222C39;--control:#6B7688;--accent:#5B9BFF;--accent-hover:#79AEFF;--accent-text:#8FBBFF;--accent-soft:#1A2C47;--accent-ink:#0B1422;--focus:#8FBBFF;--danger:#FF9B94;--danger-soft:#36201F;--success:#4CC27E;--match-bg:#2E2615;--match-border:#8B6F1F;--match-text:#F0C877;--shadow-popover:0 16px 40px rgba(0,0,0,.5)}
+@media(max-width:680px){.demo-head{padding:12px;gap:8px}.demo-note{width:100%}.demo-actions{margin-inline-start:0}.reader-shell{margin:0 12px 12px;min-height:700px}.reader-top{padding:8px 12px}.book-meta{display:none}.outline-btn{padding:6px}.reading-column{padding:22px 20px 48px}.reading-heading{font-size:21px}.reader-paragraph{font-size:18px}.selection-toolbar{max-width:calc(100% - 24px);flex-wrap:wrap}.selection-toolbar button{height:36px}.tag-picker{inset-inline:12px!important;inset-block:auto 12px!important;width:auto;max-height:calc(100dvh - 24px)}.tag-options{max-height:calc(100dvh - 280px)}}
+@media(pointer:coarse){.tag-option{min-height:44px}.tag-input,.picker-actions button,.selection-toolbar button,.demo-head button{min-height:44px}}
+@media(prefers-reduced-motion:reduce){.selection-toolbar,.tag-picker{animation:none}.loading-dot{animation-duration:1.5s}button:active:not(:disabled){transform:none}}
+</style>
+</head>
+<body>
+<header class="demo-head"><h1>划选原句加标签 · 交互样稿</h1><span class="demo-note">独立样稿 · 不写入文献库</span><div class="demo-actions"><button id="demo-select" type="button">体验选中一句话</button><button id="theme-toggle" type="button" aria-pressed="false">深色</button><button id="reset-demo" type="button">重置</button></div></header>
+
+<main class="reader-shell">
+  <header class="reader-top"><button class="back-btn" type="button">‹ 返回检索</button><span class="book-title">法哲学原理：或自然法和国家学纲要</span><span class="book-meta">第 62 页 · PDF</span><span class="top-spacer"></span><button class="outline-btn" type="button">目录</button></header>
+  <div class="reading-area"><article class="reading-column" aria-label="文献原文">
+    <h2 class="reading-heading">第一篇 抽象法</h2><p class="reading-location">第 46 节 · 第 62 页 · 出版方页码</p>
+    <p class="selection-note" id="selection-note">请在下方原文中划选一句话。选中后，句旁会出现「加标签」</p>
+    <p class="reader-paragraph" data-paragraph="p1">因为我的意志作为人的意志，从而作为单个人的意志，在所有权中，对我说来是成为客观的了，所以所有权获得了以下规定：在把自己的意志体现在物中时，我就把该物据为己有。</p>
+    <p class="reader-paragraph" id="target-paragraph" data-paragraph="p2">自然界各种对象的利用，按其本性来说，是不能特殊化而成为私人占有的。罗马的土地法包含着关于土地占有的公有和私有之间的斗争。</p>
+    <div class="collected" id="collected" role="status" hidden><span class="collected-mark" aria-hidden="true"></span><span>已收集到素材库</span><span class="collected-tag" id="collected-tag"></span></div>
+    <p class="reader-paragraph" data-paragraph="p3">附释：共同所有权由于它的本性可变为个别所有，也获得了一种自在地可分解的共同性的规定。至于我把我的应有部分留在其中，这本身是一种任意的事。</p>
+    <p class="reader-paragraph" data-paragraph="p4">家庭信托遗赠财产包含着一个人格权、从而与私有权相反的因素。但是属于私有权的各种规定有时不得不从属于法的较高级领域，即共同体、国家。</p>
+  </article></div>
+</main>
+<div class="selection-toolbar" id="selection-toolbar" role="toolbar" aria-label="选中文字操作" hidden><button type="button" id="copy-selection">复制引文</button><button type="button" class="tag-action" id="tag-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="tag-picker">加标签</button><button type="button" class="clear-action" id="clear-selection" aria-label="清除选区">×</button></div>
+<section class="tag-picker" id="tag-picker" role="dialog" aria-modal="false" aria-labelledby="picker-title" hidden>
+  <h2 class="picker-title" id="picker-title">给这句话加标签</h2><p class="picker-subtitle">保留原文位置，之后可回到这一页</p>
+  <label class="tag-label" for="tag-input">标签</label><input class="tag-input" id="tag-input" type="text" placeholder="输入名称，如 #哲学/异化" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="tag-options" aria-describedby="picker-help" maxlength="100">
+  <p class="picker-hint" id="picker-help" role="status" aria-live="polite">输入可查找已有标签，用 / 分层，最多三级</p>
+  <div class="tag-options" id="tag-options" role="group" aria-label="标签选项"></div>
+  <div class="picker-foot"><span class="picker-selection" id="picker-selection">未选择标签</span><div class="picker-actions"><button type="button" id="picker-cancel">取消</button><button type="button" class="primary" id="picker-submit">收集</button></div></div>
+</section>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>
+(function(){
+'use strict';
+const initialTags=['哲学','哲学/异化','哲学/承认理论','读书笔记','读书笔记/黑格尔','待整理'];
+let known=new Set(initialTags),checked=new Set(),active=-1,options=[],busy=false,captured=null,previousFocus=null,savedTags=[];
+const $=id=>document.getElementById(id),picker=$('tag-picker'),toolbar=$('selection-toolbar'),input=$('tag-input'),trigger=$('tag-trigger');
+function displayPath(path){return path.split('/').join(' / ')}
+function normalize(value){const parts=value.trim().replace(/^#/,'').split(/[/／]/).map(p=>p.trim());if(parts.some(p=>!p))throw new Error('标签名不能为空，请补全 / 两侧的名称');if(parts.length>3)throw new Error('标签最多三级，请减少一层');if(parts.some(p=>Array.from(p).length>30))throw new Error('每级标签最多 30 个字符，请缩短名称');return parts.join('/')}
+function positionElement(el,anchor,preferAbove){
+ const r=anchor.getBoundingClientRect();
+ const mobile=matchMedia('(max-width:680px)').matches;
+ if(mobile){el.style.left='';el.style.top='';el.style.bottom='';el.style.right='';return}
+ if(el!==picker)el.style.maxWidth='';
+ const width=el===picker?Math.min(336,innerWidth-24):el.offsetWidth,height=el.offsetHeight;
+ const left=Math.max(12,Math.min(r.left,innerWidth-width-12));
+ let top=r.bottom+8;
+ if(preferAbove)top=r.top-height-8;
+ if(top<12)top=r.bottom+8;
+ el.style.left=left+'px';el.style.top=top+'px';
+}
+function positionToolbar(){const r=captured.range.getBoundingClientRect();const w=toolbar.offsetWidth,h=toolbar.offsetHeight;const left=Math.max(12,Math.min(r.left,innerWidth-w-12));let top=r.bottom+8;if(top+h>innerHeight-12)top=r.top-h-8;toolbar.style.left=left+'px';toolbar.style.top=top+'px'}
+function clearInlineStyles(el){['left','top','bottom','right','maxWidth'].forEach(p=>el.style.removeProperty(p))}
+function showSelectionToolbar(){toolbar.hidden=false;positionElement(toolbar,captured.range,false);picker.hidden=false;positionElement(picker,toolbar,true);trigger.setAttribute('aria-expanded','true');input.focus()}
+function captureSelection(){
+ const selection=getSelection();if(!selection||selection.isCollapsed||!selection.rangeCount)return;
+ const range=selection.getRangeAt(0);const common=range.commonAncestorContainer.nodeType===1?range.commonAncestorContainer:range.commonAncestorContainer.parentElement;
+ const paragraph=common.closest('.reader-paragraph');if(!paragraph||!paragraph.contains(range.startContainer)||!paragraph.contains(range.endContainer))return;
+ if(!selection.toString().trim())return;
+ captured={range:range.cloneRange(),text:selection.toString().trim(),paragraph};
+ $('selection-note').textContent='已选中一句话，可添加标签后收集到素材库';toolbar.hidden=false;clearInlineStyles(toolbar);positionToolbar();
+}
+function clearSelection(){captured=null;toolbar.hidden=true;picker.hidden=true;clearInlineStyles(toolbar);clearInlineStyles(picker);trigger.setAttribute('aria-expanded','false');getSelection().removeAllRanges();$('selection-note').textContent='请在下方原文中划选一句话。选中后，句旁会出现「加标签」'}
+function setMessage(message,isError){const help=$('picker-help');help.textContent=message;help.className=isError?'picker-hint picker-error':'picker-hint';input.setAttribute('aria-invalid',isError?'true':'false')}
+function updateCount(){$('picker-selection').textContent=checked.size?'已选 '+checked.size+' 个标签':'可不加标签，直接收集';$('picker-submit').textContent=checked.size?'收集':'直接收集'}
+function syncActive(){options.forEach((o,i)=>{const el=$(o.id);el.classList.toggle('active',i===active);if(i===active)el.setAttribute('aria-current','true');else el.removeAttribute('aria-current')});if(options[active])input.setAttribute('aria-activedescendant',options[active].id);else input.removeAttribute('aria-activedescendant')}
+function drawOptions(){
+ const raw=input.value.trim();let path='',error='';try{if(raw)path=normalize(raw)}catch(e){error=e.message}options=[];$('tag-options').replaceChildren();
+ const heading=document.createElement('div');heading.className='options-label';heading.textContent=raw?'匹配已有标签':'已有标签';$('tag-options').appendChild(heading);
+ const needle=raw.replace(/^#/,'').toLowerCase();
+ const matches=[...known].filter(p=>p.toLowerCase().includes(needle)).sort((a,b)=>a.localeCompare(b,'zh-CN'));
+ matches.forEach(tag=>{const id='tag-'+options.length;options.push({id,path:tag});const label=document.createElement('label');label.className='tag-option';label.id=id;const cb=document.createElement('input');cb.type='checkbox';cb.className='check';cb.checked=checked.has(tag);cb.tabIndex=-1;cb.setAttribute('aria-label','选择 '+displayPath(tag));cb.addEventListener('change',()=>{cb.checked?checked.add(tag):checked.delete(tag);updateCount()});const name=document.createElement('span');name.className='tag-name';name.textContent=tag.split('/').at(-1);const parent=document.createElement('span');parent.className='tag-path';parent.textContent=tag.includes('/')?tag.slice(0,tag.lastIndexOf('/')):'';label.append(cb,name,parent);$('tag-options').appendChild(label)});
+ if(raw&&!known.has(path)&&!error){const id='tag-new';options.push({id,path,create:true});const button=document.createElement('button');button.type='button';button.id=id;button.className='new-option';const plus=document.createElement('span');plus.textContent='＋';const text=document.createElement('span');text.textContent='创建“'+displayPath(path)+'”';button.append(plus,text);button.addEventListener('click',()=>chooseOption(options.findIndex(o=>o.id===id)));$('tag-options').appendChild(button)}
+ if(error)setMessage(error,true);else if(raw&&(known.has(path)||matches.length===1))setMessage('匹配到已有标签，Enter 选择',false);else if(raw&&!matches.length)setMessage('没有这个标签，可直接创建',false);else setMessage('输入可查找已有标签，用 / 分层，最多三级',false);
+ active=options.findIndex(o=>o.path===path);
+if(active<0)active=options.findIndex(o=>!o.create);
+if(active<0)active=options.findIndex(o=>o.create);
+if(active<0&&options.length)active=0;
+syncActive();updateCount();
+}
+function chooseOption(index){if(index<0||!options[index]||busy)return;const option=options[index];if(option.create){try{const path=normalize(option.path);path.split('/').forEach((_,i)=>known.add(path.split('/').slice(0,i+1).join('/')));checked.add(path);input.value='';drawOptions();input.focus();setMessage('已加入待保存标签：'+displayPath(path),false)}catch(e){setMessage(e.message,true)}return}checked.has(option.path)?checked.delete(option.path):checked.add(option.path);input.value='';drawOptions();setMessage('已加入待保存标签：'+displayPath(option.path),false);input.focus()}
+function openPicker(){if(!captured)return;previousFocus=document.activeElement;drawOptions();clearInlineStyles(picker);showSelectionToolbar()}
+function closePicker(){picker.hidden=true;trigger.setAttribute('aria-expanded','false');if(previousFocus&&previousFocus.isConnected)previousFocus.focus()}
+function showToast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout($('toast')._timer);$('toast')._timer=setTimeout(()=>$('toast').hidden=true,4500)}
+function markSavedSentence(){
+ if(!captured)return;
+ try{const mark=document.createElement('mark');mark.className='saved-sentence';captured.range.surroundContents(mark)}catch(e){/* Cross-node selections keep their saved quote below without changing the reading DOM. */}
+}
+$('demo-select').addEventListener('click',()=>{clearSelection();const p=$('target-paragraph'),node=p.firstChild,start=node.textContent.indexOf('自然界各种对象的利用'),end=node.textContent.indexOf('私人占有的。')+'私人占有的。'.length;const range=document.createRange();range.setStart(node,start);range.setEnd(node,end);const s=getSelection();s.removeAllRanges();s.addRange(range);captureSelection()});
+document.addEventListener('pointerup',e=>{setTimeout(()=>{if(e.target.closest('.reader-paragraph'))captureSelection()},0)});
+document.addEventListener('pointerdown',e=>{if(!picker.hidden&&!picker.contains(e.target)&&!toolbar.contains(e.target))closePicker();if(!toolbar.hidden&&!toolbar.contains(e.target)&&!picker.contains(e.target)&&!e.target.closest('.reader-paragraph'))clearSelection()},true);
+trigger.addEventListener('click',openPicker);$('picker-cancel').addEventListener('click',closePicker);$('clear-selection').addEventListener('click',clearSelection);
+$('copy-selection').addEventListener('click',()=>showToast('已复制所选原句及出处（样稿演示）'));
+input.addEventListener('input',()=>{if(!busy)drawOptions()});
+input.addEventListener('keydown',e=>{if(e.isComposing)return;if(e.key==='ArrowDown'){e.preventDefault();if(options.length)active=(active+1+options.length)%options.length;syncActive()}if(e.key==='ArrowUp'){e.preventDefault();if(options.length)active=(active-1+options.length)%options.length;syncActive()}if(e.key==='Enter'){e.preventDefault();if(options.length){const target=options[active]&&options[active].create&&options.some(o=>!o.create)?options.findIndex(o=>!o.create):active;chooseOption(target)}else if(input.value.trim()){try{checked.add(normalize(input.value));updateCount()}catch(error){setMessage(error.message,true)}}}if(e.key==='Escape'){e.preventDefault();closePicker()}});
+$('tag-options').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closePicker()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!picker.hidden)closePicker();else clearSelection()}});
+$('picker-submit').addEventListener('click',()=>{if(busy)return;try{if(input.value.trim()){const path=normalize(input.value);if(known.has(path))checked.add(path);else{input.focus();setMessage('按 Enter 创建这个标签，或点击“创建”选项',false);return}}}catch(e){setMessage(e.message,true);input.focus();return}busy=true;$('picker-submit').disabled=true;$('picker-cancel').disabled=true;input.disabled=true;$('picker-submit').textContent='收集中';setTimeout(()=>{busy=false;savedTags=[...checked];markSavedSentence();$('collected-tag').textContent=savedTags.map(p=>'#'+displayPath(p)).join(' ');$('collected').hidden=false;toolbar.hidden=true;picker.hidden=true;trigger.setAttribute('aria-expanded','false');getSelection().removeAllRanges();$('selection-note').textContent='这句话已保存到素材库，保留原句、出处和字符位置';$('picker-submit').disabled=false;$('picker-cancel').disabled=false;input.disabled=false;$('picker-submit').textContent='收集';showToast('已收集这句话'+(savedTags.length?'，并添加 '+savedTags.length+' 个标签':''));},350)});
+window.addEventListener('resize',()=>{if(!picker.hidden&&captured){clearInlineStyles(picker);positionElement(picker,toolbar,true)}else if(!toolbar.hidden&&captured){clearInlineStyles(toolbar);positionElement(toolbar,captured.range,false)}});
+$('theme-toggle').addEventListener('click',()=>{const dark=document.documentElement.dataset.theme!=='dark';document.documentElement.dataset.theme=dark?'dark':'frost-blue';$('theme-toggle').textContent=dark?'浅色':'深色';$('theme-toggle').setAttribute('aria-pressed',String(dark))});
+$('reset-demo').addEventListener('click',()=>location.reload());
+})();
+</script>
+</body>
+</html>

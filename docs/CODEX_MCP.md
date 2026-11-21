@@ -6,7 +6,7 @@
 
 ## 当前可用范围
 
-MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十七个工具：十二个只读；五个为带确认门槛的写工具（书目补全 2 个、对齐修正 3 个），只有用户在对话中明确同意后才会生效，其余读写路径不受影响。
+MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十九个工具：十四个只读；五个为带确认门槛的写工具（书目补全 2 个、对齐修正 3 个），只有用户在对话中明确同意后才会生效，其余读写路径不受影响。
 
 - `list_documents`：按题名、作者、文件名或类型查找已导入文献，并标出所属作品与已对齐的其他版本；
 - `locate_quote`：定位原句、近似引文和多个候选；
@@ -24,6 +24,8 @@ MEFinder MCP v1 是本地 STDIO 服务，向 Codex 提供十七个工具：十�
 - `propose_alignment_correction`：当既有对齐把某句指到错误译文段时，用源/目标 Segment ID 与判断依据记录一条“待确认”的修正提议——它不改变任何查询，只返回 `confirmation_token`，必须交用户复核；
 - `confirm_alignment_correction`：在用户明确同意后，用 `override_id` 和 `confirmation_token` 让修正永久生效，普通双栏阅读与 MCP 查询随后都优先采用它；未经用户确认不得调用；
 - `revoke_alignment_correction`：撤销待确认或已确认的修正，恢复自动对齐，可逆；
+- `list_material_tags`：列出完整标签路径和文字摘录数；
+- `read_tag_excerpts`：读取标签及其子标签下已保存的原文、说明与出处，可用 `limit` 和 `offset` 分页；
 - `list_alignment_corrections`：只读列出全部修正记录（待确认/已确认/已撤销）及证据，供复核审计。
 
 Windows 安装版、Windows 绿色版和 macOS 安装包都包含独立的 `MEFinderMCP` sidecar。不要把桌面应用主程序配置为 MCP 命令。
@@ -201,7 +203,7 @@ tool_timeout_sec = 60
 1. 运行 `codex mcp list`，应看到启用的 `mefinder`；
 2. 运行 `codex mcp get mefinder --json`，核对命令、参数和工作目录；
 3. 在 Codex TUI 或桌面端输入 `/mcp`，应看到服务器已连接；
-4. 工具列表应包含本页“当前可用范围”列出的十七个工具（十二个只读 + 五个带确认门槛的写工具）；
+4. 工具列表应包含本页“当前可用范围”列出的十九个工具（十四个只读 + 五个带确认门槛的写工具）；
 5. 先在 MEFinder 中导入至少一篇文献，再询问：“只使用 MEFinder 核对这句话出自哪篇文献、哪一页。”
 
 建议继续检查以下自然语言任务：

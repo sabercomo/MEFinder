@@ -145,8 +145,50 @@ def save_local_ocr_config(
     payload: Mapping[str, object],
     config_path: Path,
 ) -> Dict[str, object]:
+    """Save the full OCR configuration or update one engine atomically."""
+
     with _CONFIG_LOCK:
+        if isinstance(payload, Mapping) and payload.get("action") == "update_engine":
+            return _update_local_ocr_engine(payload, config_path)
         return _save_local_ocr_config(payload, config_path)
+
+
+def _normalized_engine_settings(
+    raw: Mapping[str, object],
+) -> Dict[str, object]:
+    enabled = raw.get("enabled")
+    if not isinstance(enabled, bool):
+        raise LocalOCRError("组件启用状态必须是布尔值。")
+    python_path = _absolute_path(raw.get("python_path"))
+    script_path = _absolute_path(raw.get("script_path"))
+    if enabled and (not python_path.is_file() or not script_path.is_file()):
+        raise LocalOCRError("启用组件前请填写有效的 Python 和 ocr.py 路径。")
+    return {
+        "enabled": enabled,
+        "python_path": str(python_path) if str(python_path) != "." else "",
+        "script_path": str(script_path) if str(script_path) != "." else "",
+        "weights_sha256": str(raw.get("weights_sha256") or "").strip(),
+    }
+
+
+def _update_local_ocr_engine(
+    payload: Mapping[str, object], config_path: Path,
+) -> Dict[str, object]:
+    provider_id = str(payload.get("provider_id") or "").strip()
+    if provider_id not in _ENGINE_SPECS:
+        raise LocalOCRError("未知的本地 OCR 组件。")
+    data = _config_payload(load_local_ocr_config(config_path))
+    engines = data["engines"]
+    if "enabled" in payload:
+        changes = {"enabled": payload["enabled"]}
+    else:
+        changes = {key: payload.get(key) for key in ("python_path", "script_path")}
+        if not all(_absolute_path(value).is_file() for value in changes.values()):
+            raise LocalOCRError("请先填写有效的 Python 和 ocr.py 路径。")
+    engines[provider_id] = _normalized_engine_settings({**engines[provider_id], **changes})
+    data["schema_version"] = LOCAL_OCR_SCHEMA_VERSION
+    atomic_write_json(Path(config_path), data)
+    return local_ocr_config_summary(config_path)
 
 
 def _save_local_ocr_config(
@@ -163,19 +205,7 @@ def _save_local_ocr_config(
         raw = raw_engines.get(provider_id)
         if not isinstance(raw, Mapping):
             raise LocalOCRError(f"缺少组件设置：{provider_id}")
-        enabled = raw.get("enabled")
-        if not isinstance(enabled, bool):
-            raise LocalOCRError("组件启用状态必须是布尔值。")
-        python_path = _absolute_path(raw.get("python_path"))
-        script_path = _absolute_path(raw.get("script_path"))
-        if enabled and (not python_path.is_file() or not script_path.is_file()):
-            raise LocalOCRError("启用组件前请填写有效的 Python 和 ocr.py 路径。")
-        engines[provider_id] = {
-            "enabled": enabled,
-            "python_path": str(python_path) if str(python_path) != "." else "",
-            "script_path": str(script_path) if str(script_path) != "." else "",
-            "weights_sha256": str(raw.get("weights_sha256") or "").strip(),
-        }
+        engines[provider_id] = _normalized_engine_settings(raw)
     data = {
         "schema_version": LOCAL_OCR_SCHEMA_VERSION,
         "render_dpi": _bounded_int(payload.get("render_dpi"), 200, 96, 400),

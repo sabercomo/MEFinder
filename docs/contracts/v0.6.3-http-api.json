@@ -142,6 +142,18 @@
     "/api/zotero/preview",
     "/api/zotero/sync"
   ],
+  "local_ocr_engine_update": {
+    "route": "POST /api/local-ocr",
+    "request": {
+      "action": "update_engine",
+      "provider_id": "ndlocr-lite|ndlkotenocr-lite",
+      "enabled": "boolean, 启停时提供",
+      "python_path": "string, 保存路径时与 script_path 一起提供",
+      "script_path": "string, 保存路径时与 python_path 一起提供"
+    },
+    "compatibility": "仍支持原有整份设置提交。单引擎提交保留另一引擎和全局 OCR 参数。",
+    "response": "同原有设置保存响应，返回当前 OCR 设置及组件状态。"
+  },
   "zotero_source_sync": {
     "note": "0.5.6 新增：来源 → Zotero。只读 Zotero 7 本机 Local API（127.0.0.1:23119），不读写 zotero.sqlite、不走 Zotero Web API、不读取 Zotero 全文索引。偏好走 /api/preferences 的 zotero_sync_enabled / zotero_sync_collections / zotero_sync_frequency。",
     "routes": {

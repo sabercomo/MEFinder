@@ -525,12 +525,8 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("fetch('/api/mineru-accounts'", HTML)
         self.assertIn("fetch('/api/mineru-accounts/service'", HTML)
         self.assertIn("fetch('/api/mineru-accounts/test'", HTML)
-        self.assertIn("async function deleteMineruAccount(accountId)", HTML)
-        # 移除入口在编辑区，不在账号行（DESIGN.md §5：危险操作置于维护区域）
-        self.assertIn(
-            "deleteMineruAccount(document.getElementById('mineru-account-id').value)",
-            HTML,
-        )
+        self.assertIn("['删除', 'deleteMineruAccount', 'action-btn mineru-remove-btn']", HTML)
+        self.assertNotIn('id="mineru-account-remove"', HTML)
         self.assertIn('id="mineru-local-settings"', HTML)
         self.assertIn(
             '<section class="mineru-local-settings" id="mineru-local-settings">',
@@ -560,13 +556,12 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("本地识别失败会自动改用 MinerU 完成", HTML)
         local_ocr_loader = HTML[
             HTML.index("async function loadLocalOCRConfig()"):
-            HTML.index("function localOCRPayload()")
+            HTML.index("function localOCRPaths(fields)")
         ]
         self.assertIn("if (status && !parserStore.localOCRConfig)", local_ocr_loader)
-        self.assertIn(
-            'class="settings-actions settings-save-row local-ocr-save-row"',
-            HTML,
-        )
+        self.assertNotIn('id="local-ocr-save"', HTML)
+        self.assertEqual(HTML.count('data-action-change="toggleLocalOCREngine"'), 2)
+        self.assertEqual(HTML.count('data-action="saveLocalOCRPaths"'), 2)
         # 一处：MinerU 本地部署的网格内保存行（settings-control 网格子项范式）。
         self.assertEqual(
             HTML.count('class="settings-control settings-actions settings-save-row"'),
@@ -673,7 +668,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("payload.output_dir = outputDirectory", HTML)
         self.assertIn("function importBackup()", HTML)
         self.assertIn('<small id="backup-export-hint">', HTML)
-        self.assertIn("仅备份页码、书目和偏好，不含 PDF", HTML)
+        self.assertIn("备份包含素材库中的图片、页码、书目和偏好。源文献需单独备份", HTML)
         self.assertIn("fetch('/api/backup/export'", HTML)
         self.assertIn("fetch('/api/backup/import/choose'", HTML)
         self.assertIn("fetch('/api/backup/import'", HTML)

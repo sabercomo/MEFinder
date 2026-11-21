@@ -15,13 +15,21 @@ import sqlite3
 from datetime import datetime, timezone
 
 from .connection import table_exists
-from .index_schema import MATERIALS_SCHEMA
+from .index_schema import MATERIALS_SCHEMA, MATERIAL_IMAGE_SCHEMA
 
 
 def install_materials_schema(connection: sqlite3.Connection) -> bool:
     """Install durable text excerpts and their tag assignments."""
     changed = not table_exists(connection, "material_excerpts")
     for statement in MATERIALS_SCHEMA:
+        connection.execute(statement)
+    return changed
+
+
+def install_material_images_schema(connection: sqlite3.Connection) -> bool:
+    """Install image metadata and its shared tag assignments."""
+    changed = not table_exists(connection, "material_images")
+    for statement in MATERIAL_IMAGE_SCHEMA:
         connection.execute(statement)
     return changed
 

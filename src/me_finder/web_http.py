@@ -19,7 +19,7 @@ from typing import Any, BinaryIO, Callable, Mapping, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .http_range import InvalidByteRange, parse_byte_range
-from .http_route_table import RawRequest
+from .http_route_table import BinaryResponse, RawRequest
 
 
 MAX_JSON_REQUEST_BYTES = 1024 * 1024
@@ -214,7 +214,10 @@ def make_http_handler(context: WebHTTPContext):
                     keep_blank_values=api_route.policy.keep_blank_query,
                 )
                 status, payload = api_route.handler(params)
-                self._send_json(payload, status=status)
+                if isinstance(payload, BinaryResponse):
+                    self._send(status, payload.body, payload.content_type)
+                else:
+                    self._send_json(payload, status=status)
                 return
             if parsed.path in {"/", "/index.html", "/reader", "/reader/", "/reader-window"}:
                 preferences_path = resolve_preferences_path(root)
@@ -305,10 +308,10 @@ def make_http_handler(context: WebHTTPContext):
             if length < 0:
                 self._send_json({"error": "Content-Length 无效。"}, status=400)
                 return
-            if length > MAX_JSON_REQUEST_BYTES:
+            policy = api_route.policy if api_route is not None else None
+            if (policy is None or policy.max_body_bytes is None) and length > MAX_JSON_REQUEST_BYTES:
                 self._send_json({"error": "JSON 请求内容过大。"}, status=413)
                 return
-            policy = api_route.policy if api_route is not None else None
             if policy is not None and policy.max_body_bytes is not None and length > policy.max_body_bytes:
                 if policy.drain_oversize:
                     self.rfile.read(length)

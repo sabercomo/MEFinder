@@ -828,7 +828,6 @@ html[data-desktop-shell="macos"] .about-platform-browser { display: none; }
   cursor: pointer;
 }
 .settings-check input { accent-color: var(--accent); }
-.vision-provider-layout { margin-top: 14px; display: grid; gap: 14px; }
 .vision-add-btn {
   flex: 0 0 auto;
   display: inline-flex;
@@ -839,7 +838,7 @@ html[data-desktop-shell="macos"] .about-platform-browser { display: none; }
   font-size: 12px;
 }
 .vision-add-btn svg { width: 13px; height: 13px; }
-.vision-provider-list { display: grid; gap: 8px; }
+.vision-provider-list { display: grid; border-top: 1px solid var(--border-default); }
 .vision-provider-list:empty { display: none; }
 .vision-provider-empty {
   display: grid;
@@ -927,17 +926,6 @@ html[data-desktop-shell="macos"] .about-platform-browser { display: none; }
 }
 .vision-provider-card-actions { display: flex; align-items: center; gap: 3px; }
 .vision-provider-card-actions .ui-switch { margin-right: 7px; }
-.vision-provider-state {
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--success-soft);
-  color: var(--success);
-  font-size: 11px;
-  font-weight: 600;
-}
-.vision-provider-state.warning { background: var(--warning-soft); color: var(--warning); }
-.vision-provider-state.muted { background: var(--surface-hover); color: var(--text-tertiary); }
-.vision-provider-state.pending { background: var(--accent-soft); color: var(--accent); }
 .vision-table-identity .vision-avatar { width: 32px; height: 32px; border-radius: var(--radius-md); }
 .mineru-text-action.danger { color: var(--danger); }
 .icon-btn {
@@ -1039,6 +1027,26 @@ html[data-desktop-shell="macos"] .about-platform-browser { display: none; }
 .mineru-account-switch-text { min-width: 26px; color: var(--text-secondary); font-size: 13.5px; }
 .mineru-account-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .mineru-account-aside { flex: 1; min-width: 0; color: var(--text-tertiary); font-size: 13px; }
+/* Hallmark · component: settings destructive action · genre: utilitarian · theme: existing MEFinder
+ * pre-emit critique: P5 H5 E4 S5 R5 V4 · contrast / chrome / tokens / responsive */
+.action-btn.mineru-remove-btn {
+  padding-inline: 10px;
+  min-width: 54px;
+  color: var(--text-secondary);
+  background: transparent;
+  border-color: transparent;
+}
+@media (hover: hover) {
+  .action-btn.mineru-remove-btn:not([aria-disabled="true"]):hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+}
+.mineru-remove-btn:active { transform: scale(.97); }
+.mineru-remove-btn[aria-disabled="true"] { opacity: .6; cursor: wait; }
+@media (pointer: coarse) {
+  .action-btn.mineru-remove-btn { min-height: 44px; }
+}
 @media (max-width: 760px) {
   .mineru-account-actions { flex-wrap: wrap; }
   .mineru-account-aside { flex: 1 0 100%; }
@@ -1184,11 +1192,9 @@ html[data-desktop-shell="macos"] .about-platform-browser { display: none; }
 .local-ocr-manual > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--radius-sm); }
 .local-ocr-grid { margin-top: 16px; }
 .local-ocr-grid .settings-input { max-width: none; }
-.local-ocr-save-row {
-  margin-top: 0;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-subtle);
-}
+.local-ocr-toggle-hint { margin: 6px 0 0; text-align: end; }
+.local-ocr-toggle-hint:empty { display: none; }
+.local-ocr-component .settings-hint.is-error { color: var(--danger); }
 @media (max-width: 760px) {
   .local-ocr-component-head,
   .local-ocr-install-row { align-items: stretch; flex-direction: column; }
@@ -2324,4 +2330,144 @@ html[data-desktop-shell="macos"] .about-platform-browser { display: none; }
   .settings-nav { padding: 22px 14px; gap: 3px; }
   .settings-nav-group { padding: 5px 13px 4px; margin-top: 14px; }
   .settings-nav-item { padding: 11px 13px; }
+}
+
+/* Hallmark · component: vision API settings · genre: utilitarian · theme: MEFinder
+ * pre-emit critique: P5 H5 E5 S5 R5 V4 · contrast / chrome / tokens / responsive */
+#vision-api-settings .settings-section-head {
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 10px;
+}
+#vision-api-settings .settings-section-note { max-width: 60ch; }
+#vision-api-settings .vision-add-btn { height: 36px; }
+.vision-ledger-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 0 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.vision-ledger-head small { color: var(--text-secondary); font-size: 12px; font-weight: 400; }
+.vision-ledger-row { border-bottom: 1px solid var(--border-subtle); padding: 13px 0; }
+.vision-ledger-line { display: flex; align-items: center; gap: 12px; }
+.vision-ledger-copy { flex: 1 1 auto; min-width: 0; display: grid; gap: 3px; }
+.vision-ledger-name {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.vision-ledger-meta {
+  color: var(--text-secondary);
+  line-height: 1.45;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.vision-ledger-host {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.vision-ledger-state { color: var(--text-secondary); }
+.vision-ledger-state.is-ready { color: var(--success); }
+.vision-ledger-state.is-warning { color: var(--warning); }
+.vision-ledger-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.vision-ledger-toggle { min-width: 64px; margin-inline-end: 5px; min-height: 34px; white-space: nowrap; }
+.vision-ledger-toggle .vision-toggle-label { font-size: 12px; }
+.vision-quiet-action.action-btn {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+  min-height: 34px;
+  padding-inline: 10px;
+}
+.vision-quiet-action.action-btn[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+@media (hover: hover) {
+  .vision-quiet-action.action-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+}
+#vision-api-settings .vision-editor-card {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: visible;
+  max-width: none;
+  margin-top: 12px;
+  background: var(--surface-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+#vision-api-settings .settings-editor-head { padding: 12px 16px; }
+#vision-api-settings .vision-editor-form { padding: 12px 16px 0; gap: 12px; }
+#vision-api-settings .vision-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px 16px;
+}
+.vision-editor-form .settings-field { display: flex; flex-direction: column; align-items: stretch; gap: 5px; }
+.vision-editor-form .settings-field > label { padding-top: 0; }
+.vision-editor-form .settings-field > small,
+.vision-editor-form .settings-field > :not(label):not(small) { margin-top: 0; }
+.vision-editor-form .settings-field > .settings-input { flex: 0 0 auto; max-width: none; }
+.vision-editor-form .settings-editor-actions { flex-wrap: wrap; }
+.vision-editor-form .settings-hint { min-width: 0; }
+#vision-api-settings .vision-editor-fields .settings-field > label { font-size: 13px; font-weight: 600; }
+#vision-api-settings .vision-editor-form .settings-input,
+#vision-api-settings .vision-editor-form #vision-model-refresh { height: 36px; }
+#vision-api-settings .vision-editor-form .settings-model-row { align-items: center; flex-wrap: nowrap; }
+#vision-api-settings .vision-editor-form .settings-model-row .vision-model-combo { flex: 1 1 0; min-width: 0; }
+#vision-api-settings #vision-model-refresh { white-space: nowrap; flex: 0 0 auto; font-size: 12px; padding-inline: 10px; }
+#vision-api-settings .vision-model-hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
+#vision-api-settings .vision-model-hint:empty { display: none; }
+#vision-api-settings .vision-model-hint.is-error { color: var(--danger); }
+#vision-api-settings .settings-editor-actions {
+  margin: 0 -16px;
+  padding: 10px 16px;
+  gap: 7px;
+}
+#vision-api-settings .settings-editor-actions > .settings-hint:empty { margin: 0 auto 0 0; }
+#vision-api-settings .vision-fallback-toggle { margin: 0; padding: 14px 0 0; border: 0; }
+#vision-api-settings .vision-policy-copy strong { font-size: 14px; }
+#vision-api-settings .vision-policy-copy small { color: var(--text-secondary); font-size: 12px; }
+@container (max-width: 535px) {
+  .vision-ledger-line { align-items: flex-start; flex-wrap: wrap; gap: 5px 8px; }
+  .vision-ledger-copy { flex-basis: 100%; }
+  .vision-ledger-actions { margin-inline-start: auto; }
+  #vision-api-settings .vision-editor-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 340px) {
+  #vision-api-settings .settings-editor-actions > .settings-hint:not(:empty) {
+    flex: 1 0 100%;
+    order: -1;
+  }
+}
+@media (pointer: coarse) {
+  #vision-api-settings .vision-ledger-toggle,
+  #vision-api-settings .vision-ledger-actions button,
+  #vision-api-settings .settings-editor-actions button,
+  #vision-api-settings #vision-model-refresh,
+  #vision-api-settings .vision-add-btn { min-height: 44px; }
+}
+
+/* Settings search reuses the editable rows in place. */
+.settings-search { position: relative; flex: 0 1 240px; min-width: 0; align-self: center; }
+.settings-search > svg { position: absolute; inset-inline-start: 10px; top: 10px; width: 16px; height: 16px; color: var(--text-tertiary); pointer-events: none; }
+.settings-search input { width: 100%; height: 36px; padding-inline: 32px 9px; border: 1px solid var(--border-control); border-radius: var(--radius-md); background: var(--input-bg); color: var(--text-primary); font-size: 13px; }
+.settings-search input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-searching .settings-nav,
+.settings-searching .settings-section:not(.settings-search-hit),
+.settings-searching .settings-search-miss { display: none !important; }
+.settings-searching .settings-section.settings-search-hit { display: block; }
+.settings-searching .settings-search-hit ~ .settings-search-hit { margin-block-start: 24px; }
+.settings-search-empty { color: var(--text-secondary); }
+@media (max-width: 460px) {
+  #page-settings > .page-header .page-header-row { flex-direction: column; gap: 8px; }
+  .settings-search { flex-basis: auto; width: 100%; align-self: stretch; }
 }

@@ -456,9 +456,9 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
             "static/js/64-settings-model-view.js": 1,
             # Vue 试点第二块：托管 MinerU 卡片只暴露 MEFinderManagedMineruView。
             "static/js/70-managed-mineru-view.js": 1,
-            # 0.5.5 +1：托管 MinerU「检查新版本」入口 checkManagedMineruUpdates。
-            "static/js/70-vision.js": 23,
-            "static/js/71-vision-providers.js": 10,
+            # MinerU 删除改用行内委托，移除旧模板需要的全局命令。
+            "static/js/70-vision.js": 21,
+            "static/js/71-vision-providers.js": 9,
             "static/js/72-vision-stats.js": 4,
             "static/js/78-import-jobs.js": 1,
             "static/js/79-import-batch.js": 6,
@@ -708,10 +708,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.6.2：保留公式排版资源，按版本文字重算指纹。
     # 0.6.3：主导航可在侧栏和顶栏之间切换，检索结果支持带编号的独立公式。
     # 0.6.3：检索结果按原文选区复制和收藏，标签选择器就地展开。
+    # MinerU 删除入口移到账号行，确认框默认聚焦取消。
     BASELINE_SHA256 = (
-        "7a5162ae97b09a534535c1b3a013321bbd2e617fbe34e8cd8867d06d4f91abd2"
+        "3a103522a4939f19637830b44f85603bc9eef2a22a3f20f3723fd4355aedac6d"
     )
-    BASELINE_BYTES = 1867623
+    BASELINE_BYTES = 1917632
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

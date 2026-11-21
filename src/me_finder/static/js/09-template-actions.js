@@ -103,7 +103,6 @@
   MEFinderActions.registerInline('templateClick105', function(event, target) { MEFinder.parserRuntime.cancelEditMineruService(); });
   MEFinderActions.registerInline('templateClick106', function(event, target) { toggleMineruSecret('mineru-token','mineru-token-toggle'); });
   MEFinderActions.registerInline('templateClick107', function(event, target) { openMineruTokenPage(); });
-  MEFinderActions.registerInline('templateClick108', function(event, target) { deleteMineruAccount(document.getElementById('mineru-account-id').value); });
   MEFinderActions.registerInline('templateClick109', function(event, target) { testMineruConnection(document.getElementById('mineru-account-id').value, this); });
   MEFinderActions.registerInline('templateClick110', function(event, target) { closeMineruAccountDialog(); });
   MEFinderActions.registerInline('templateClick111', function(event, target) { saveMineruConfig(event); });
@@ -118,7 +117,6 @@
   MEFinderActions.registerInline('templateClick120', function(event, target) { manageLocalOCRComponent('ndlkotenocr-lite','uninstall',this); });
   MEFinderActions.registerInline('templateClick121', function(event, target) { manageLocalOCRComponent('ndlkotenocr-lite','cancel',this); });
   MEFinderActions.registerInline('templateClick122', function(event, target) { testLocalOCREngine('ndlkotenocr-lite', this); });
-  MEFinderActions.registerInline('templateClick123', function(event, target) { saveLocalOCRConfig(); });
   MEFinderActions.registerInline('templateClick136', function(event, target) { saveMineruLocalSettings(); });
   MEFinderActions.registerInline('templateClick137', function(event, target) { testMineruLocalConnection(); });
   MEFinderActions.registerInline('templateClick138', function(event, target) { toggleMineruSecret('general-model-key','general-model-key-toggle'); });

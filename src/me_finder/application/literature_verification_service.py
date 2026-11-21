@@ -42,6 +42,26 @@ class LiteratureVerificationService:
     def index_path(self) -> Path:
         return Path(self._runtime_root_provider()) / "data" / "index.sqlite3"
 
+    def list_material_tags(self) -> dict[str, object]:
+        """List the material library's tags without changing the index."""
+        from ..materials.service import list_material_tags
+
+        tags = list_material_tags(self._existing_index_path())
+        return {"schema_version": SCHEMA_VERSION, "total": len(tags), "tags": tags}
+
+    def read_tag_excerpts(self, tag: str, *, limit: int = 20, offset: int = 0) -> dict[str, object]:
+        """Read a page of saved excerpts and their captured source references."""
+        from ..materials.service import read_tag_excerpts
+
+        validated_limit = _bounded_integer("limit", limit, minimum=1, maximum=100)
+        validated_offset = _bounded_integer("offset", offset, minimum=0, maximum=2**63 - 1)
+        excerpts = read_tag_excerpts(self._existing_index_path(), tag)
+        end = validated_offset + validated_limit
+        return {
+            "schema_version": SCHEMA_VERSION, "total": len(excerpts),
+            "has_more": end < len(excerpts), "excerpts": excerpts[validated_offset:end],
+        }
+
     def list_documents(
         self,
         *,

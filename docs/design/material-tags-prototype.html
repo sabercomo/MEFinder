@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="frost-blue">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEFinder 素材库标签原型</title>
+<style>
+/* Hallmark · macrostructure: Collection Index (app page, Workbench family) · tone: utilitarian, quiet
+ * theme: existing MEFinder theme system (frost-blue tokens, names mirror 00-themes.css) · enrichment: none
+ * pre-emit critique: P4 H4 E4 S5 R5 V4
+ * follows design.md §3 检索 / §5 界面文案（句末不加句号）· §4 token 命名
+ */
+:root{
+  --app-bg:#F5F8FC;--sidebar-bg:#F1F5FA;--surface-primary:#FFFFFF;--surface-secondary:#F8FAFD;--surface-elevated:#FFFFFF;
+  --surface-hover:#F1F5FA;--surface-selected:#EAF3FF;
+  --text-primary:#172033;--text-secondary:#414D61;--text-tertiary:#667085;--text-decorative:#98A2B3;
+  --border-subtle:#EDF1F6;--border-default:#DDE5EF;--border-strong:#C8D4E2;--border-control:#828CA0;
+  --accent-fill:#0F62E6;--accent-hover:#0B54C9;--accent-soft:#EAF3FF;--accent-text:#0B5EC7;--accent-contrast:#FFFFFF;
+  --success:#168A46;--warning:#B8620F;--warning-soft:#FFF2E2;--danger:#C8322B;--neutral-soft:#EEF1F5;
+  --match-block-bg:#FFF8E6;--match-block-accent:#B86C08;--match-inline-bg:#FFE7A8;--match-inline-border:#E9B644;--match-inline-text:#30240A;
+  --shadow-popover:0 12px 32px rgba(23,32,51,.14);--dialog-backdrop:rgba(23,32,51,.30);
+  --focus-ring:0 0 0 3px rgba(22,119,255,.22);
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-pill:999px;
+  --font-ui:"PingFang SC","Microsoft YaHei UI","Segoe UI Variable",-apple-system,system-ui,sans-serif;
+  --font-reading:"Noto Serif SC","Songti SC","STSong",Georgia,serif;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --z-modal:400;--z-toast:500;--z-dropdown:100;
+}
+html[data-theme="dark"]{
+  --app-bg:#0F141C;--sidebar-bg:#131A24;--surface-primary:#161E29;--surface-secondary:#1A232F;--surface-elevated:#1D2733;
+  --surface-hover:#1F2937;--surface-selected:#1B2C45;
+  --text-primary:#E7ECF3;--text-secondary:#BAC4D2;--text-tertiary:#8E99AA;--text-decorative:#667085;
+  --border-subtle:#222C39;--border-default:#2C3847;--border-strong:#3A4757;--border-control:#6B7688;
+  --accent-fill:#5B9BFF;--accent-hover:#79AEFF;--accent-soft:#1A2C47;--accent-text:#8FBBFF;--accent-contrast:#0B1422;
+  --success:#4CC27E;--warning:#F0A04B;--warning-soft:#2E2215;--danger:#FF7A72;--neutral-soft:#222A36;
+  --match-block-bg:#2E2615;--match-block-accent:#F0C877;--match-inline-bg:#3D2F0A;--match-inline-border:#8B6F1F;--match-inline-text:#F0C877;
+  --shadow-popover:0 16px 40px rgba(0,0,0,.5);--dialog-backdrop:rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html,body{height:100%;overflow-x:clip}
+body{margin:0;background:var(--app-bg);color:var(--text-primary);font-family:var(--font-ui);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:12px 16px;display:flex;flex-direction:column;gap:10px}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+[hidden]{display:none!important}
+mark{background:var(--match-inline-bg);color:var(--match-inline-text);border:1px solid var(--match-inline-border);padding:0 2px;border-radius:var(--radius-sm);-webkit-box-decoration-break:clone;box-decoration-break:clone}
+
+.demo{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-tertiary)}
+.demo b{color:var(--text-secondary);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:2px;background:var(--surface-primary)}
+.seg button{height:26px;padding:0 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-tertiary);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+
+/* shell */
+.win{position:relative;flex:1;min-height:760px;display:grid;grid-template-columns:180px minmax(0,1fr);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface-primary)}
+.side{background:var(--sidebar-bg);border-right:1px solid var(--border-subtle);padding:16px 10px 12px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.brand{display:flex;align-items:center;gap:6px;padding:6px 10px 16px;font-size:14px;font-weight:700;color:var(--text-primary);white-space:nowrap}
+.brand svg{flex:0 0 auto;color:var(--text-tertiary)}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow:auto}
+.nav-item{display:flex;align-items:center;gap:9px;padding:0 10px;height:38px;border-radius:var(--radius-md);font-size:14px;color:var(--text-secondary);white-space:nowrap;text-align:left;width:100%}
+.nav-item svg{width:18px;height:18px;flex:0 0 auto}
+.nav-item[aria-current="page"]{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+.nav-count{margin-left:auto;font-size:11px;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
+.side-foot{font-size:11px;color:var(--text-decorative);padding:10px 10px 0;white-space:nowrap}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.main-head{padding:22px 24px 0;flex:0 0 auto}
+.page-title{font-size:22px;font-weight:700;line-height:1.3;margin:0}
+.page-subtitle{font-size:13px;color:var(--text-tertiary);margin-top:4px}
+
+/* search page */
+.search-row{display:flex;gap:8px;margin-top:16px}
+.search-input{flex:1;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--surface-primary)}
+.search-input svg{width:16px;height:16px;color:var(--text-tertiary);flex:0 0 auto}
+.search-input input{flex:1;min-width:0;border:0;background:none;outline:none;font-size:14px}
+.search-btn{height:40px;padding:0 18px;border-radius:var(--radius-md);background:var(--accent-fill);color:var(--accent-contrast);font-size:14px;font-weight:600;white-space:nowrap}
+.search-btn:hover{background:var(--accent-hover)}
+.search-filters{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:12px;color:var(--text-tertiary);flex-wrap:wrap}
+.filter-pill{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-md);font-size:12px;color:var(--text-secondary);white-space:nowrap}
+.filter-pill svg{width:12px;height:12px}
+.filter-pill.on{background:var(--surface-selected);border-color:var(--accent-fill);color:var(--accent-text)}
+
+.results-area{flex:1;min-height:0;display:flex;margin-top:16px;border-top:1px solid var(--border-subtle)}
+.results-list{width:400px;min-width:280px;flex:0 0 auto;border-right:1px solid var(--border-subtle);overflow:auto;display:flex;flex-direction:column}
+.results-count{padding:10px 16px;font-size:12px;color:var(--text-tertiary);border-bottom:1px solid var(--border-subtle);flex:0 0 auto}
+
+.result-row{padding:12px 16px;border-bottom:1px solid var(--border-subtle);cursor:pointer;position:relative;display:flex;flex-direction:column;gap:5px;transition:background 120ms var(--ease-out)}
+.result-row:hover{background:var(--surface-hover)}
+.result-row.selected{background:var(--accent-soft)}
+.result-row.selected::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:var(--radius-sm);background:var(--accent-fill)}
+.result-row-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.result-checkbox{width:17px;height:17px;accent-color:var(--accent-fill);cursor:pointer;flex:0 0 auto;margin:0}
+.result-title{font-size:13px;font-weight:600;color:var(--text-primary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.result-score{font-size:11px;font-weight:600;color:var(--accent-text);background:var(--accent-soft);padding:1px 6px;border-radius:var(--radius-sm);flex:0 0 auto}
+.result-meta{font-size:11.5px;color:var(--text-tertiary);display:flex;gap:8px;flex-wrap:wrap}
+.result-meta span{white-space:nowrap}
+.result-snippet{font-size:12.5px;color:var(--text-secondary);line-height:1.65;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* selection bar (mirrors library-selection-bar) */
+.selection-bar{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 10px 6px 6px;border-radius:var(--radius-lg);background:var(--surface-elevated);border:1px solid var(--border-default);margin:8px 12px 0;flex:0 0 auto;flex-wrap:wrap}
+.selection-count{font-size:13px;font-weight:600;color:var(--text-primary);white-space:nowrap}
+.selection-spacer{flex:1}
+.selection-cancel{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md);color:var(--text-secondary);flex:0 0 auto}
+.selection-cancel:hover{background:var(--surface-hover);color:var(--text-primary)}
+.selection-cancel svg{width:16px;height:16px}
+
+.action-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:34px;padding:0 13px;border-radius:var(--radius-md);font-size:13px;font-weight:500;border:1px solid var(--border-default);background:var(--surface-primary);color:var(--text-primary);white-space:nowrap;transition:background 120ms var(--ease-out)}
+.action-btn:hover{background:var(--surface-hover)}
+.action-btn.primary{background:var(--accent-fill);color:var(--accent-contrast);border-color:var(--accent-fill)}
+.action-btn.primary:hover{background:var(--accent-hover)}
+.action-btn svg{width:15px;height:15px;flex:0 0 auto}
+.action-btn:disabled{opacity:.45;cursor:default}
+
+/* detail pane */
+.detail-pane{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.detail-header{padding:20px 24px 14px;border-bottom:1px solid var(--border-subtle);flex:0 0 auto}
+.detail-title{font-size:16px;font-weight:700;line-height:1.4}
+.detail-author{font-size:13px;color:var(--text-secondary);margin-top:3px}
+.detail-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.detail-pill{font-size:11.5px;padding:2px 9px;border-radius:var(--radius-sm);background:var(--surface-secondary);color:var(--text-secondary);border:1px solid var(--border-subtle)}
+.detail-pill.accent{background:var(--accent-soft);color:var(--accent-text);border-color:transparent}
+.detail-body{flex:1;overflow:auto;padding:16px 24px}
+.detail-hit{font-size:15px;line-height:1.95;color:var(--text-primary);padding:16px 18px;border-radius:var(--radius-lg);border:1px solid var(--match-inline-border);border-left:3px solid var(--match-block-accent);background:var(--match-block-bg);margin-bottom:16px}
+.detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tag-chip{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 9px;border-radius:var(--radius-pill);background:var(--surface-selected);color:var(--accent-text);font-size:12px;font-weight:500;border:1px solid transparent;cursor:pointer}
+.tag-chip:hover{background:var(--accent-soft)}
+.tag-chip svg{width:12px;height:12px}
+.detail-actions{padding:12px 24px 16px;border-top:1px solid var(--border-subtle);display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:0 0 auto}
+
+/* library page */
+.lib-layout{flex:1;min-height:0;display:flex;margin-top:0}
+.tag-pane{width:220px;min-width:160px;flex:0 0 auto;border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;padding:16px 0 12px}
+.tag-pane-head{padding:0 16px 10px;font-size:12px;font-weight:600;color:var(--text-tertiary);letter-spacing:.04em;display:flex;align-items:center;justify-content:space-between}
+.tag-pane-head button{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);color:var(--text-tertiary)}
+.tag-pane-head button:hover{background:var(--surface-hover);color:var(--text-primary)}
+.tag-pane-head button svg{width:14px;height:14px}
+.tag-list{flex:1;overflow:auto;padding:0 8px}
+.tag-item{display:flex;align-items:center;gap:8px;padding:0 10px;height:34px;border-radius:var(--radius-md);font-size:13px;color:var(--text-secondary);width:100%;text-align:left;white-space:nowrap;cursor:pointer}
+.tag-item:hover{background:var(--surface-hover);color:var(--text-primary)}
+.tag-item.active{background:var(--surface-selected);color:var(--accent-text);font-weight:600}
+.tag-item svg{width:15px;height:15px;flex:0 0 auto;opacity:.7}
+.tag-item.active svg{opacity:1}
+.tag-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag-count{font-size:11px;color:var(--text-tertiary);font-variant-numeric:tabular-nums;flex:0 0 auto}
+
+.excerpt-pane{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.excerpt-pane-head{padding:16px 24px 12px;border-bottom:1px solid var(--border-subtle);flex:0 0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.excerpt-tag-title{font-size:16px;font-weight:700}
+.excerpt-tag-meta{font-size:12px;color:var(--text-tertiary)}
+.excerpt-pane-head .spacer{flex:1}
+.excerpt-search{display:flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--surface-primary);min-width:0;width:200px}
+.excerpt-search svg{width:14px;height:14px;color:var(--text-tertiary);flex:0 0 auto}
+.excerpt-search input{border:0;background:none;outline:none;font-size:13px;min-width:0;flex:1}
+
+.excerpt-list{flex:1;overflow:auto;padding:8px 0}
+.excerpt-row{padding:14px 24px;border-bottom:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:background 120ms var(--ease-out)}
+.excerpt-row:hover{background:var(--surface-hover)}
+.excerpt-row.active{background:var(--accent-soft)}
+.excerpt-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.excerpt-book{font-size:13px;font-weight:600;color:var(--text-primary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.excerpt-page{font-size:12px;color:var(--accent-text);background:var(--accent-soft);padding:1px 7px;border-radius:var(--radius-sm);white-space:nowrap;flex:0 0 auto}
+.excerpt-text{font-size:13px;color:var(--text-secondary);line-height:1.75;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.excerpt-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.excerpt-date{font-size:11.5px;color:var(--text-tertiary)}
+.excerpt-note{font-size:12px;color:var(--text-tertiary);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.excerpt-tags{display:flex;gap:5px;flex-wrap:wrap}
+
+.excerpt-detail{width:340px;min-width:0;flex:0 0 auto;border-left:1px solid var(--border-subtle);display:flex;flex-direction:column;overflow:hidden}
+.excerpt-detail-head{padding:16px 20px 12px;border-bottom:1px solid var(--border-subtle);flex:0 0 auto}
+.excerpt-detail-title{font-size:14px;font-weight:700;line-height:1.4}
+.excerpt-detail-meta{font-size:12px;color:var(--text-secondary);margin-top:4px}
+.excerpt-detail-body{flex:1;overflow:auto;padding:14px 20px}
+.excerpt-detail-text{font-size:14px;line-height:1.9;color:var(--text-primary);padding:14px 16px;border-radius:var(--radius-lg);border:1px solid var(--match-inline-border);border-left:3px solid var(--match-block-accent);background:var(--match-block-bg);margin-bottom:14px}
+.excerpt-detail-section{margin-bottom:14px}
+.excerpt-detail-label{font-size:11.5px;font-weight:600;color:var(--text-tertiary);margin-bottom:5px}
+.excerpt-detail-note{font-size:13px;color:var(--text-secondary);line-height:1.6;min-height:24px;padding:6px 8px;border-radius:var(--radius-sm);border:1px dashed var(--border-default);background:var(--surface-secondary)}
+.excerpt-detail-actions{padding:10px 20px 14px;border-top:1px solid var(--border-subtle);display:flex;gap:8px;flex-wrap:wrap;flex:0 0 auto}
+
+/* dialog */
+.dialog-backdrop{position:fixed;inset:0;z-index:var(--z-modal);background:var(--dialog-backdrop);display:flex;align-items:center;justify-content:center}
+.dialog{background:var(--surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);box-shadow:var(--shadow-popover);width:min(460px,90vw);padding:24px 24px 20px;display:flex;flex-direction:column;gap:16px}
+.dialog-title{font-size:16px;font-weight:700}
+.dialog-subtitle{font-size:13px;color:var(--text-tertiary);margin-top:-8px}
+.tag-check-list{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto}
+.tag-check-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--radius-md);cursor:pointer;font-size:14px}
+.tag-check-row:hover{background:var(--surface-hover)}
+.tag-check-row input{width:16px;height:16px;accent-color:var(--accent-fill);margin:0;flex:0 0 auto}
+.tag-check-row .tc-count{margin-left:auto;font-size:12px;color:var(--text-tertiary)}
+.new-tag-row{display:flex;gap:8px;align-items:center}
+.new-tag-input{flex:1;height:36px;padding:0 10px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--surface-primary);font-size:13px;outline:none}
+.new-tag-input:focus{border-color:var(--accent-fill);box-shadow:var(--focus-ring)}
+.dialog-actions{display:flex;justify-content:flex-end;gap:8px}
+.dialog-note{font-size:12px;color:var(--text-tertiary);line-height:1.6;padding:8px 10px;background:var(--surface-secondary);border-radius:var(--radius-sm);border:1px solid var(--border-subtle)}
+
+/* reader page */
+.reader-pane{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.reader-toolbar{display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border-subtle);flex:0 0 auto;flex-wrap:wrap}
+.reader-toolbar-title{font-size:14px;font-weight:600;flex:1;min-width:0}
+.reader-body{flex:1;overflow:auto;padding:24px 32px;font-family:var(--font-reading);font-size:17px;line-height:1.9;color:var(--text-primary)}
+.reader-para{margin-bottom:18px;text-align:justify}
+.reader-para.sel{position:relative}
+.selection-pop{position:absolute;background:var(--surface-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);box-shadow:var(--shadow-popover);padding:6px;display:flex;gap:4px;align-items:center;z-index:var(--z-dropdown);white-space:nowrap}
+.selection-pop .pop-btn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:500;color:var(--text-primary);border:1px solid var(--border-default);background:var(--surface-primary);cursor:pointer;white-space:nowrap}
+.selection-pop .pop-btn:hover{background:var(--surface-hover)}
+.selection-pop .pop-btn.primary{background:var(--accent-fill);color:var(--accent-contrast);border-color:var(--accent-fill)}
+.selection-pop .pop-btn.primary:hover{background:var(--accent-hover)}
+.selection-pop .pop-btn svg{width:14px;height:14px;flex:0 0 auto}
+
+/* toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:var(--z-toast);background:var(--text-primary);color:var(--surface-primary);padding:10px 18px;border-radius:var(--radius-md);font-size:13px;box-shadow:var(--shadow-popover);display:flex;align-items:center;gap:10px;white-space:nowrap;max-width:90vw}
+.toast .toast-undo{color:var(--accent-text);font-weight:600;cursor:pointer;margin-left:6px}
+
+@media(max-width:1100px){
+  .results-list{width:320px;min-width:240px}
+  .detail-header,.detail-body{padding-inline:16px}
+  .excerpt-detail{width:280px}
+}
+@media(max-width:900px){
+  .win{grid-template-columns:160px minmax(0,1fr)}
+  .results-list{width:260px;min-width:200px}
+  .excerpt-detail{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="demo">
+  <b>素材库标签 · 交互原型</b>
+  <div class="seg" role="group" aria-label="页面">
+    <button type="button" data-view="search" aria-pressed="true">检索</button>
+    <button type="button" data-view="library" aria-pressed="false">素材库</button>
+    <button type="button" data-view="reader" aria-pressed="false">阅读器</button>
+  </div>
+  <div class="seg" role="group" aria-label="主题">
+    <button type="button" data-theme="frost-blue" aria-pressed="true">浅色</button>
+    <button type="button" data-theme="dark" aria-pressed="false">深色</button>
+  </div>
+  <span style="font-size:11.5px;color:var(--text-decorative)">示例数据为虚构 · 非生产数据</span>
+</div>
+
+<div class="win" id="win">
+  <aside class="side">
+    <div class="brand">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 5l-5 5 5 5"/></svg>
+      文献原句定位器
+    </div>
+    <nav class="nav">
+      <button class="nav-item" data-view="search" aria-current="page">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+        文献检索
+      </button>
+      <button class="nav-item" data-view="library">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="16" height="14" rx="2"/><line x1="7" y1="3" x2="7" y2="17"/></svg>
+        文献库
+      </button>
+      <button class="nav-item" data-view="materials">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        素材库
+        <span class="nav-count" id="nav-material-count">6</span>
+      </button>
+      <button class="nav-item" data-view="works">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="7" height="13" rx="1.5"/><rect x="11" y="3.5" width="7" height="13" rx="1.5"/></svg>
+        译本对照
+      </button>
+      <button class="nav-item" data-view="import">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M6 9l4 4 4-4"/><path d="M3 14v2a1 1 0 001 1h12a1 1 0 001-1v-2"/></svg>
+        文献导入
+      </button>
+      <button class="nav-item" data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+        设置
+      </button>
+    </nav>
+    <div class="side-foot">MEFinder v0.6.2</div>
+  </aside>
+
+  <div class="main" id="main"></div>
+</div>
+
+<!-- Tag dialog -->
+<div class="dialog-backdrop" id="tag-dialog" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+    <div>
+      <div class="dialog-title" id="dlg-title">加标签</div>
+      <div class="dialog-subtitle" id="dlg-subtitle">将选中的语料加入标签</div>
+    </div>
+    <div class="tag-check-list" id="dlg-tag-list"></div>
+    <div class="new-tag-row">
+      <input class="new-tag-input" id="dlg-new-tag" type="text" placeholder="新建标签名…" maxlength="30">
+      <button class="action-btn" id="dlg-create-btn" type="button">新建</button>
+    </div>
+    <div class="dialog-note" id="dlg-note">可多选，已加的标签会保持勾选</div>
+    <div class="dialog-actions">
+      <button class="action-btn" id="dlg-cancel" type="button">取消</button>
+      <button class="action-btn primary" id="dlg-confirm" type="button">保存标签</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" hidden role="status" aria-live="polite">
+  <span id="toast-msg"></span>
+  <span class="toast-undo" id="toast-undo" hidden>撤销</span>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ── State ── */
+var state = {
+  view: 'search',
+  selectedIds: new Set(),
+  activeResultId: null,
+  activeExcerptId: null,
+  activeTag: 'all',
+  excerptFilter: '',
+  tags: [
+    {id:'t1', name:'异化', count:3},
+    {id:'t2', name:'承认理论', count:2},
+    {id:'t3', name:'社会学理论', count:1}
+  ],
+  excerpts: [
+    {
+      id:'e1', sourceId:'src1', resultId:'r1', tagIds:['t1'],
+      book:'1844年经济学哲学手稿', author:'马克思', page:'第 57 页', format:'PDF',
+      date:'2026-11-10', note:'',
+      text:'劳动所生产的对象，即劳动的产品，作为一种<mark>异己的</mark>存在物，作为不依赖于生产者的力量，同劳动相对立。劳动的产品是固定在某个对象中的、物化的劳动，这就是劳动的对象化。劳动的现实化就是劳动的对象化。在国民经济学假定的状况中，劳动的这种现实化表现为工人的<mark>非现实化</mark>，对象化表现为对象的丧失和被对象奴役，占有表现为<mark>异化</mark>、外化。'
+    },
+    {
+      id:'e2', sourceId:'src2', resultId:'r2', tagIds:['t1','t2'],
+      book:'承认理论', author:'霍耐特', page:'第 112 页', format:'PDF',
+      date:'2026-11-12', note:'异化与承认的关系',
+      text:'如果个体在社会中不能获得充分的承认，那么他就会经验到一种<mark>自我异化</mark>的状态——他无法把自己理解为社会共同体的平等成员，他的自我关系因此被扭曲。'
+    },
+    {
+      id:'e3', sourceId:'src1', tagIds:['t1'],
+      book:'1844年经济学哲学手稿', author:'马克思', page:'第 60 页', format:'PDF',
+      date:'2026-11-10', note:'',
+      text:'工人在他的对象中的<mark>异化</mark>表现在：工人生产得越多，他能够消费的越少；他创造价值越多，他自己越没有价值、越低贱；工人的产品越完美，工人自己越畸形；工人创造的对象越文明，工人自己越野蛮；劳动越有力量，工人越无力；劳动越机巧，工人越愚笨，越成为自然界的奴隶。'
+    },
+    {
+      id:'e4', sourceId:'src3', tagIds:['t2'],
+      book:'为承认而斗争', author:'霍耐特', page:'第 45 页', format:'PDF',
+      date:'2026-11-08', note:'',
+      text:'个体的自我关系取决于他能否在他人那里获得承认。爱的关系提供了最初级的承认形式，法律关系提供了抽象的承认，而社会尊重则提供了最高形式的承认。'
+    },
+    {
+      id:'e5', sourceId:'src4', tagIds:['t3'],
+      book:'社会理论的结构', author:'瑞泽尔', page:'第 203 页', format:'PDF',
+      date:'2026-11-05', note:'理论综述参考',
+      text:'马克思的<mark>异化</mark>概念在当代社会学中经历了多次重新阐释，从卢卡奇的物化理论到法兰克福学派的批判理论，再到当代的承认理论，这一概念始终保持着其批判性的锋芒。'
+    },
+    {
+      id:'e6', sourceId:'src5', resultId:'r3', tagIds:['t1'],
+      book:'法哲学原理', author:'黑格尔', page:'第 78 页', format:'EPUB',
+      date:'2026-11-03', note:'页码待校准',
+      text:'市民社会中的劳动分工使人陷入一种<mark>异化</mark>的状态：个人越是专业化，他就越是依赖于他人的劳动，他的独立性就越是被社会的相互依存关系所取代。',
+      pageUncalibrated: true
+    }
+  ],
+  results: [
+    {
+      id:'r1', sourceId:'src1',
+      title:'1844年经济学哲学手稿', author:'马克思 · 人民出版社 2000', page:'第 57 页', score:98, format:'PDF',
+      snippet:'劳动所生产的对象，即劳动的产品，作为一种<mark>异己的</mark>存在物…占有表现为<mark>异化</mark>、外化',
+      hit:'劳动所生产的对象，即劳动的产品，作为一种<mark>异己的</mark>存在物，作为不依赖于生产者的力量，同劳动相对立。劳动的产品是固定在某个对象中的、物化的劳动，这就是劳动的对象化。劳动的现实化就是劳动的对象化。在国民经济学假定的状况中，劳动的这种现实化表现为工人的<mark>非现实化</mark>，对象化表现为对象的丧失和被对象奴役，占有表现为<mark>异化</mark>、外化。',
+      context:'【上文】在国民经济学中，工人的劳动被假定为一种商品…【下文】工人在他的对象中的异化表现在：工人生产得越多，他能够消费的越少…',
+      tagIds:['t1']
+    },
+    {
+      id:'r2', sourceId:'src3',
+      title:'为承认而斗争', author:'霍耐特 · 上海人民出版社 2005', page:'第 112 页', score:91, format:'PDF',
+      snippet:'如果个体在社会中不能获得充分的承认，那么他就会经验到一种<mark>自我异化</mark>的状态…',
+      hit:'如果个体在社会中不能获得充分的承认，那么他就会经验到一种<mark>自我异化</mark>的状态——他无法把自己理解为社会共同体的平等成员，他的自我关系因此被扭曲。',
+      context:'【上文】承认的三种形式构成了个体自我实现的必要条件…【下文】法律关系的承认提供了一种抽象的平等…',
+      tagIds:[]
+    },
+    {
+      id:'r3', sourceId:'src5',
+      title:'法哲学原理', author:'黑格尔 · 商务印书馆 1961', page:'第 78 页', score:87, format:'EPUB',
+      snippet:'市民社会中的劳动分工使人陷入一种<mark>异化</mark>的状态：个人越是专业化…',
+      hit:'市民社会中的劳动分工使人陷入一种<mark>异化</mark>的状态：个人越是专业化，他就越是依赖于他人的劳动，他的独立性就越是被社会的相互依存关系所取代。',
+      context:'【上文】市民社会是各个成员作为独立的单个人的联合…【下文】国家作为普遍性的体现，超越了市民社会的特殊性…',
+      tagIds:[],
+      pageUncalibrated: true
+    },
+    {
+      id:'r4', sourceId:'src4',
+      title:'社会理论的结构', author:'瑞泽尔 · 华夏出版社 2000', page:'第 203 页', score:82, format:'PDF',
+      snippet:'马克思的<mark>异化</mark>概念在当代社会学中经历了多次重新阐释…',
+      hit:'马克思的<mark>异化</mark>概念在当代社会学中经历了多次重新阐释，从卢卡奇的物化理论到法兰克福学派的批判理论，再到当代的承认理论，这一概念始终保持着其批判性的锋芒。',
+      context:'【上文】古典社会理论为现代社会学奠定了基础…【下文】卢卡奇的物化理论将异化概念扩展到了整个资本主义社会…',
+      tagIds:['t3']
+    },
+    {
+      id:'r5', sourceId:'src6',
+      title:'历史与阶级意识', author:'卢卡奇 · 商务印书馆 1999', page:'第 145 页', score:79, format:'PDF',
+      snippet:'物化是<mark>异化</mark>的更深一层：人的关系变成了物的关系…',
+      hit:'物化是<mark>异化</mark>的更深一层：人的关系变成了物的关系，人的活动变成了商品交换的活动，人的主体性被商品的客观性所吞噬。',
+      context:'【上文】卢卡奇在《历史与阶级意识》中提出了物化概念…【下文】物化意识是资本主义社会的意识形态…',
+      tagIds:[]
+    },
+    {
+      id:'r6', sourceId:'src7',
+      title:'单向度的人', author:'马尔库塞 · 上海译文出版社 2008', page:'第 67 页', score:75, format:'PDF',
+      snippet:'发达工业社会中的<mark>异化</mark>已经不仅仅是经济层面的…',
+      hit:'发达工业社会中的<mark>异化</mark>已经不仅仅是经济层面的，它渗透到了人的意识和欲望之中，使人失去了否定性的维度，成为了单向度的人。',
+      context:'【上文】马尔库塞分析了发达工业社会的意识形态特征…【下文】单向度的思想和行为模式压制了批判性思维…',
+      tagIds:[]
+    }
+  ],
+  readerSelection: null,
+  readerTagDialogOpen: false,
+  _lastFocus: null
+};
+
+/* ── Helpers ── */
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function tagName(id){var t=state.tags.find(function(t){return t.id===id;});return t?t.name:'';}
+function tagCount(id){return state.excerpts.filter(function(e){return e.tagIds.indexOf(id)>=0;}).length;}
+function findExcerptForResult(resultId){return state.excerpts.find(function(e){return e.resultId===resultId;})||null;}
+function plainText(html){var d=document.createElement('div');d.innerHTML=html;return d.textContent;}
+function saveResultToMaterials(result, checked){
+  var existing=findExcerptForResult(result.id);
+  if(existing){ existing.tagIds=checked.slice(); return {excerpt:existing, isNew:false}; }
+  var excerpt={
+    id:'e'+Date.now()+'-'+result.id,
+    sourceId:result.sourceId,
+    resultId:result.id,
+    tagIds:checked.slice(),
+    book:result.title,
+    author:(result.author||'').split(' · ')[0],
+    page:result.page,
+    format:result.format,
+    date:'2026-11-18',
+    note:'',
+    text:plainText(result.hit),
+    pageUncalibrated:!!result.pageUncalibrated
+  };
+  state.excerpts.push(excerpt);
+  return {excerpt:excerpt, isNew:true};
+}
+function updateNavCount(){document.getElementById('nav-material-count').textContent=state.excerpts.length;}
+function showToast(msg, undoFn){
+  var t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  var u=document.getElementById('toast-undo');
+  if(undoFn){u.hidden=false;u.onclick=function(){undoFn();t.hidden=true;};}
+  else{u.hidden=true;u.onclick=null;}
+  t.hidden=false;
+  clearTimeout(t._timer);
+  t._timer=setTimeout(function(){t.hidden=true;},4000);
+}
+
+/* ── Tag dialog ── */
+var _dlgFocus=null;
+function openTagDialog(excerptIds, onConfirm){
+  _dlgFocus=document.activeElement;
+  var dlg=document.getElementById('tag-dialog');
+  var list=document.getElementById('dlg-tag-list');
+  list.innerHTML='';
+  state.tags.forEach(function(t){
+    var row=document.createElement('label');
+    row.className='tag-check-row';
+    var cb=document.createElement('input');
+    cb.type='checkbox';cb.value=t.id;
+    /* pre-check if every target already carries this tag (via materials or result tagIds) */
+    cb.checked=excerptIds.every(function(eid){
+      var e=state.excerpts.find(function(x){return x.id===eid;});
+      if(e) return e.tagIds.indexOf(t.id)>=0;
+      var r=state.results.find(function(x){return x.id===eid;});
+      if(r) return r.tagIds.indexOf(t.id)>=0;
+      return false;
+    });
+    row.appendChild(cb);
+    row.appendChild(document.createTextNode(esc(t.name)));
+    var cnt=document.createElement('span');cnt.className='tc-count';cnt.textContent=tagCount(t.id)+' 条';
+    row.appendChild(cnt);
+    list.appendChild(row);
+  });
+  document.getElementById('dlg-new-tag').value='';
+  document.getElementById('dlg-subtitle').textContent='将 '+excerptIds.length+' 条语料加入标签';
+  dlg.hidden=false;
+  var firstCb=list.querySelector('input');
+  if(firstCb) firstCb.focus();
+
+  document.getElementById('dlg-create-btn').onclick=function(){
+    var name=document.getElementById('dlg-new-tag').value.trim();
+    if(!name) return;
+    if(state.tags.find(function(t){return t.name===name;})){showToast('标签已存在');return;}
+    var id='t'+Date.now();
+    state.tags.push({id:id,name:name,count:0});
+    var row=document.createElement('label');
+    row.className='tag-check-row';
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=id;cb.checked=true;
+    row.appendChild(cb);row.appendChild(document.createTextNode(name));
+    var cnt=document.createElement('span');cnt.className='tc-count';cnt.textContent='0 条';row.appendChild(cnt);
+    list.appendChild(row);
+    document.getElementById('dlg-new-tag').value='';
+  };
+
+  document.getElementById('dlg-confirm').onclick=function(){
+    var checked=Array.from(list.querySelectorAll('input:checked')).map(function(cb){return cb.value;});
+    dlg.hidden=true;
+    if(_dlgFocus)_dlgFocus.focus();
+    if(onConfirm) onConfirm(checked);
+  };
+  document.getElementById('dlg-cancel').onclick=function(){
+    dlg.hidden=true;
+    if(_dlgFocus)_dlgFocus.focus();
+  };
+  dlg.onclick=function(e){if(e.target===dlg){dlg.hidden=true;if(_dlgFocus)_dlgFocus.focus();}};
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&!document.getElementById('tag-dialog').hidden){
+    document.getElementById('tag-dialog').hidden=true;
+    if(_dlgFocus)_dlgFocus.focus();
+  }
+});
+
+/* ── Render: search page ── */
+function renderSearch(){
+  var main=document.getElementById('main');
+  main.innerHTML='';
+  var head=document.createElement('div');head.className='main-head';
+  head.innerHTML='<div class="page-title">文献检索</div><div class="page-subtitle">在本地文献库中定位原句、文献与准确页码</div>';
+  var searchRow=document.createElement('div');searchRow.className='search-row';
+  searchRow.innerHTML='<div class="search-input"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg><input type="text" value="异化" readonly></div><button class="search-btn" type="button">搜索</button>';
+  head.appendChild(searchRow);
+  var filters=document.createElement('div');filters.className='search-filters';
+  filters.innerHTML='<span>综合检索</span><span class="filter-pill on">全部来源</span><span class="filter-pill">全部文献</span><span class="filter-pill">10 条</span>';
+  head.appendChild(filters);
+  main.appendChild(head);
+
+  var area=document.createElement('div');area.className='results-area';
+
+  /* list pane */
+  var list=document.createElement('div');list.className='results-list';
+  var cnt=document.createElement('div');cnt.className='results-count';cnt.textContent='找到 6 条候选';
+  list.appendChild(cnt);
+
+  /* selection bar */
+  if(state.selectedIds.size>0){
+    var bar=document.createElement('div');bar.className='selection-bar';bar.setAttribute('role','toolbar');bar.setAttribute('aria-label','批量操作');
+    bar.innerHTML='<button class="selection-cancel" id="sel-cancel" aria-label="取消选择"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button>'
+      +'<span class="selection-count">已选 '+state.selectedIds.size+' 条</span><span class="selection-spacer"></span>'
+      +'<button class="action-btn primary" id="sel-tag-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>加标签</button>';
+    list.appendChild(bar);
+    bar.querySelector('#sel-cancel').onclick=function(){state.selectedIds.clear();renderSearch();};
+    bar.querySelector('#sel-tag-btn').onclick=function(){
+      var ids=Array.from(state.selectedIds);
+      openTagDialog(ids,function(checked){
+        var newCount=0;
+        ids.forEach(function(rid){
+          var r=state.results.find(function(x){return x.id===rid;});
+          if(!r) return;
+          r.tagIds=checked.slice();
+          var res=saveResultToMaterials(r, checked);
+          if(res.isNew) newCount+=1;
+        });
+        state.selectedIds.clear();
+        renderSearch();
+        showToast(newCount>0?('已收集 '+newCount+' 条语料并保存标签'):'已保存标签');
+      });
+    };
+  }
+
+  state.results.forEach(function(r,i){
+    var row=document.createElement('div');row.className='result-row'+(state.activeResultId===r.id?' selected':'');
+    row.dataset.id=r.id;
+    var head=document.createElement('div');head.className='result-row-head';
+    var cb=document.createElement('input');cb.type='checkbox';cb.className='result-checkbox';cb.checked=state.selectedIds.has(r.id);
+    cb.setAttribute('aria-label','选择此条语料');
+    cb.onclick=function(e){e.stopPropagation();if(cb.checked)state.selectedIds.add(r.id);else state.selectedIds.delete(r.id);renderSearch();};
+    head.appendChild(cb);
+    var score=document.createElement('span');score.className='result-score';score.textContent=r.score+'%';head.appendChild(score);
+    var title=document.createElement('span');title.className='result-title';title.textContent=r.title;head.appendChild(title);
+    row.appendChild(head);
+    var meta=document.createElement('div');meta.className='result-meta';
+    meta.innerHTML='<span>'+esc(r.author)+'</span><span>'+esc(r.page)+'</span><span>'+esc(r.format)+'</span>';
+    row.appendChild(meta);
+    var snip=document.createElement('div');snip.className='result-snippet';snip.innerHTML=r.snippet;
+    row.appendChild(snip);
+    if(r.tagIds.length>0){
+      var tagRow=document.createElement('div');tagRow.className='detail-tags';
+      r.tagIds.forEach(function(tid){
+        var chip=document.createElement('button');chip.className='tag-chip';chip.type='button';
+        chip.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'+esc(tagName(tid));
+        chip.onclick=function(e){e.stopPropagation();state.view='materials';state.activeTag=tid;render();};
+        tagRow.appendChild(chip);
+      });
+      row.appendChild(tagRow);
+    }
+    row.onclick=function(){state.activeResultId=r.id;renderSearch();};
+    list.appendChild(row);
+  });
+  area.appendChild(list);
+
+  /* detail pane */
+  var detail=document.createElement('div');detail.className='detail-pane';
+  var active=state.results.find(function(r){return r.id===state.activeResultId;});
+  if(active){
+    var dh=document.createElement('div');dh.className='detail-header';
+    dh.innerHTML='<div class="detail-title">'+esc(active.title)+'</div><div class="detail-author">'+esc(active.author)+'</div>';
+    var pills=document.createElement('div');pills.className='detail-pills';
+    pills.innerHTML='<span class="detail-pill accent">'+esc(active.format)+'</span><span class="detail-pill">'+esc(active.page)+'</span>'
+      +(active.pageUncalibrated?'<span class="detail-pill" style="color:var(--warning);border-color:var(--warning-soft);background:var(--warning-soft)">页码待校准</span>':'');
+    dh.appendChild(pills);
+    if(active.tagIds.length>0){
+      var dt=document.createElement('div');dt.className='detail-tags';
+      active.tagIds.forEach(function(tid){
+        var chip=document.createElement('button');chip.className='tag-chip';chip.type='button';
+        chip.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'+esc(tagName(tid));
+        chip.onclick=function(){state.view='materials';state.activeTag=tid;render();};
+        dt.appendChild(chip);
+      });
+      dh.appendChild(dt);
+    }
+    detail.appendChild(dh);
+    var db=document.createElement('div');db.className='detail-body';
+    db.innerHTML='<div class="detail-hit">'+active.hit+'</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.7">'+esc(active.context)+'</div>';
+    detail.appendChild(db);
+    var da=document.createElement('div');da.className='detail-actions';
+    da.innerHTML='<button class="action-btn" id="d-copy">复制出处</button>'
+      +'<button class="action-btn" id="d-reader">查看结构化文本</button>'
+      +'<button class="action-btn" id="d-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>加标签</button>'
+      +'<button class="action-btn primary" id="d-open">打开原文</button>';
+    detail.appendChild(da);
+    da.querySelector('#d-tag').onclick=function(){
+      openTagDialog([active.id],function(checked){
+        active.tagIds=checked.slice();
+        var res=saveResultToMaterials(active, checked);
+        renderSearch();
+        showToast(res.isNew?'已收集语料并保存标签':'已保存标签');
+      });
+    };
+    da.querySelector('#d-copy').onclick=function(){showToast('出处已复制（原型）');};
+    da.querySelector('#d-reader').onclick=function(){state.view='reader';render();};
+    da.querySelector('#d-open').onclick=function(){showToast('打开原文（原型）');};
+  }else{
+    detail.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:14px">选择一条结果查看详情</div>';
+  }
+  area.appendChild(detail);
+  main.appendChild(area);
+}
+
+/* ── Render: materials/library page ── */
+function renderMaterials(){
+  var main=document.getElementById('main');
+  main.innerHTML='';
+  var head=document.createElement('div');head.className='main-head';
+  head.innerHTML='<div class="page-title">素材库</div><div class="page-subtitle">按标签整理收集的语料，随时取用</div>';
+  main.appendChild(head);
+
+  var layout=document.createElement('div');layout.className='lib-layout';
+
+  /* tag pane */
+  var tagPane=document.createElement('div');tagPane.className='tag-pane';
+  var tpHead=document.createElement('div');tpHead.className='tag-pane-head';
+  tpHead.innerHTML='标签<button id="new-tag-btn" title="新建标签"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg></button>';
+  tagPane.appendChild(tpHead);
+  var tagList=document.createElement('div');tagList.className='tag-list';
+
+  var allItem=document.createElement('button');allItem.className='tag-item'+(state.activeTag==='all'?' active':'');
+  allItem.innerHTML='<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><line x1="3" y1="9" x2="17" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg><span class="tag-name">全部语料</span><span class="tag-count">'+state.excerpts.length+'</span>';
+  allItem.onclick=function(){state.activeTag='all';renderMaterials();};
+  tagList.appendChild(allItem);
+
+  state.tags.forEach(function(t){
+    var item=document.createElement('button');item.className='tag-item'+(state.activeTag===t.id?' active':'');
+    item.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg><span class="tag-name">'+esc(t.name)+'</span><span class="tag-count">'+tagCount(t.id)+'</span>';
+    item.onclick=function(){state.activeTag=t.id;state.activeExcerptId=null;renderMaterials();};
+    tagList.appendChild(item);
+  });
+  tagPane.appendChild(tagList);
+  layout.appendChild(tagPane);
+
+  /* excerpt list pane */
+  var filtered=state.excerpts.filter(function(e){
+    if(state.activeTag!=='all'&&e.tagIds.indexOf(state.activeTag)<0) return false;
+    if(state.excerptFilter&&e.text.toLowerCase().indexOf(state.excerptFilter.toLowerCase())<0&&e.book.toLowerCase().indexOf(state.excerptFilter.toLowerCase())<0) return false;
+    return true;
+  });
+
+  var listPane=document.createElement('div');listPane.className='excerpt-pane';
+  var lpHead=document.createElement('div');lpHead.className='excerpt-pane-head';
+  var tagLabel=state.activeTag==='all'?'全部语料':tagName(state.activeTag);
+  lpHead.innerHTML='<span class="excerpt-tag-title">'+esc(tagLabel)+'</span><span class="excerpt-tag-meta">'+filtered.length+' 条</span><span class="spacer"></span>';
+  var searchWrap=document.createElement('div');searchWrap.className='excerpt-search';
+  searchWrap.innerHTML='<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="6"/><line x1="13" y1="13" x2="18" y2="18"/></svg><input type="text" placeholder="筛选语料…" value="'+esc(state.excerptFilter)+'" id="excerpt-filter">';
+  lpHead.appendChild(searchWrap);
+  var exportBtn=document.createElement('button');exportBtn.className='action-btn';exportBtn.innerHTML='导出';exportBtn.onclick=function(){showToast('导出 Markdown（原型）');};
+  lpHead.appendChild(exportBtn);
+  listPane.appendChild(lpHead);
+
+  var exList=document.createElement('div');exList.className='excerpt-list';
+  if(filtered.length===0){
+    exList.innerHTML='<div style="padding:40px 24px;text-align:center;color:var(--text-tertiary);font-size:14px">此标签下暂无语料<br><span style="font-size:12px;margin-top:8px;display:block">在检索结果中勾选语料，点击「加标签」即可收集</span></div>';
+  }
+  filtered.forEach(function(e){
+    var row=document.createElement('div');row.className='excerpt-row'+(state.activeExcerptId===e.id?' active':'');
+    row.dataset.id=e.id;
+    var eh=document.createElement('div');eh.className='excerpt-head';
+    eh.innerHTML='<span class="excerpt-book">'+esc(e.book)+'</span><span class="excerpt-page">'+esc(e.page)+'</span>'
+      +(e.pageUncalibrated?'<span class="excerpt-page" style="background:var(--warning-soft);color:var(--warning)">待校准</span>':'');
+    row.appendChild(eh);
+    var et=document.createElement('div');et.className='excerpt-text';et.innerHTML=e.text;row.appendChild(et);
+    var ef=document.createElement('div');ef.className='excerpt-foot';
+    ef.innerHTML='<span class="excerpt-date">'+esc(e.author)+' · '+esc(e.date)+'</span>';
+    if(e.note) ef.innerHTML+='<span class="excerpt-note">'+esc(e.note)+'</span>';
+    var tagsSpan=document.createElement('div');tagsSpan.className='excerpt-tags';
+    e.tagIds.forEach(function(tid){
+      var chip=document.createElement('button');chip.className='tag-chip';chip.type='button';chip.style.fontSize='11px';chip.style.height='22px';
+      chip.textContent=tagName(tid);
+      chip.onclick=function(ev){ev.stopPropagation();state.activeTag=tid;renderMaterials();};
+      tagsSpan.appendChild(chip);
+    });
+    ef.appendChild(tagsSpan);
+    row.appendChild(ef);
+    row.onclick=function(){state.activeExcerptId=e.id;renderMaterials();};
+    exList.appendChild(row);
+  });
+  listPane.appendChild(exList);
+  layout.appendChild(listPane);
+
+  /* excerpt detail pane */
+  var activeEx=state.excerpts.find(function(e){return e.id===state.activeExcerptId;});
+  if(activeEx){
+    var dp=document.createElement('div');dp.className='excerpt-detail';
+    var dh=document.createElement('div');dh.className='excerpt-detail-head';
+    dh.innerHTML='<div class="excerpt-detail-title">'+esc(activeEx.book)+'</div><div class="excerpt-detail-meta">'+esc(activeEx.author)+' · '+esc(activeEx.page)+'</div>';
+    dp.appendChild(dh);
+    var db=document.createElement('div');db.className='excerpt-detail-body';
+    db.innerHTML='<div class="excerpt-detail-text">'+activeEx.text+'</div>';
+    var noteSection=document.createElement('div');noteSection.className='excerpt-detail-section';
+    noteSection.innerHTML='<div class="excerpt-detail-label">备注</div><div class="excerpt-detail-note" id="ex-note">'+(activeEx.note?esc(activeEx.note):'<span style="color:var(--text-tertiary)">添加备注…</span>')+'</div>';
+    db.appendChild(noteSection);
+    var tagSection=document.createElement('div');tagSection.className='excerpt-detail-section';
+    tagSection.innerHTML='<div class="excerpt-detail-label">标签</div>';
+    var tagWrap=document.createElement('div');tagWrap.className='detail-tags';
+    activeEx.tagIds.forEach(function(tid){
+      var chip=document.createElement('button');chip.className='tag-chip';chip.type='button';
+      chip.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'+esc(tagName(tid));
+      chip.onclick=function(){state.activeTag=tid;renderMaterials();};
+      tagWrap.appendChild(chip);
+    });
+    tagSection.appendChild(tagWrap);
+    db.appendChild(tagSection);
+    dp.appendChild(db);
+    var da=document.createElement('div');da.className='excerpt-detail-actions';
+    da.innerHTML='<button class="action-btn" id="ex-copy">复制出处</button>'
+      +'<button class="action-btn" id="ex-tag">编辑标签</button>'
+      +'<button class="action-btn" id="ex-note-btn">编辑备注</button>'
+      +'<button class="action-btn primary" id="ex-open">打开原文</button>';
+    dp.appendChild(da);
+    da.querySelector('#ex-copy').onclick=function(){showToast('出处已复制（原型）');};
+    da.querySelector('#ex-open').onclick=function(){showToast('打开原文（原型）');};
+    da.querySelector('#ex-tag').onclick=function(){
+      openTagDialog([activeEx.id],function(checked){
+        activeEx.tagIds=checked.slice();
+        renderMaterials();
+        showToast('已保存标签');
+      });
+    };
+    da.querySelector('#ex-note-btn').onclick=function(){
+      var note=prompt('编辑备注',activeEx.note||'');
+      if(note!==null){activeEx.note=note;renderMaterials();showToast('备注已保存');}
+    };
+    layout.appendChild(dp);
+  }
+
+  main.appendChild(layout);
+
+  /* excerpt filter input */
+  var filterInput=document.getElementById('excerpt-filter');
+  if(filterInput){
+    filterInput.oninput=function(){state.excerptFilter=filterInput.value;};
+    filterInput.onkeydown=function(e){if(e.key==='Enter')renderMaterials();};
+  }
+
+  /* new tag button */
+  var newBtn=document.getElementById('new-tag-btn');
+  if(newBtn){
+    newBtn.onclick=function(){
+      var name=prompt('新建标签名');
+      if(name&&name.trim()){
+        if(state.tags.find(function(t){return t.name===name.trim();})){showToast('标签已存在');return;}
+        state.tags.push({id:'t'+Date.now(),name:name.trim(),count:0});
+        renderMaterials();
+        showToast('标签「'+name.trim()+'」已创建');
+      }
+    };
+  }
+}
+
+/* ── Render: reader page ── */
+function renderReader(){
+  var main=document.getElementById('main');
+  main.innerHTML='';
+  var head=document.createElement('div');head.className='main-head';
+  head.innerHTML='<div class="page-title">阅读</div><div class="page-subtitle">1844年经济学哲学手稿 · 马克思</div>';
+  main.appendChild(head);
+
+  var pane=document.createElement('div');pane.className='reader-pane';
+  var toolbar=document.createElement('div');toolbar.className='reader-toolbar';
+  toolbar.innerHTML='<span class="reader-toolbar-title">1844年经济学哲学手稿</span>'
+    +'<span style="font-size:12px;color:var(--text-tertiary)">PDF · 第 57 页</span>'
+    +'<button class="action-btn" id="r-back">返回检索</button>';
+  pane.appendChild(toolbar);
+  toolbar.querySelector('#r-back').onclick=function(){state.view='search';render();};
+
+  var body=document.createElement('div');body.className='reader-body';
+  body.innerHTML=
+    '<p class="reader-para">在国民经济学假定的状况中，劳动的这种现实化表现为工人的非现实化，对象化表现为对象的丧失和被对象奴役，占有表现为异化、外化。</p>'
+    +'<p class="reader-para" id="reader-sel-para">劳动所生产的对象，即劳动的产品，作为一种异己的存在物，作为不依赖于生产者的力量，同劳动相对立。劳动的产品是固定在某个对象中的、物化的劳动，这就是劳动的对象化。劳动的现实化就是劳动的对象化。</p>'
+    +'<p class="reader-para">工人在他的对象中的异化表现在：工人生产得越多，他能够消费的越少；他创造价值越多，他自己越没有价值、越低贱；工人的产品越完美，工人自己越畸形。</p>'
+    +'<p style="font-size:13px;color:var(--text-tertiary);margin-top:24px;font-family:var(--font-ui)">划选上方段落中的任意文字，查看「加标签」浮条</p>';
+  pane.appendChild(body);
+  main.appendChild(pane);
+
+  /* selection listener */
+  var selPara=document.getElementById('reader-sel-para');
+  var pop=document.createElement('div');pop.className='selection-pop';pop.hidden=true;
+  pop.innerHTML='<button class="pop-btn" id="pop-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制引文</button>'
+    +'<button class="pop-btn primary" id="pop-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>加标签</button>';
+  document.getElementById('win').appendChild(pop);
+
+  pop.querySelector('#pop-copy').onclick=function(){showToast('引文已复制（原型）');pop.hidden=true;window.getSelection().removeAllRanges();};
+  pop.querySelector('#pop-tag').onclick=function(){
+    var sel=window.getSelection();
+    var text=sel?sel.toString().trim():'';
+    if(!text){showToast('请先划选文字');return;}
+    pop.hidden=true;
+    sel.removeAllRanges();
+    /* create a temp result from the selection, then collect it into materials */
+    var tempId='r-reader-temp';
+    var existing=state.results.find(function(r){return r.id===tempId;});
+    if(!existing){
+      state.results.push({id:tempId,sourceId:'src1',title:'1844年经济学哲学手稿',author:'马克思 · 人民出版社 2000',page:'第 57 页',score:100,format:'PDF',snippet:esc(text),hit:esc(text),context:'',tagIds:[]});
+      existing=state.results.find(function(r){return r.id===tempId;});
+    }
+    openTagDialog([tempId],function(checked){
+      existing.tagIds=checked.slice();
+      var res=saveResultToMaterials(existing, checked);
+      showToast(res.isNew?'已收集语料并保存标签':'已保存标签');
+    });
+  };
+
+  var mouseupHandler=function(){
+    setTimeout(function(){
+      var sel=window.getSelection();
+      if(!sel||sel.isCollapsed||!sel.rangeCount){pop.hidden=true;return;}
+      var range=sel.getRangeAt(0);
+      var container=range.commonAncestorContainer;
+      var el=container.nodeType===1?container:container.parentElement;
+      if(!el||!selPara.contains(el)){pop.hidden=true;return;}
+      var text=sel.toString().trim();
+      if(!text){pop.hidden=true;return;}
+      var rect=range.getBoundingClientRect();
+      var winRect=document.getElementById('win').getBoundingClientRect();
+      var top=rect.top-winRect.top-44;
+      var left=rect.left-winRect.left;
+      if(top<0) top=rect.bottom-winRect.top+8;
+      pop.style.top=top+'px';pop.style.left=Math.max(8,left)+'px';
+      pop.hidden=false;
+    },0);
+  };
+  document.addEventListener('mouseup',mouseupHandler);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){pop.hidden=true;}});
+
+  /* cleanup on view change */
+  state._readerCleanup=function(){document.removeEventListener('mouseup',mouseupHandler);pop.remove();};
+}
+
+/* ── Main render ── */
+function render(){
+  if(state._readerCleanup){state._readerCleanup();state._readerCleanup=null;}
+  /* update nav */
+  document.querySelectorAll('.nav-item').forEach(function(btn){
+    var v=btn.dataset.view;
+    var active=(v==='materials'&&state.view==='materials')||(v==='search'&&state.view==='search')||(v===state.view);
+    btn.setAttribute('aria-current',active?'page':'false');
+  });
+  /* update demo tabs */
+  document.querySelectorAll('.demo .seg button[data-view]').forEach(function(btn){
+    btn.setAttribute('aria-pressed',btn.dataset.view===state.view?'true':'false');
+  });
+  updateNavCount();
+  if(state.view==='search') renderSearch();
+  else if(state.view==='materials') renderMaterials();
+  else if(state.view==='reader') renderReader();
+  else{ document.getElementById('main').innerHTML='<div style="padding:40px;color:var(--text-tertiary);font-size:14px">'+state.view+' 页（原型中未实现）</div>'; }
+}
+
+/* ── Nav wiring ── */
+document.querySelectorAll('.nav-item').forEach(function(btn){
+  btn.onclick=function(){
+    var v=btn.dataset.view;
+    if(v==='materials'){state.view='materials';}
+    else if(v==='search'){state.view='search';}
+    else if(v==='reader'){state.view='reader';}
+    else{state.view=v;}
+    render();
+  };
+});
+document.querySelectorAll('.demo .seg button[data-view]').forEach(function(btn){
+  btn.onclick=function(){state.view=btn.dataset.view;render();};
+});
+document.querySelectorAll('.demo .seg button[data-theme]').forEach(function(btn){
+  btn.onclick=function(){
+    document.documentElement.setAttribute('data-theme',btn.dataset.theme);
+    document.querySelectorAll('.demo .seg button[data-theme]').forEach(function(b){b.setAttribute('aria-pressed',b===btn?'true':'false');});
+  };
+});
+
+render();
+})();
+</script>
+</body>
+</html>

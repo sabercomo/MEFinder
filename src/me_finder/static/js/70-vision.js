@@ -5,6 +5,8 @@
   // 本地 OCR 与托管 MinerU 各一份请求代次：轮询与安装/卸载等操作谁最后发起就采信谁，
   // 晚到的旧轮询不得覆盖操作后的状态、也不得停掉轮询（14-task-state.js）。
   var localOCRRequests = global.MEFinderTaskState.createLatest();
+  var localOCRSaving = false;
+  var localOCRReloadQueued = false;
   var managedMineruRequests = global.MEFinderTaskState.createLatest();
   var managedMineruView = global.MEFinderManagedMineruView;
 
@@ -33,6 +35,8 @@
       python: document.getElementById(prefix + '-python'),
       script: document.getElementById(prefix + '-script'),
       hint: document.getElementById(prefix + '-hint'),
+      toggleHint: document.getElementById(prefix + '-toggle-hint'),
+      savePaths: document.getElementById(prefix + '-save-paths'),
       managedState: document.getElementById(prefix + '-managed-state'),
       installHint: document.getElementById(prefix + '-install-hint'),
       progress: document.getElementById(prefix + '-progress'),
@@ -74,7 +78,8 @@
         fields.managedState.textContent = labels[managed.state]
           || (managed.update_available ? '可更新 · tag ' + managed.tag
             : installed ? '已安装 · tag ' + managed.tag
-            : managed.error ? '安装失败' : '未安装');
+            : managed.error ? '安装失败'
+            : engine.configured ? '手动配置' : '未安装');
       }
       if (fields.installHint) {
         var detail = managed.error ? '上次操作失败：' + managed.error : (managed.message || '');
@@ -104,9 +109,11 @@
       if (fields.uninstall) fields.uninstall.hidden = !installed || busy;
       if (fields.cancel) fields.cancel.hidden = !busy;
       if (fields.enabled) fields.enabled.disabled = busy;
-      // DESIGN.md §6：未安装时先完成安装，不摆一个看起来可用的启用开关。
       var enabledLabel = fields.enabled ? fields.enabled.closest('.ui-switch') : null;
-      if (enabledLabel) enabledLabel.hidden = !installed;
+      if (enabledLabel) {
+        enabledLabel.hidden = !installed && !engine.configured && !engine.enabled;
+        enabledLabel.querySelector('.ui-switch-text').textContent = fields.enabled.checked ? '开启' : '关闭';
+      }
       if (fields.installHint && installed && !busy && !managed.error) {
         fields.installHint.textContent = fields.enabled && fields.enabled.checked
           ? '导入图像型 PDF 时按文献语言自动使用，全程在本机运行'
@@ -114,6 +121,7 @@
       }
       if (fields.python) fields.python.disabled = busy;
       if (fields.script) fields.script.disabled = busy;
+      fields.savePaths.disabled = busy;
     });
     if (!installer.supported) {
       var status = document.getElementById('local-ocr-status');
@@ -152,20 +160,28 @@
       });
       var enabledLabel = fields.enabled ? fields.enabled.closest('.ui-switch') : null;
       if (enabledLabel) enabledLabel.hidden = true;
+      fields.savePaths.disabled = true;
     });
     showToast('读取本地 OCR 设置失败：' + reason, 'danger');
   }
 
-  function renderLocalOCRConfig(config) {
+  function syncLocalOCRPath(input, value, submittedValue) {
+    var clean = input.value === input.defaultValue || input.value.trim() === submittedValue;
+    var draft = input.value;
+    input.defaultValue = value;
+    input.value = clean ? value : draft;
+  }
+
+  function renderLocalOCRConfig(config, savedPaths) {
     var reload = document.getElementById('local-ocr-reload');
     if (reload) reload.hidden = true;
     parserStore.localOCRConfig = config;
     (config.engines || []).forEach(function(engine) {
       var fields = localOCREngineFields(engine.provider_id);
       if (fields.enabled) fields.enabled.checked = !!engine.enabled;
-      if (fields.python) fields.python.value = engine.python_path || '';
-      if (fields.script) fields.script.value = engine.script_path || '';
-      if (fields.hint) fields.hint.textContent = engine.configured ? '入口已配置' : '';
+      var submitted = savedPaths && savedPaths.provider_id === engine.provider_id ? savedPaths : {};
+      syncLocalOCRPath(fields.python, engine.python_path || '', submitted.python_path);
+      syncLocalOCRPath(fields.script, engine.script_path || '', submitted.script_path);
     });
     renderLocalOCRInstaller(config);
     var available = (config.engines || []).filter(function(engine) {
@@ -181,6 +197,10 @@
   async function loadLocalOCRConfig() {
     var status = document.getElementById('local-ocr-status');
     if (status && !parserStore.localOCRConfig) { status.className = 'settings-status'; status.textContent = '读取中…'; }
+    if (localOCRSaving) {
+      localOCRReloadQueued = true;
+      return;
+    }
     var token = localOCRRequests.begin();
     try {
       var response = await MEFinderApi.fetch('/api/local-ocr');
@@ -197,67 +217,63 @@
     loadGeneralModelConfig();
   }
 
-  function localOCRPayload() {
-    var modern = localOCREngineFields('ndlocr-lite');
-    var ancient = localOCREngineFields('ndlkotenocr-lite');
-    var current = parserStore.localOCRConfig || {};
-    var currentEngines = {};
-    (current.engines || []).forEach(function(engine) {
-      currentEngines[engine.provider_id] = engine;
-    });
-    return {
-      render_dpi: current.render_dpi || 200,
-      probe_pages: current.probe_pages || 3,
-      pages_per_slice: current.pages_per_slice || 10,
-      timeout_seconds_per_page: current.timeout_seconds_per_page || 300,
-      blank_ink_ratio: current.blank_ink_ratio == null ? 0.001 : current.blank_ink_ratio,
-      engines: {
-        'ndlocr-lite': {
-          enabled: !!modern.enabled.checked,
-          python_path: modern.python.value.trim(),
-          script_path: modern.script.value.trim(),
-          weights_sha256: (currentEngines['ndlocr-lite'] || {}).weights_sha256 || ''
-        },
-        'ndlkotenocr-lite': {
-          enabled: !!ancient.enabled.checked,
-          python_path: ancient.python.value.trim(),
-          script_path: ancient.script.value.trim(),
-          weights_sha256: (currentEngines['ndlkotenocr-lite'] || {}).weights_sha256 || ''
-        }
-      }
-    };
+  function localOCRPaths(fields) {
+    return {python_path: fields.python.value.trim(), script_path: fields.script.value.trim()};
   }
 
-  async function saveLocalOCRConfig() {
-    var button = document.getElementById('local-ocr-save');
-    var hint = document.getElementById('local-ocr-save-hint');
-    button.disabled = true;
-    button.textContent = '保存中…';
-    if (hint) hint.textContent = '';
+  async function saveLocalOCREngine(providerId, changes, trigger) {
+    var config = parserStore.localOCRConfig;
+    var fields = localOCREngineFields(providerId);
+    var toggle = 'enabled' in changes;
+    var engine = config && config.engines.find(function(item) { return item.provider_id === providerId; });
+    if (!engine || localOCRSaving) {
+      if (toggle && engine) trigger.checked = !!engine.enabled;
+      return;
+    }
+    var hint = toggle ? fields.toggleHint : fields.hint;
+    var previousFocus = document.activeElement === trigger;
+    var payload = Object.assign({action: 'update_engine', provider_id: providerId}, changes);
+    localOCRSaving = true;
+    localOCRRequests.invalidate();
+    trigger.disabled = true;
+    hint.classList.remove('is-error');
+    hint.textContent = '正在保存…';
+    if (toggle) trigger.closest('.ui-switch').querySelector('.ui-switch-text').textContent = trigger.checked ? '开启' : '关闭';
     try {
       var response = await MEFinderApi.fetch('/api/local-ocr', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(localOCRPayload())
+        body: JSON.stringify(payload)
       });
       var data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || '保存失败');
-      // 保存成功才作废在途轮询（它会把表单改回保存前的值）；失败时轮询照常继续。
-      localOCRRequests.invalidate();
-      renderLocalOCRConfig(data);
-      if (hint) hint.textContent = data.available ? '已保存；扫描类 PDF 将优先使用本地 OCR' : '已保存；当前不会改变导入路由';
+      renderLocalOCRConfig(data, toggle ? null : payload);
+      hint.textContent = toggle ? '已保存' : '路径已保存';
     } catch (error) {
-      if (hint) hint.textContent = '未保存：' + error.message;
+      if (toggle) {
+        trigger.checked = !!engine.enabled;
+        trigger.closest('.ui-switch').querySelector('.ui-switch-text').textContent = trigger.checked ? '开启' : '关闭';
+      }
+      trigger.disabled = false;
+      hint.classList.add('is-error');
+      hint.textContent = (toggle ? '未能保存，已恢复原设置：' : '路径未保存：') + error.message;
+      localOCRReloadQueued = localOCRReloadQueued || parserStore.localOCRPollTimer !== null;
     } finally {
-      button.disabled = false;
-      button.textContent = '保存设置';
+      localOCRSaving = false;
+      if (localOCRReloadQueued) {
+        localOCRReloadQueued = false;
+        stopLocalOCRPoll();
+        loadLocalOCRConfig();
+      }
+      if (previousFocus && document.activeElement === document.body) trigger.focus({preventScroll:true});
     }
   }
 
   async function manageLocalOCRComponent(providerId, action, button) {
+    var name = providerId === 'ndlocr-lite' ? '日文 OCR' : '古籍 OCR';
     if (action === 'uninstall' && !await showAppConfirm(
       '将删除该组件的模型、独立 Python 环境和自动填入的路径',
-      {title:'卸载本地 OCR？', tone:'warning', confirmText:'卸载'}
+      {title:'卸载「' + name + '」？', tone:'danger', confirmText:'卸载', focusCancel:true, compact:true}
     )) return;
     // 操作一开始就作废在途轮询：它带回的是操作前的快照。
     localOCRRequests.invalidate();
@@ -281,11 +297,12 @@
   }
 
   async function testLocalOCREngine(providerId, button) {
-    var payload = localOCRPayload().engines[providerId];
     var fields = localOCREngineFields(providerId);
+    var payload = localOCRPaths(fields);
     button.disabled = true;
     button.textContent = '测试中…';
-    if (fields.hint) fields.hint.textContent = '正在启动 CLI…';
+    fields.hint.classList.remove('is-error');
+    fields.hint.textContent = '正在启动 CLI…';
     try {
       var response = await MEFinderApi.fetch('/api/local-ocr/test', {
         method: 'POST',
@@ -296,7 +313,8 @@
       if (!response.ok || data.error) throw new Error(data.error || '启动失败');
       if (fields.hint) fields.hint.textContent = '启动成功 · ' + data.latency_ms + ' ms';
     } catch (error) {
-      if (fields.hint) fields.hint.textContent = '启动失败：' + error.message;
+      fields.hint.classList.add('is-error');
+      fields.hint.textContent = '启动失败：' + error.message;
     } finally {
       button.disabled = false;
       button.textContent = '测试手动入口';
@@ -314,31 +332,11 @@
       var resp = await MEFinderApi.fetch('/api/mineru-accounts');
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '读取失败');
-      parserStore.mineruAccounts = Array.isArray(data.accounts) ? data.accounts : [];
-      parserStore.mineruAccounts.sort(function(left, right) {
-        return String(left.display_name || left.account_id || '').localeCompare(
-          String(right.display_name || right.account_id || ''),
-          'zh-CN',
-          {numeric:true, sensitivity:'base'}
-        );
-      });
-      parserStore.mineruStatistics = data.statistics || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
       document.getElementById('mineru-api-base').value = data.api_base || 'https://mineru.net';
       var serviceAddress = document.getElementById('mineru-service-address');
       if (serviceAddress) serviceAddress.textContent = data.api_base || 'https://mineru.net';
       renderMineruLocalSettings(data.local_deployment || {}, managedMineruRequests.isCurrent(token));
-      renderMineruAccountList();
-      var addButton = document.getElementById('mineru-add-account');
-      if (addButton) addButton.hidden = !parserStore.mineruAccounts.length;
-      if (!parserStore.mineruAccounts.length) startAddMineruAccount(false);
-      var enabledCount = parserStore.mineruAccounts.filter(function(item) { return item.enabled && item.configured; }).length;
-      if (enabledCount) {
-        status.className = 'settings-status ready';
-        status.textContent = '已配置 ' + enabledCount + ' 个可用账号';
-      } else {
-        status.className = 'settings-status warning';
-        status.textContent = parserStore.mineruAccounts.length ? '账号均未启用' : '尚未添加账号';
-      }
+      renderMineruAccounts(data, status);
       parserStore.mineruConfigLoaded = true;
     } catch (e) {
       status.className = 'settings-status warning';
@@ -565,6 +563,30 @@
     }
   }
 
+  function renderMineruAccounts(data, status) {
+    parserStore.mineruAccounts = Array.isArray(data.accounts) ? data.accounts : [];
+    parserStore.mineruAccounts.sort(function(left, right) {
+      return String(left.display_name || left.account_id || '').localeCompare(
+        String(right.display_name || right.account_id || ''),
+        'zh-CN',
+        {numeric:true, sensitivity:'base'}
+      );
+    });
+    parserStore.mineruStatistics = data.statistics || {parsed_book_count:0, parsed_page_count:0, credentials:[]};
+    renderMineruAccountList();
+    var addButton = document.getElementById('mineru-add-account');
+    if (addButton) addButton.hidden = !parserStore.mineruAccounts.length;
+    if (!parserStore.mineruAccounts.length) startAddMineruAccount(false);
+    var enabledCount = parserStore.mineruAccounts.filter(function(item) { return item.enabled && item.configured; }).length;
+    if (enabledCount) {
+      status.className = 'settings-status ready';
+      status.textContent = '已配置 ' + enabledCount + ' 个可用账号';
+    } else {
+      status.className = 'settings-status warning';
+      status.textContent = parserStore.mineruAccounts.length ? '账号均未启用' : '尚未添加账号';
+    }
+  }
+
   function renderMineruAccountList() {
     // 讨论稿的行式布局：一行一个账号，第一行是名称与事实（密钥 / 检测结论 /
     // 到期），第二行是该账号的动作。解析量进「解析统计」，不挤在行里。
@@ -611,11 +633,16 @@
       row.appendChild(main);
       var actions = visionNode('div', 'mineru-account-actions');
       actions.appendChild(visionNode('span', 'mineru-account-aside', aside));
-      [['检测连接', 'testMineruConnection', 'action-btn quiet'], ['编辑', 'selectMineruAccount', 'action-btn']].forEach(function(action) {
+      [
+        ['检测连接', 'testMineruConnection', 'action-btn quiet'],
+        ['编辑', 'selectMineruAccount', 'action-btn'],
+        ['删除', 'deleteMineruAccount', 'action-btn mineru-remove-btn']
+      ].forEach(function(action) {
         var button = visionNode('button', action[2], action[0]);
         button.type = 'button';
         button.dataset.accountId = item.account_id;
         button.dataset.action = action[1];
+        if (action[1] === 'deleteMineruAccount') button.setAttribute('aria-label', '删除' + item.display_name);
         actions.appendChild(button);
       });
       row.appendChild(actions);
@@ -671,7 +698,6 @@
     }
     var editing = !!document.getElementById('mineru-account-id').value.trim();
     var test = document.getElementById('mineru-account-test'); if (test) test.hidden = !editing;
-    var remove = document.getElementById('mineru-account-remove'); if (remove) remove.hidden = !editing;
   }
 
   async function openMineruTokenPage() {
@@ -844,12 +870,20 @@
     }
   }
 
-  async function deleteMineruAccount(accountId) {
+  async function deleteMineruAccount(button) {
+    var list = document.getElementById('mineru-account-list');
+    if (list.getAttribute('aria-busy') === 'true') return;
+    var accountId = button.dataset.accountId;
     var item = parserStore.mineruAccounts.find(function(account) { return account.account_id === accountId; });
-    if (!item || !await showAppConfirm(
-      '将删除 MinerU 账号「' + item.display_name + '」及其在本机保存的 Token。已完成的解析统计会保留',
-      {title:'删除 MinerU 账号？', confirmText:'删除', tone:'danger'}
+    if (!item) return;
+    button.focus({preventScroll:true});
+    if (!await showAppConfirm(
+      '将移除本机保存的 Token，已有解析统计会保留',
+      {title:'删除「' + item.display_name + '」？', confirmText:'删除', tone:'danger', focusCancel:true, compact:true}
     )) return;
+    list.setAttribute('aria-busy', 'true');
+    button.setAttribute('aria-disabled', 'true');
+    button.textContent = '删除中…';
     try {
       var resp = await MEFinderApi.fetch('/api/mineru-accounts', {
         method: 'POST',
@@ -858,12 +892,22 @@
       });
       var data = await resp.json();
       if (!resp.ok || data.error) throw new Error(data.error || '删除失败');
+      var restoreFocus = document.activeElement === button;
+      var rowIndex = parserStore.mineruAccounts.findIndex(function(account) { return account.account_id === accountId; });
       if (parserStore.mineruSelectedAccountId === accountId) hideMineruEditor();
-      parserStore.mineruConfigLoaded = false;
-      await loadMineruConfig();
-      showToast('MinerU 账号已删除');
+      renderMineruAccounts(data, document.getElementById('mineru-config-status'));
+      if (restoreFocus) {
+        var buttons = list.querySelectorAll('.mineru-remove-btn');
+        var next = buttons[rowIndex] || buttons[rowIndex - 1] || document.getElementById('mineru-account-name');
+        next.focus({preventScroll:true});
+      }
+      showToast('已删除「' + item.display_name + '」', 'success');
     } catch (e) {
       showToast('删除 MinerU 账号失败：' + e.message, 'danger');
+    } finally {
+      list.removeAttribute('aria-busy');
+      button.removeAttribute('aria-disabled');
+      button.textContent = '删除';
     }
   }
 
@@ -1043,6 +1087,14 @@
   global.MEFinder = global.MEFinder || {};
   global.MEFinder.parserRuntime = parserRuntimeAPI;
 
+  MEFinderActions.register('toggleLocalOCREngine', function(event, target) {
+    saveLocalOCREngine(target.dataset.providerId, {enabled: target.checked}, target);
+  });
+  MEFinderActions.register('saveLocalOCRPaths', function(event, target) {
+    var providerId = target.dataset.providerId;
+    saveLocalOCREngine(providerId, localOCRPaths(localOCREngineFields(providerId)), target);
+  });
+
   MEFinderActions.register('toggleMineruAccountEnabled', function(event, target) {
     toggleMineruAccountEnabled(target);
   });
@@ -1053,12 +1105,15 @@
     selectMineruAccount(target.dataset.accountId);
   });
 
+  MEFinderActions.register('deleteMineruAccount', function(event, target) {
+    deleteMineruAccount(target);
+  });
+
   // 内联处理器仍需浏览器全局可见；模块间调用统一走 MEFinder.parserRuntime。
   global.saveGeneralModel = saveGeneralModel;
   global.testGeneralModel = testGeneralModel;
   global.fetchGeneralModelModels = fetchGeneralModelModels;
   global.loadLocalOCRConfig = loadLocalOCRConfig;
-  global.saveLocalOCRConfig = saveLocalOCRConfig;
   global.manageLocalOCRComponent = manageLocalOCRComponent;
   global.testLocalOCREngine = testLocalOCREngine;
   global.manageMineruComponent = manageMineruComponent;
@@ -1067,7 +1122,6 @@
   global.testMineruLocalConnection = testMineruLocalConnection;
   global.openMineruTokenPage = openMineruTokenPage;
   global.startAddMineruAccount = startAddMineruAccount;
-  global.deleteMineruAccount = deleteMineruAccount;
   global.closeMineruAccountDialog = closeMineruAccountDialog;
   global.toggleMineruSecret = toggleMineruSecret;
   global.saveMineruConfig = saveMineruConfig;

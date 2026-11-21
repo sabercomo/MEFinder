@@ -1,15 +1,17 @@
 """Export and restore curated runtime state and alignment recipes.
 
 Deliberately excludes the large regenerable artifacts — the SQLite index,
-the corpus PDFs, and the OCR/VLM page results — so a backup is a few hundred
-KB and survives moving to a new machine.
+the corpus PDFs, and the OCR/VLM page results. User-collected images are
+portable and included with their metadata.
 """
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
+import re
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -18,6 +20,8 @@ from typing import Dict, List, Optional
 
 from .document_groups import read_document_group_snapshot
 from .materials.backup import decode_materials_snapshot
+from .materials.images import MAX_IMAGE_BYTES, image_path, image_type, write_image
+from .errors import UserFacingError
 from .persistence.materials_store import read_materials_snapshot
 from .import_config_store import import_config_lock, save_import_config
 from .alignment.snapshots import read_alignment_recipe_snapshot
@@ -166,6 +170,11 @@ def create_backup(
             materials_snapshot = read_materials_snapshot(Path(index_path))
             archive.writestr(_MATERIALS_FILE, json.dumps(materials_snapshot, ensure_ascii=False))
             included.append(_MATERIALS_FILE)
+            for image in materials_snapshot["material_images"]:
+                image_file = image_path(runtime_root, image["digest"])
+                member = image_file.relative_to(runtime_root).as_posix()
+                archive.write(image_file, member)
+                included.append(member)
 
         for relative_dir in _MANIFEST_DIRS:
             manifest_dir = runtime_root / relative_dir
@@ -222,6 +231,8 @@ def _is_safe_member(name: str) -> bool:
     normalized = name.replace("\\", "/")
     if normalized.startswith("../") or ".." in normalized.split("/") or normalized.startswith("/"):
         return False
+    if re.fullmatch(r"materials/images/[0-9a-f]{64}", name):
+        return True
     return normalized in {
         _CONFIG_FILE,
         _DOCUMENT_GROUPS_FILE,
@@ -302,6 +313,22 @@ def restore_backup(
         if _MATERIALS_FILE in names:
             materials_snapshot = decode_materials_snapshot(archive.read(_MATERIALS_FILE))
             restored.append(_MATERIALS_FILE)
+            images = materials_snapshot.get("material_images", [])
+            for image in images:
+                member = image_path(runtime_root, image["digest"]).relative_to(runtime_root).as_posix()
+                try:
+                    info = archive.getinfo(member)
+                    if info.file_size > MAX_IMAGE_BYTES:
+                        raise ValueError
+                    data = archive.read(info)
+                    if hashlib.sha256(data).hexdigest() != image["digest"] or image_type(data) != image["mime"]:
+                        raise ValueError
+                except (KeyError, ValueError, UserFacingError) as exc:
+                    raise ValueError("备份中的素材图片缺失或损坏") from exc
+            for image in images:
+                member = image_path(runtime_root, image["digest"]).relative_to(runtime_root).as_posix()
+                write_image(runtime_root, image["digest"], archive.read(member))
+                restored.append(member)
 
         if _DOCUMENT_GROUPS_FILE in names:
             try:
