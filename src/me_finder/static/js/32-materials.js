@@ -693,40 +693,63 @@
     page.min = '1';
     page.value = '1';
     page.setAttribute('aria-label', 'PDF 页码');
+    const previousPage = button('上一页');
+    const nextPage = button('下一页');
     const loadPage = button('预览');
+    const pagination = node('div', 'materials-pdf-pagination');
+    pagination.append(previousPage, page, nextPage, loadPage);
     const controls = node('div', 'materials-pdf-controls');
-    controls.append(select, page, loadPage);
+    controls.append(select, pagination);
     const canvas = node('canvas', 'materials-crop-canvas');
     canvas.hidden = true;
     canvas.setAttribute('aria-label', 'PDF 页面预览。拖动框选截图区域');
     const message = node('p', 'materials-secondary', '选择 PDF 后预览页面');
     message.setAttribute('role', 'status');
     const cancel = button('取消');
-    const use = button('使用这张图');
+    const use = button('使用这张图', 'action-btn materials-pdf-use');
     use.disabled = true;
     const actions = node('div', 'materials-form-actions');
     actions.append(cancel, use);
     dialog.append(heading, controls, message, canvas, actions);
     document.body.append(dialog);
-    dialog.addEventListener('close', () => dialog.remove(), {once: true});
-    cancel.addEventListener('click', () => dialog.close());
-    dialog.showModal();
-    let result, image, start, box;
+    let result, image, start, box, draftBox;
+    let pageCount = 0;
+    let previewRequested = false;
     let generation = 0;
+    let previewTimer;
+    dialog.addEventListener('close', () => {
+      clearTimeout(previewTimer);
+      dialog.remove();
+    }, {once: true});
+    cancel.addEventListener('click', () => dialog.close());
     const context = canvas.getContext('2d');
+    const syncPagination = () => {
+      const number = page.valueAsNumber;
+      const valid = pageCount && Number.isInteger(number) && number >= 1 && number <= pageCount;
+      previousPage.disabled = !valid || number <= 1;
+      nextPage.disabled = !valid || number >= pageCount;
+    };
     const clear = () => {
+      clearTimeout(previewTimer);
       generation++;
-      result = image = box = start = null;
+      result = image = box = start = draftBox = null;
       canvas.hidden = true;
       use.disabled = true;
+      syncPagination();
+    };
+    const describeSelection = () => {
+      message.textContent = 'PDF 第 ' + result.page + ' / ' + pageCount
+        + (box ? ' 页 · 已框选局部' : ' 页 · 可使用整页，或拖动框选');
     };
     const draw = () => {
       context.drawImage(image, 0, 0);
-      if (!box) return;
+      const region = draftBox || box;
+      if (!region) return;
+      const [left, top, right, bottom] = region;
       context.strokeStyle = getComputedStyle(host).getPropertyValue('--accent-text').trim();
       context.lineWidth = 4;
-      context.strokeRect(box[0] * canvas.width, box[1] * canvas.height,
-        (box[2] - box[0]) * canvas.width, (box[3] - box[1]) * canvas.height);
+      context.strokeRect(left * canvas.width, top * canvas.height,
+        (right - left) * canvas.width, (bottom - top) * canvas.height);
     };
     const position = event => {
       const bounds = canvas.getBoundingClientRect();
@@ -736,7 +759,7 @@
     const move = event => {
       if (!start) return;
       const [x, y] = position(event);
-      box = [Math.min(x, start[0]), Math.min(y, start[1]), Math.max(x, start[0]), Math.max(y, start[1])];
+      draftBox = [Math.min(x, start[0]), Math.min(y, start[1]), Math.max(x, start[0]), Math.max(y, start[1])];
       draw();
     };
     canvas.addEventListener('pointerdown', event => {
@@ -747,20 +770,30 @@
       move(event);
     });
     canvas.addEventListener('pointermove', move);
+    const finishSelection = () => {
+      if (!start) return;
+      start = draftBox = null;
+      use.disabled = false;
+      draw();
+      describeSelection();
+    };
     canvas.addEventListener('pointerup', event => {
       if (!start) return;
       move(event);
-      start = null;
-      use.disabled = (box[2] - box[0]) * canvas.width < 2 || (box[3] - box[1]) * canvas.height < 2;
+      const [left, top, right, bottom] = draftBox;
+      if ((right - left) * canvas.width >= 2 && (bottom - top) * canvas.height >= 2) box = draftBox;
+      finishSelection();
     });
-    canvas.addEventListener('pointercancel', () => {
-      start = box = null;
-      if (image) draw();
-    });
+    canvas.addEventListener('pointercancel', finishSelection);
+    canvas.addEventListener('lostpointercapture', finishSelection);
     bindMaterialSelect(select, value => {
       selectMaterialOption(select, value, 'PDF 文献');
       page.value = '1';
+      page.removeAttribute('max');
+      pageCount = 0;
+      previewRequested = false;
       clear();
+      message.textContent = '选择 PDF 后预览页面';
     });
     options.addEventListener('keydown', event => {
       if (event.isComposing || event.ctrlKey || event.altKey || event.metaKey
@@ -774,42 +807,86 @@
       event.preventDefault();
       next.focus();
     });
-    page.addEventListener('input', clear);
-    loadPage.disabled = true;
-    loadPage.addEventListener('click', async () => {
+    async function previewPage() {
       clear();
-      if (!select.dataset.value) return;
+      const sourceId = select.dataset.value;
+      const number = page.valueAsNumber;
+      if (!sourceId) return;
+      if (!Number.isInteger(number) || number < 1 || (pageCount && number > pageCount)) {
+        message.textContent = pageCount ? '请输入 1–' + pageCount + ' 之间的页码' : '请输入有效页码';
+        return;
+      }
+      previewRequested = true;
       const current = generation;
-      message.textContent = '正在预览…';
+      message.textContent = '正在预览第 ' + number + ' 页…';
       try {
-        const response = await post({action: 'preview_pdf', source_id: select.dataset.value, page: page.valueAsNumber});
+        const response = await post({action: 'preview_pdf', source_id: sourceId, page: number});
         const bitmap = new Image();
         bitmap.src = response.data;
         await bitmap.decode();
         if (generation !== current || !dialog.open) return;
         result = response;
+        pageCount = response.page_count;
+        page.max = String(pageCount);
+        syncPagination();
         image = bitmap;
         canvas.width = image.naturalWidth;
         canvas.height = image.naturalHeight;
         canvas.hidden = false;
         draw();
-        message.textContent = 'PDF 第 ' + result.page + ' / ' + result.page_count + ' 页 · 拖动框选';
+        use.disabled = false;
+        describeSelection();
       } catch (failure) {
-        if (generation === current) message.textContent = failure.message;
+        if (generation === current && dialog.open) message.textContent = failure.message;
+      }
+    }
+    loadPage.disabled = true;
+    syncPagination();
+    loadPage.addEventListener('click', previewPage);
+    function stepPage(offset) {
+      page.value = String(page.valueAsNumber + offset);
+      previewPage();
+    }
+    previousPage.addEventListener('click', () => stepPage(-1));
+    nextPage.addEventListener('click', () => stepPage(1));
+    page.addEventListener('input', () => {
+      clear();
+      if (previewRequested) {
+        message.textContent = '正在更新页码…';
+        previewTimer = setTimeout(previewPage, 160);
+      }
+    });
+    page.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        previewPage();
       }
     });
     use.addEventListener('click', () => {
-      const [left, top, right, bottom] = box;
-      const crop = node('canvas');
-      crop.width = Math.ceil((right - left) * canvas.width);
-      crop.height = Math.ceil((bottom - top) * canvas.height);
-      crop.getContext('2d').drawImage(image, left * canvas.width, top * canvas.height,
-        crop.width, crop.height, 0, 0, crop.width, crop.height);
-      const label = result.title + (result.citation_page ? ' · 印刷页 ' + result.citation_page : '')
-        + ' · PDF 第 ' + result.page + ' 页';
-      onUse({source_id: result.source_id, page: result.page, revision: result.revision, box}, crop.toDataURL(), label);
-      dialog.close();
+      if (!result || use.disabled) return;
+      try {
+        let preview = result.data;
+        if (box) {
+          const [left, top, right, bottom] = box;
+          const width = (right - left) * canvas.width;
+          const height = (bottom - top) * canvas.height;
+          const crop = node('canvas');
+          crop.width = Math.ceil(width);
+          crop.height = Math.ceil(height);
+          crop.getContext('2d').drawImage(image, left * canvas.width, top * canvas.height,
+            width, height, 0, 0, crop.width, crop.height);
+          preview = crop.toDataURL();
+        }
+        const label = result.title + (result.citation_page ? ' · 印刷页 ' + result.citation_page : '')
+          + ' · PDF 第 ' + result.page + ' 页';
+        onUse({source_id: result.source_id, page: result.page, revision: result.revision,
+          box: box || [0, 0, 1, 1]}, preview, label);
+        dialog.close();
+      } catch {
+        message.textContent = '无法使用这张图，请重新预览后重试';
+      }
     });
+    dialog.showModal();
     try {
       const {source_files: sources} = await global.MEFinderApi.getJSON('/api/sources');
       for (const source of sources.filter(source => source.source_type === 'pdf')) {

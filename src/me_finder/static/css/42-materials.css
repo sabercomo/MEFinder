@@ -159,8 +159,14 @@
 .materials-image-viewport.is-expanded .materials-image-detail { max-width: none; max-height: none; }
 .materials-pdf-crop { width: min(640px, calc(100% - 24px)); }
 .materials-pdf-crop:has(.materials-pdf-select.is-open) { overflow: visible; }
-.materials-pdf-controls { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto; gap: 8px; margin-block: 8px; }
-.materials-pdf-controls > input { width: 100%; height: 36px; }
+.materials-pdf-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-block: 8px; }
+.materials-pdf-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.materials-pdf-pagination > input { width: 64px; height: 36px; }
+.materials-pdf-pagination > button { padding-inline: 8px; }
+.materials-pdf-pagination > button:disabled, .materials-pdf-use:disabled { opacity: .5; cursor: default; }
+@media (max-width: 535px) {
+  .materials-pdf-controls { grid-template-columns: minmax(0, 1fr); }
+}
 .materials-pdf-select .app-select-trigger { width: 100%; min-width: 0; font-size: 13px; }
 .materials-pdf-select .app-select-trigger:disabled { color: var(--text-tertiary); cursor: default; }
 .materials-pdf-select .app-select-menu {

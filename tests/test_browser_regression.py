@@ -103,6 +103,8 @@ class BrowserRegressionTests(unittest.TestCase):
         with fitz.open() as pdf:
             original = pdf.new_page(width=160, height=100)
             original.draw_rect(fitz.Rect(0, 0, 80, 100), fill=(0, 0, 1), color=None)
+            second = pdf.new_page(width=100, height=180)
+            second.draw_rect(second.rect, fill=(0, 1, 0), color=None)
             pdf.save(root / "material-source.pdf")
         with closing(sqlite3.connect(self.fixture.db)) as connection, connection:
             connection.execute(
@@ -1011,6 +1013,47 @@ class BrowserRegressionTests(unittest.TestCase):
         page.get_by_role("button", name="保存到素材库").click()
         page.get_by_role("button", name="打开原文").wait_for()
         page.wait_for_function("document.querySelector('#materials-detail img')?.naturalWidth > 100")
+
+    def test_material_pdf_preview_can_use_the_whole_page_without_dragging(self) -> None:
+        page = self.page
+        page.locator("#materials-nav").click()
+        page.locator("#materials-add-image").click()
+        page.get_by_role("button", name="从库内 PDF 截图…").click()
+        dialog = page.get_by_role("dialog", name="从 PDF 截图")
+        use = dialog.get_by_role("button", name="使用这张图")
+        self.assertTrue(use.is_disabled())
+        dialog.get_by_role("button", name=re.compile("^PDF 文献：")).click()
+        dialog.locator('#materials-pdf-options [data-value="pdf-de"]').click()
+        preview = dialog.get_by_role("button", name="预览", exact=True)
+        preview.click()
+        canvas = dialog.locator("canvas")
+        canvas.wait_for(state="visible")
+        first_width = canvas.evaluate("canvas => canvas.width")
+        self.assertTrue(use.is_enabled(), "预览后即使没有框选也能使用整页")
+
+        previous = dialog.get_by_role("button", name="上一页")
+        next_page = dialog.get_by_role("button", name="下一页")
+        page_number = dialog.get_by_role("spinbutton", name="PDF 页码")
+        self.assertTrue(previous.is_disabled())
+        next_page.click()
+        dialog.get_by_role("status").get_by_text("PDF 第 2 / 2 页", exact=False).wait_for()
+        self.assertEqual(page_number.input_value(), "2")
+        self.assertLess(canvas.evaluate("canvas => canvas.width"), first_width)
+        self.assertTrue(next_page.is_disabled())
+        previous.click()
+        dialog.get_by_role("status").get_by_text("PDF 第 1 / 2 页", exact=False).wait_for()
+        self.assertEqual(canvas.evaluate("canvas => canvas.width"), first_width)
+        page_number.press("ArrowUp")
+        dialog.get_by_role("status").get_by_text("PDF 第 2 / 2 页", exact=False).wait_for()
+        use.click()
+        dialog.wait_for(state="hidden")
+        page.locator(".materials-image-preview").wait_for(state="visible")
+        page.get_by_role("button", name="保存到素材库").click()
+        page.get_by_role("button", name="打开原文").wait_for()
+        with closing(sqlite3.connect(self.fixture.db)) as connection:
+            origin = json.loads(connection.execute("SELECT origin FROM material_images").fetchone()[0])
+        self.assertEqual(origin["box"], [0, 0, 1, 1])
+        self.assertEqual(origin["page"], 2)
 
     def test_every_main_view_keeps_hidden_elements_off_screen(self) -> None:
         for label in ("文献检索", "文献库", "译本对照", "文献导入", "设置"):

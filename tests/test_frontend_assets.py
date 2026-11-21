@@ -711,9 +711,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # MinerU 删除入口移到账号行，确认框默认聚焦取消。
     # 0.6.4：素材库页头上移，版本文字与间距变化。
     BASELINE_SHA256 = (
-        "2a9e216b361fef899099fb06f3c1b98d2238652370b257f1ef4931203909b86a"
+        "d5e85f78b4e490ae77dff5304eb055c71b73fb831f5b1059f1ddc66cb6997d1f"
     )
-    BASELINE_BYTES = 1917658
+    BASELINE_BYTES = 1920868
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
