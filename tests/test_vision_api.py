@@ -8,6 +8,7 @@ import sqlite3
 import unittest
 import urllib.error
 from contextlib import closing
+from http.client import IncompleteRead, RemoteDisconnected
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -725,6 +726,29 @@ class VisionAPIConfigTests(unittest.TestCase):
         self.assertTrue(
             image_item["image_url"]["url"].startswith("data:image/png;base64,")
         )
+
+    def test_openai_transport_failures_are_reported_to_settings(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "vision_api.local.json"
+            self._save_provider(path, name="测试接口", host="example.test")
+            config = load_vision_provider(None, path)
+            client = OpenAICompatibleVisionClient(config)
+            for error in (
+                RemoteDisconnected("Remote end closed connection without response"),
+                ConnectionResetError(10054, "Connection reset by peer"),
+                IncompleteRead(b"", 8),
+            ):
+                with self.subTest(error=type(error).__name__), patch(
+                    "urllib.request.OpenerDirector.open", side_effect=error,
+                ) as opener:
+                    with self.assertRaises(VisionAPIError) as connection:
+                        client.test_connection()
+                    self.assertTrue(connection.exception.stop_document)
+                    self.assertIn(str(error), str(connection.exception))
+                    with self.assertRaises(VisionAPIError) as discovery:
+                        discover_vision_models({"id": config.provider_id}, path)
+                    self.assertIn(str(error), str(discovery.exception))
+                    self.assertEqual(opener.call_count, 2)
 
     def test_chat_completion_reuses_successful_relay_authentication(self) -> None:
         opener = _CompatibilityOpener(

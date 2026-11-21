@@ -18,6 +18,7 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from http.client import HTTPException
 from typing import Dict, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
@@ -397,9 +398,10 @@ class OpenAICompatibleVisionClient:
                             f"{detail or '请求失败'}",
                             stop_document=True,
                         ) from exc
-                    except urllib.error.URLError as exc:
+                    except (OSError, HTTPException) as exc:
+                        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
                         raise VisionAPIError(
-                            f"{self.config.name} 网络请求失败：{exc.reason}",
+                            f"{self.config.name} 网络请求失败：{reason}",
                             stop_document=True,
                         ) from exc
                 if raw is not None:
@@ -559,9 +561,10 @@ def list_models(
                 else:
                     message = f"获取模型列表失败（HTTP {exc.code}），可以改为手动填写。"
                 raise VisionAPIError(message) from exc
-            except urllib.error.URLError as exc:
+            except (OSError, HTTPException) as exc:
+                reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
                 raise VisionAPIError(
-                    f"{provider_name} 网络请求失败：{exc.reason}"
+                    f"{provider_name} 网络请求失败：{reason}"
                 ) from exc
         if raw_bytes is not None:
             break
