@@ -903,7 +903,7 @@ class BrowserRegressionTests(unittest.TestCase):
         page.locator("#materials-image-import input[type=file]").set_input_files(
             {"name": "diagram.png", "mimeType": "image/png", "buffer": png}
         )
-        page.get_by_role("textbox", name="说明（可选）").fill("可检索图片说明")
+        page.get_by_role("textbox", name="图片说明（可选）").fill("可检索图片说明")
         page.get_by_role("button", name="保存到素材库").click()
         image = page.locator("#materials-detail img")
         image.wait_for(state="visible")
@@ -948,9 +948,10 @@ class BrowserRegressionTests(unittest.TestCase):
                 }""",
                 {"name": event_name, "bytes": list(png)},
             )
-            page.locator(".materials-image-preview").wait_for(state="visible")
+            page.locator(".image-workbench-image").wait_for(state="visible")
+            self.assertTrue(page.get_by_role("button", name="裁剪", exact=True).is_hidden())
             page.get_by_role("button", name="移除", exact=True).click()
-            page.get_by_role("button", name="返回素材库").click()
+            page.get_by_role("button", name="取消", exact=True).click()
         page.get_by_role("button", name="新建标签").click()
         tag_dialog = page.get_by_role("dialog", name="新建标签")
         tag_dialog.wait_for()
@@ -960,14 +961,16 @@ class BrowserRegressionTests(unittest.TestCase):
         self.assertAlmostEqual(tag_bounds["y"] + tag_bounds["height"] / 2, viewport["height"] / 2, delta=1)
         tag_dialog.get_by_role("button", name="取消").click()
 
-        for width in (1000, 535, 375):
+        for width in (1000, 535, 375, 320):
             page.set_viewport_size({"width": width, "height": 700})
             page.locator("#materials-add-image").click()
             self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= innerWidth"))
-            screenshot = page.get_by_role("button", name="从库内 PDF 截图…")
-            self.assertEqual(screenshot.bounding_box()["height"], 34)
-            self.assertEqual(page.get_by_role("button", name="选择文件").bounding_box()["height"], 34)
-            screenshot.click()
+            choose_image = page.get_by_role("button", name="选择图片", exact=True)
+            self.assertEqual(choose_image.bounding_box()["height"], 36)
+            page.get_by_role("tab", name="从 PDF 截取").click()
+            choose_pdf = page.get_by_role("button", name="选择 PDF", exact=True)
+            self.assertEqual(choose_pdf.bounding_box()["height"], 36)
+            choose_pdf.click()
             crop_dialog = page.get_by_role("dialog", name="从 PDF 截图")
             crop_dialog.wait_for()
             crop_bounds = crop_dialog.bounding_box()
@@ -983,10 +986,11 @@ class BrowserRegressionTests(unittest.TestCase):
             self.assertFalse(pdf_list.is_visible())
             self.assertTrue(crop_dialog.is_visible())
             crop_dialog.get_by_role("button", name="取消", exact=True).click()
-            page.get_by_role("button", name="返回素材库").click()
+            page.get_by_role("button", name="取消", exact=True).click()
 
         page.locator("#materials-add-image").click()
-        page.get_by_role("button", name="从库内 PDF 截图…").click()
+        page.get_by_role("tab", name="从 PDF 截取").click()
+        page.get_by_role("button", name="选择 PDF", exact=True).click()
         trigger = page.get_by_role("button", name=re.compile("^PDF 文献："))
         trigger.wait_for()
         trigger.press("ArrowDown")
@@ -1009,7 +1013,30 @@ class BrowserRegressionTests(unittest.TestCase):
         page.mouse.down()
         page.mouse.move(bounds["x"] + bounds["width"] * .40, bounds["y"] + bounds["height"] * .70)
         page.mouse.up()
-        page.get_by_role("button", name="使用这张图").click()
+        dialog = page.get_by_role("dialog", name="从 PDF 截图")
+        selection = dialog.locator(".materials-crop-selection")
+        original = selection.bounding_box()
+        handle = dialog.get_by_role("button", name="调整选区右下角").bounding_box()
+        x, y = handle["x"] + handle["width"] / 2, handle["y"] + handle["height"] / 2
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x + 35, y - 20, steps=4)
+        page.mouse.up()
+        resized = selection.bounding_box()
+        self.assertAlmostEqual(resized["width"] - original["width"], 35, delta=1)
+        self.assertAlmostEqual(resized["height"] - original["height"], -20, delta=1)
+        dialog.get_by_role("button", name="使用选区").click()
+        image = page.locator(".image-workbench-image")
+        selected_url = image.get_attribute("src")
+        note = page.get_by_role("textbox", name="图片说明（可选）")
+        note.fill("保留说明")
+        page.get_by_role("button", name="裁剪", exact=True).click()
+        dialog.get_by_role("status").get_by_text("PDF 第 1 / 2 页", exact=False).wait_for()
+        self.assertEqual(selection.bounding_box(), resized)
+        dialog.get_by_role("button", name="清除选区").click()
+        dialog.get_by_role("button", name="取消").click()
+        self.assertEqual(image.get_attribute("src"), selected_url)
+        self.assertEqual(note.input_value(), "保留说明")
         page.get_by_role("button", name="保存到素材库").click()
         page.get_by_role("button", name="打开原文").wait_for()
         page.wait_for_function("document.querySelector('#materials-detail img')?.naturalWidth > 100")
@@ -1018,9 +1045,10 @@ class BrowserRegressionTests(unittest.TestCase):
         page = self.page
         page.locator("#materials-nav").click()
         page.locator("#materials-add-image").click()
-        page.get_by_role("button", name="从库内 PDF 截图…").click()
+        page.get_by_role("tab", name="从 PDF 截取").click()
+        page.get_by_role("button", name="选择 PDF", exact=True).click()
         dialog = page.get_by_role("dialog", name="从 PDF 截图")
-        use = dialog.get_by_role("button", name="使用这张图")
+        use = dialog.get_by_role("button", name="使用整页", exact=True)
         self.assertTrue(use.is_disabled())
         dialog.get_by_role("button", name=re.compile("^PDF 文献：")).click()
         dialog.locator('#materials-pdf-options [data-value="pdf-de"]').click()
@@ -1035,8 +1063,29 @@ class BrowserRegressionTests(unittest.TestCase):
         next_page = dialog.get_by_role("button", name="下一页")
         page_number = dialog.get_by_role("spinbutton", name="PDF 页码")
         self.assertTrue(previous.is_disabled())
-        next_page.click()
+        held = []
+
+        def hold_preview(route: Route) -> None:
+            if route.request.method == "POST" and route.request.post_data_json.get("action") == "preview_pdf":
+                held.append(route)
+            else:
+                route.continue_()
+
+        footer = dialog.locator(".materials-form-actions")
+        geometry = (dialog.bounding_box(), footer.bounding_box())
+        page.route("**/api/materials", hold_preview)
+        try:
+            next_page.click()
+            dialog.get_by_role("status").get_by_text("正在预览第 2 页", exact=False).wait_for()
+            self.assertEqual((dialog.bounding_box(), footer.bounding_box()), geometry)
+            self.assertTrue(canvas.is_visible())
+            self.assertTrue(use.is_disabled())
+        finally:
+            for route in held:
+                route.continue_()
+            page.unroute("**/api/materials", hold_preview)
         dialog.get_by_role("status").get_by_text("PDF 第 2 / 2 页", exact=False).wait_for()
+        self.assertEqual((dialog.bounding_box(), footer.bounding_box()), geometry)
         self.assertEqual(page_number.input_value(), "2")
         self.assertLess(canvas.evaluate("canvas => canvas.width"), first_width)
         self.assertTrue(next_page.is_disabled())
@@ -1047,13 +1096,77 @@ class BrowserRegressionTests(unittest.TestCase):
         dialog.get_by_role("status").get_by_text("PDF 第 2 / 2 页", exact=False).wait_for()
         use.click()
         dialog.wait_for(state="hidden")
-        page.locator(".materials-image-preview").wait_for(state="visible")
+        page.locator(".image-workbench-image").wait_for(state="visible")
+        self.assertTrue(page.get_by_role("button", name="裁剪", exact=True).is_visible())
         page.get_by_role("button", name="保存到素材库").click()
         page.get_by_role("button", name="打开原文").wait_for()
         with closing(sqlite3.connect(self.fixture.db)) as connection:
             origin = json.loads(connection.execute("SELECT origin FROM material_images").fetchone()[0])
         self.assertEqual(origin["box"], [0, 0, 1, 1])
         self.assertEqual(origin["page"], 2)
+
+    def test_image_import_shows_existing_tags_and_keeps_draft_on_save_failure(self) -> None:
+        page = self.page
+        for path in ("理论/异化", "理论/社会学"):
+            response = page.request.post(self.base_url + "/api/materials", data={"action": "create_tag", "path": path})
+            self.assertTrue(response.ok)
+        page.locator("#materials-nav").click()
+        page.locator("#materials-add-image").click()
+        editor = page.locator("#materials-image-import")
+        tag = editor.get_by_role("button", name="理论 / 异化", exact=True)
+        search = editor.get_by_role("searchbox", name="搜索或新建标签")
+        tag.wait_for(timeout=4000)
+        self.assertTrue(search.is_visible())
+        self.assertEqual(editor.get_by_text("归类", exact=True).count(), 0)
+        tag.click()
+        self.assertEqual(tag.get_attribute("aria-pressed"), "true")
+        tag.click()
+        self.assertEqual(tag.get_attribute("aria-pressed"), "false")
+        tag.click()
+        search.fill("调研/记录")
+        search.press("Enter")
+        new_tag = editor.get_by_role("button", name="调研 / 记录", exact=True)
+        self.assertEqual(new_tag.get_attribute("aria-pressed"), "true")
+
+        with fitz.open() as pdf:
+            png = pdf.new_page(width=260, height=190).get_pixmap().tobytes("png")
+        editor.locator("input[type=file]").set_input_files(
+            {"name": "observation.png", "mimeType": "image/png", "buffer": png}
+        )
+        image = editor.locator(".image-workbench-image")
+        image.wait_for(state="visible")
+        before = image.get_attribute("src")
+        note = editor.get_by_role("textbox", name="图片说明（可选）")
+        note.fill("观察记录")
+        editor.get_by_role("tab", name="本地图片").press("ArrowRight")
+        self.assertEqual(editor.get_by_role("tab", name="从 PDF 截取").get_attribute("aria-selected"), "true")
+        self.assertTrue(editor.get_by_role("button", name="保存到素材库").is_disabled())
+        editor.get_by_role("tab", name="本地图片").click()
+        self.assertEqual(image.get_attribute("src"), before)
+        self.assertEqual(note.input_value(), "观察记录")
+        self.assertEqual(tag.get_attribute("aria-pressed"), "true")
+
+        def fail_save(route: Route) -> None:
+            if route.request.method == "POST" and route.request.post_data_json.get("action") == "collect_image":
+                route.fulfill(status=500, json={"error": "暂时无法写入"})
+            else:
+                route.continue_()
+
+        save = editor.get_by_role("button", name="保存到素材库")
+        page.route("**/api/materials", fail_save)
+        try:
+            save.click()
+            editor.get_by_role("status").get_by_text("保存失败 · 暂时无法写入").wait_for()
+        finally:
+            page.unroute("**/api/materials", fail_save)
+        self.assertEqual(image.get_attribute("src"), before)
+        self.assertEqual(note.input_value(), "观察记录")
+        save.click()
+        editor.wait_for(state="hidden")
+        page.locator("#materials-detail img").wait_for(state="visible")
+        with closing(sqlite3.connect(self.fixture.db)) as connection:
+            rows = connection.execute("SELECT path FROM material_image_tags ORDER BY path").fetchall()
+        self.assertEqual(rows, [("理论/异化",), ("调研/记录",)])
 
     def test_every_main_view_keeps_hidden_elements_off_screen(self) -> None:
         for label in ("文献检索", "文献库", "译本对照", "文献导入", "设置"):
