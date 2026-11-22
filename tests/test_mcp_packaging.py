@@ -112,8 +112,8 @@ class MCPPackagingTests(unittest.TestCase):
             self.windows_workflow,
         )
         self.assertIn("gh release download v0.4.9", self.windows_workflow)
-        self.assertIn("MEFinder-v0.6.4-windows-setup.exe", self.windows_workflow)
-        self.assertIn("MEFinder-v0.6.4-windows-portable.zip", self.windows_workflow)
+        self.assertIn("MEFinder-v0.6.5-windows-setup.exe", self.windows_workflow)
+        self.assertIn("MEFinder-v0.6.5-windows-portable.zip", self.windows_workflow)
         self.assertIn("upgrade-sentinel.txt", self.windows_workflow)
         self.assertIn("unins000.exe", self.windows_workflow)
         self.assertIn("portable-moved", self.windows_workflow)
@@ -123,7 +123,7 @@ class MCPPackagingTests(unittest.TestCase):
         self,
     ) -> None:
         self.assertIn("contents: write", self.windows_workflow)
-        self.assertIn("gh release upload v0.6.4", self.windows_workflow)
+        self.assertIn("gh release upload v0.6.5", self.windows_workflow)
         self.assertIn("$release.isDraft", self.windows_workflow)
         self.assertLess(
             self.windows_workflow.index("Publish unsigned Windows artifacts"),

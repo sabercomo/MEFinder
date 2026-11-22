@@ -710,8 +710,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.6.3：检索结果按原文选区复制和收藏，标签选择器就地展开。
     # MinerU 删除入口移到账号行，确认框默认聚焦取消。
     # 0.6.4：素材库页头上移，版本文字与间距变化。
+    # 0.6.5：版本文字更新，装配字节数不变。
     BASELINE_SHA256 = (
-        "3872d4a9f7932f1f33d99a6baa0958108efdbd9579d400ee99aaa8e1608c54f9"
+        "97562fddb158f0a2335b59211c6419c210d29aaaa2095185c75631f165109b61"
     )
     BASELINE_BYTES = 1940404
 
