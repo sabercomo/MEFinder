@@ -18,3 +18,9 @@
 没有在途摘要时直接发起共享摘要请求；已有请求时继续复用。摘要完成后启动 Zotero 界面状态观察和空闲对齐预取。摘要失败沿用原异常出口；检索、页码、数据库、HTTP 与 MCP 契约不变。
 
 回归：`test_startup_waits_for_catalog_before_works_on_default_search_page`、`test_default_startup_finishes_catalog_before_alignment_overview`。
+
+## 2026-11-22 — 启动时重复读取摘要
+
+- **事实**：默认搜索页先读摘要，再启动 Zotero 状态观察。首次状态发现已有同步历史就刷新文献库，重新读取摘要，并使已发出的对齐总览失效。用 462 篇文献库的隔离副本复现，入口出现前最长的请求是文献摘要。见 [本次计时报告](../../reports/translation-work-startup-2026-11-22.md)。
+- **修改**：默认启动先观察 Zotero 状态，再读取或复用共享摘要。首次观察时，若目录尚未开始请求，直接使用接下来的首次摘要。若已有目录或在途请求，继续刷新以覆盖真正的目录变化。对齐总览仍在摘要之后发出，后续同步仍会刷新文献库。
+- **验证**：`test_bootstrap_does_not_refetch_catalog_for_existing_zotero_history` 修复前观察到两次摘要，修复后一次。Chrome 复核摘要先于总览、各发一次，以及之后同步在各页刷新。页面样式及数据契约沿用现有实现。

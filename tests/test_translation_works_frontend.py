@@ -291,7 +291,7 @@ queue.configure({pairKey, isRunning:()=>!!works.running, canGenerate:()=>true, g
 
     @unittest.skipUnless(shutil.which("node"), "Node unavailable")
     def test_startup_waits_for_catalog_before_works_on_default_search_page(self) -> None:
-        startup = INIT_JS[INIT_JS.index("(searchStore.libraryCatalogPromise"):]
+        startup = INIT_JS[INIT_JS.index("MEFinder.zotero.start("):]
         script = r"""
 const assert=require('assert/strict');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -302,12 +302,12 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
   const searchStore={libraryCatalogPromise:alreadyRequested?pending:null};
   const fetchLibraryCatalog=()=>{requests++;searchStore.libraryCatalogPromise=pending;return pending;};
   const window={requestIdleCallback:run=>{events.push('idle');run();}};
-  const MEFinder={zotero:{start:()=>events.push('zotero')},works:{load:()=>{
+  const MEFinder={zotero:{start:async()=>events.push('zotero')},works:{load:()=>{
    events.push('overview');return Promise.resolve();
   }}};
   eval(STARTUP);
   await flush();
-  assert.deepEqual(events,[],'background work must wait for the catalog response');
+  assert.deepEqual(events,['zotero'],'alignment overview must wait for the catalog response');
   assert.equal(requests,alreadyRequested?0:1,'start or reuse one summary request');
   release();await flush();
   assert.deepEqual(events,['zotero','idle','overview']);
@@ -381,7 +381,7 @@ const showToast=message=>errors.push(message), render=()=>{renders++;}, invalida
         bodies += "\n" + _function_body(search, "function fetchLibraryCatalog(force)")
         bodies += "\n" + _function_body(LIBRARY_JS, "async function refreshLibraryData()")
         bodies += "\n" + _function_body(imports, "function pollImportJob(id)")
-        bodies += "\n" + _function_body(zotero, "async function loadStatus()")
+        bodies += "\n" + _function_body(zotero, "async function loadStatus(options)")
         script = r"""
 const assert=require('assert/strict');
 const sourceId='new-chinese-pdf';

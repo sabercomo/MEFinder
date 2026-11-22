@@ -228,25 +228,25 @@ function cacheOldCatalog() {
 })().catch(error => { console.error(error); process.exitCode = 1; });
 """)
 
-    def test_bootstrap_starts_monitor_after_initial_catalog_without_opening_settings(self):
+    def test_bootstrap_does_not_refetch_catalog_for_existing_zotero_history(self):
         self.run_sync_script(r"""
 (async () => {
   for (const name of ['configureDesktopPlatformOptions', 'setupScanDirectoryControls',
     'renderScanDirectories', 'loadPreferences', 'updateSearchDocumentLabel', 'navigateTo']) global[name] = noop;
-  document.getElementById = id => id === 'index-count' ? {} : null;
+  document.getElementById = id => id === 'index-count' ? {} : id === 'query' ? {focus: noop} : null;
   MEFinder.imports = {setupLibraryDragSelection: noop, setupScanResultDragSelection: noop,
     loadResumableImports: noop, loadActiveImports: noop, initDropZone: noop};
   MEFinder.library.setupKeyboardNav = noop;
   MEFinder.library.syncViewButtons = noop;
   MEFinder.parserRuntime.bindMineruAccountDialogDismissal = noop;
-  let releaseCatalog;
-  searchStore.libraryCatalogPromise = new Promise(resolve => { releaseCatalog = resolve; });
+  currentPage = 'search';
+  status.documents.linked = 2;
+  status.last_success_at = '2026-11-21T01:00:00Z';
   global.renderSearchDocumentOptions = noop;
   load('90-init.js');
-  assert.equal(statusCalls, 0);
-  releaseCatalog({items: []});
   await flush();
   assert.equal(statusCalls, 1);
+  assert.equal(catalogCalls, 1, 'old sync history must not refetch the initial catalog');
   assert.ok([...timers.values()].some(timer => timer.ms === 10000));
 })().catch(error => { console.error(error); process.exitCode = 1; });
 """)

@@ -101,11 +101,11 @@ const requestedInitialPage = new URLSearchParams(window.location.search).get('pa
 const initialPage = requestedInitialPage === 'calibration' ? 'library' : requestedInitialPage;
 if (['search','library','import','settings'].indexOf(initialPage) >= 0) navigateTo(initialPage);
 if (currentPage === 'search') document.getElementById('query').focus();
-// 作品状态在首屏摘要回来、浏览器空闲后再预取：总览持有索引锁，冷启动时核对
-// 各版本正文范围要数秒，先发会让文献库排在它后面。默认搜索页也先发摘要，
-// 不能在尚无摘要请求时跳过等待。进入「译本对照」仍立即加载。
-(searchStore.libraryCatalogPromise || fetchLibraryCatalog()).catch(function () {}).then(function () {
-  MEFinder.zotero.start();
+// 先读取 Zotero 同步基线，避免刚读完摘要就因历史同步状态再读一遍。
+// 轻量总览仍等摘要返回，避免正文范围冷读抢占索引锁。
+MEFinder.zotero.start({beforeInitialCatalog: true}).then(function () {
+  return searchStore.libraryCatalogPromise || fetchLibraryCatalog();
+}).catch(function () {}).then(function () {
   (window.requestIdleCallback || function (run) { return setTimeout(run, 0); })(function () {
     MEFinder.works.load().catch(function () {});
   }, {timeout: 2000});

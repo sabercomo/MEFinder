@@ -144,6 +144,10 @@ class BrowserRegressionTests(unittest.TestCase):
 
     def test_default_startup_finishes_catalog_before_alignment_overview(self) -> None:
         events = []
+        self.page.route("**/api/zotero/status", lambda route: route.fulfill(json={
+            "phase": "idle", "rows": [], "documents": {"linked": 2},
+            "last_success_at": "2026-11-21T01:00:00Z",
+        }))
         self.page.on("request", lambda request: events.append("overview")
                      if "/api/translation-works/overview?" in request.url else None)
         self.page.on("requestfinished", lambda request: events.append("summary")
@@ -152,6 +156,8 @@ class BrowserRegressionTests(unittest.TestCase):
         self.wait_until(lambda: "overview" in events and "summary" in events,
                         "startup must load the shared catalog and works")
         self.assertLess(events.index("summary"), events.index("overview"), events)
+        self.page.wait_for_load_state("networkidle")
+        self.assertEqual(events, ["summary", "overview"])
         self.navigate("文献库")
         self.page.locator("#library-list .library-entry").first.wait_for()
 

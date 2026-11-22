@@ -330,7 +330,7 @@
 
   // ── loading & polling ──
 
-  async function loadStatus() {
+  async function loadStatus(options) {
     var token = statusRequest.begin();
     clearTimeout(state.pollTimer);
     try {
@@ -341,8 +341,10 @@
       // 明细只含最近一趟同步；全库 linked 数量还能覆盖后台补交的完成。
       var linked = (status.documents || {}).linked || 0;
       var stamp = JSON.stringify([linked, status.last_success_at || '', status.finished_at || '']);
+      // 启动时若目录还没开始读取，随后的首次摘要会包含这次同步状态。
       var changed = state.catalogStamp === null
-        ? linked > 0 || !!status.last_success_at || !!status.finished_at
+        ? (!options?.beforeInitialCatalog || searchStore.libraryCatalog || searchStore.libraryCatalogPromise) &&
+          (linked > 0 || !!status.last_success_at || !!status.finished_at)
         : stamp !== state.catalogStamp;
       state.catalogStamp = stamp;
       if (changed) {
