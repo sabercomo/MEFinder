@@ -502,6 +502,7 @@ const requestJSON=()=>new Promise((resolve,reject)=>{finishGet=resolve;failGet=r
 const assert = require('assert/strict');
 const works = {loaded:false,loadSerial:0,currentId:'',hiddenGroupIds:new Set()};
 const currentPage = 'library', libraryStore = {loaded:false}, global = {MEFinder:{}};
+const document = {getElementById:()=>null};
 const showToast=()=>{}, renderSidebarEntry=()=>{}, syncLibraryAssignButton=()=>{};
 const visibleGroups=()=>[], groupById=()=>null;
 const loadAvailability=async()=>{}, ensureCatalog=async()=>{};

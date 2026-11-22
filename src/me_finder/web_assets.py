@@ -87,8 +87,10 @@ READER_WINDOW_HTML = (
 )
 
 
-def render_html(theme: str, *, reader_window: bool = False) -> str:
-    """Inject the persisted theme before the browser paints the first frame."""
+def render_html(
+    theme: str, *, reader_window: bool = False, works_navigation: str = "hidden"
+) -> str:
+    """Render the theme and work entry before the first paint."""
 
     if reader_window:
         return READER_WINDOW_HTML.replace('data-theme="frost-blue"', f'data-theme="{theme}"', 1)
@@ -100,4 +102,15 @@ def render_html(theme: str, *, reader_window: bool = False) -> str:
         else ""
     )
     replacement = f'<html lang="zh-CN" data-theme="{theme}"{shell_attribute}>'
-    return HTML.replace(marker, replacement, 1)
+    html = HTML.replace(marker, replacement, 1)
+    if works_navigation in {"visible", "readonly"}:
+        title = "译本对照（只读）" if works_navigation == "readonly" else "译本对照"
+        html = html.replace(
+            'data-page="works" hidden title="译本对照"',
+            f'data-page="works" title="{title}"',
+            1,
+        )
+    if works_navigation == "readonly":
+        tag = '<span class="sidebar-item-tag" hidden>只读</span>'
+        html = html.replace(tag, tag.replace(" hidden", ""), 1)
+    return html

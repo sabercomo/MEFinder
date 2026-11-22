@@ -173,6 +173,12 @@ def make_handler(
     calibration_get_routes, _calibration_post_routes = assemble_calibration_config_routes(
         CalibrationConfigController(root=runtime.root, load_import_config=load_import_config)
     )
+
+    def render_page(theme: str, *, reader_window: bool = False) -> str:
+        if reader_window:
+            return render_html(theme, reader_window=True)
+        return render_html(theme, works_navigation=runtime.works_navigation())
+
     Handler = make_http_handler(
         WebHTTPContext(
             root=runtime.root,
@@ -189,7 +195,7 @@ def make_handler(
                     search_post_routes,
                 ],
             ),
-            render_html=render_html,
+            render_html=render_page,
             package_dir=PACKAGE_DIR,
             read_preferences=read_preferences,
             resolve_preferences_path=resolve_preferences_path,

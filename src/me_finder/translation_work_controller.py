@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Callable, Dict, Mapping, Protocol, Sequence, Tuple, TypeVar
 
 from .alignment.text_alignment import (
     AlignmentNotFound,
@@ -12,9 +12,14 @@ from .alignment.text_alignment import (
     TextAlignmentError,
 )
 from .alignment import translation_works
+from .persistence.translation_work_reads import has_work_alignments
 
 WorkResponse = Tuple[int, Dict[str, object]]
-ReadyRunner = Callable[[Callable[[Path], Dict[str, object]]], Optional[Dict[str, object]]]
+T = TypeVar("T")
+
+
+class ReadyRunner(Protocol):
+    def __call__(self, operation: Callable[[Path], T], /) -> T | None: ...
 
 
 def _single(params: Mapping[str, Sequence[object]], name: str) -> object:
@@ -42,6 +47,23 @@ class TranslationWorkController:
         self._run_when_ready = run_when_ready
         self._active_model_id = active_model_id
         self._log_exception = log_exception
+
+    def navigation_state(self, compute_status: Callable[[], Mapping[str, object]]) -> str:
+        """Check entry visibility without loading the catalog or pair overview."""
+
+        try:
+            available = compute_status().get("available")
+        except (OSError, ValueError):
+            self._log_exception("alignment runtime status lookup failed")
+            available = None
+        if available is True:
+            return "visible"
+        try:
+            if self._run_when_ready(has_work_alignments):
+                return "readonly" if available is False else "visible"
+        except (OSError, sqlite3.Error):
+            self._log_exception("saved work alignments lookup failed")
+        return "hidden"
 
     def overview(self, params: Mapping[str, Sequence[object]] | None = None) -> WorkResponse:
         model_id = self._active_model_id()

@@ -8,7 +8,11 @@ indirect routes) stay in ``translation_works``; this module only fetches rows.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
+from pathlib import Path
 from typing import List, Optional, Sequence
+
+from .connection import connect_index, table_exists
 
 # Span tables per reader kind; internal constants, never caller input.
 _SPAN_TABLES = {
@@ -89,6 +93,17 @@ def read_latest_language_code(connection: sqlite3.Connection, source_id: str) ->
 
 
 # ── segments, runs and links ───────────────────────────────────────────────
+
+def has_work_alignments(db_path: Path) -> bool:
+    """Check for an alignment attached to a work without loading the runs."""
+
+    with closing(connect_index(db_path, readonly_uri=True)) as connection:
+        if not all(table_exists(connection, table) for table in ("document_groups", "alignment_runs")):
+            return False
+        return connection.execute(
+            "SELECT 1 FROM alignment_runs r JOIN document_groups g "
+            "ON g.document_group_id = r.document_group_id LIMIT 1"
+        ).fetchone() is not None
 
 
 def read_segment_texts(connection: sqlite3.Connection, segment_set_id: str) -> List[str]:

@@ -52,7 +52,7 @@
         <span class="sidebar-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg></span>
         <span>素材库</span>
       </button>
-      <button class="sidebar-item" data-page="works" title="译本对照" data-action="templateClick008" hidden>
+      <button class="sidebar-item" data-page="works" hidden title="译本对照" data-action="templateClick008">
         <span class="sidebar-icon">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3.5" width="7" height="13" rx="1.5"/><rect x="11" y="3.5" width="7" height="13" rx="1.5"/></svg>
         </span>
@@ -381,7 +381,13 @@
     </div>
 
     <!-- ── Translation Works Page ── -->
-    <div id="page-works" class="page" aria-label="译本对照"></div>
+    <div id="page-works" class="page" aria-label="译本对照">
+      <aside class="tw-works" aria-label="作品">
+        <div class="tw-works-head"><h1 class="tw-works-title">译本对照</h1></div>
+        <div class="tw-work-list" role="status"><p id="tw-initial-status" class="tw-note tw-list-empty">正在读取作品…</p></div>
+      </aside>
+      <section class="tw-work"></section>
+    </div>
 
     <!-- ── Import Page ── -->
     <div id="page-import" class="page">

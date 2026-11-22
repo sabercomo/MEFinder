@@ -92,6 +92,19 @@ class _ThreeVersionWork(unittest.TestCase):
 
 
 class TranslationWorkOverviewTests(_ThreeVersionWork):
+    def test_navigation_uses_runtime_or_saved_alignments(self) -> None:
+        run_when_ready = mock.Mock(side_effect=lambda operation: operation(self.db))
+        controller = TranslationWorkController(
+            run_when_ready, active_model_id=lambda: "", log_exception=lambda message: self.fail(message)
+        )
+        self.assertEqual(controller.navigation_state(lambda: {"available": True}), "visible")
+        run_when_ready.assert_not_called()
+        self.assertEqual(controller.navigation_state(lambda: {"available": False}), "hidden")
+
+        generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
+        self.assertEqual(controller.navigation_state(lambda: {"available": False}), "readonly")
+        self.assertEqual(controller.navigation_state(lambda: {}), "visible")
+
     def test_lightweight_overview_keeps_status_without_reading_link_statistics(self):
         generate_alignment(self.db, "work-one", "pdf-de", "pdf-zh")
         full = translation_works.alignment_overview(self.db)

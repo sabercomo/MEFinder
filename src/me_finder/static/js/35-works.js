@@ -301,10 +301,15 @@
 
   async function performLoad(options) {
     var serial = ++works.loadSerial;
+    var initialStatus = document.getElementById('tw-initial-status');
+    if (initialStatus) initialStatus.textContent = '正在读取作品…';
     try {
       await Promise.all([loadAvailability(), loadGroupsAndOverview(), ensureCatalog(options.forceCatalog)]);
     } catch (error) {
-      if (serial === works.loadSerial) showToast(error.message || '译本对照加载失败', 'danger');
+      if (serial === works.loadSerial) {
+        if (initialStatus) initialStatus.textContent = '作品读取失败，请重新点击「译本对照」';
+        showToast(error.message || '译本对照加载失败', 'danger');
+      }
       return;
     }
     if (serial !== works.loadSerial) return;
@@ -359,7 +364,7 @@
     await loadAvailability();
     renderSidebarEntry();
     syncLibraryAssignButton();
-    if (currentPage === 'works') render();
+    if (currentPage === 'works' && works.loaded) render();
   }
 
   async function loadPosition(groupId) {
@@ -379,7 +384,7 @@
   /* ── sidebar & library hooks ─────────────────────────────────── */
   function renderSidebarEntry() {
     var item = document.querySelector('.sidebar-item[data-page="works"]');
-    if (!item) return;
+    if (!item || (!works.loaded && !entryVisible())) return;
     item.hidden = !entryVisible();
     var tag = item.querySelector('.sidebar-item-tag');
     if (tag) tag.hidden = !isReadOnly();

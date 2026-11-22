@@ -30,6 +30,7 @@ import fitz
 from src.me_finder.app_context import AppContext
 from src.me_finder.structured_reader import get_document_window
 from src.me_finder.alignment.text_alignment import generate_alignment
+from src.me_finder.components.alignment_runtime import ManagedAlignmentRuntime
 from src.me_finder.web import ManagedThreadingHTTPServer, make_handler
 from tests import test_text_alignment
 
@@ -160,6 +161,38 @@ class BrowserRegressionTests(unittest.TestCase):
         self.assertEqual(events, ["summary", "overview"])
         self.navigate("文献库")
         self.page.locator("#library-list .library-entry").first.wait_for()
+
+    def test_translation_entry_is_visible_before_works_load(self) -> None:
+        for available in (True, False):
+            with self.subTest(available=available), mock.patch.object(
+                ManagedAlignmentRuntime, "compute_status", return_value={"available": available}
+            ):
+                self.page.set_viewport_size({"width": 1280 if available else 780, "height": 800})
+                held: list[Route] = []
+                pattern = "**/api/library?view=summary"
+
+                def hold_catalog(route: Route) -> None:
+                    held.append(route)
+
+                self.page.route(pattern, hold_catalog)
+                try:
+                    self.page.goto(self.base_url + "/", wait_until="domcontentloaded")
+                    self.wait_until(lambda: bool(held), "hold the first catalog response")
+                    entry = self.page.locator('.sidebar-item[data-page="works"]')
+                    self.assertTrue(entry.is_visible())
+                    self.assertEqual(entry.locator(".sidebar-item-tag").is_visible(), not available)
+                    imports = self.page.locator('.sidebar-item[data-page="import"]')
+                    initial_box = imports.bounding_box()
+                    entry.click()
+                    self.assertTrue(self.page.get_by_text("正在读取作品…", exact=True).is_visible())
+                    held.pop().continue_()
+                    self.page.locator(".tw-work-item").first.wait_for()
+                    self.assertEqual(imports.bounding_box(), initial_box)
+                    self.assertEqual(entry.locator(".sidebar-item-tag").is_visible(), not available)
+                finally:
+                    for route in held:
+                        route.abort()
+                    self.page.unroute(pattern, hold_catalog)
 
     def test_search_renders_mineru_formulas_without_losing_hit_highlights(self) -> None:
         text = (
@@ -545,7 +578,7 @@ class BrowserRegressionTests(unittest.TestCase):
         bar = self.page.locator(".app-titlebar")
         nav = bar.locator(".app-top-nav")
         toggle = bar.get_by_role("button", name="展开侧边栏")
-        self.assertTrue(toggle.is_visible())
+        toggle.wait_for(state="visible")
         self.page.locator('[data-page="works"]').evaluate("node => { node.hidden = false; }")
         self.assertEqual(nav.get_by_role("button").count(), 5)
         self.assertEqual(bar.bounding_box()["height"], 50)

@@ -36,6 +36,7 @@ class ApplicationRuntime:
     index_path: Path
     root: Path
     index_runtime: import_assembly.IndexRuntime
+    works_navigation: Callable[[], str]
     data_root_admission: import_assembly.DataRootAdmissionGate
     document_imports: import_assembly.DocumentImportCoordinator
     controller_get_routes: Mapping[str, Callable[..., tuple[int, object]]]
@@ -123,6 +124,7 @@ def build_application_runtime(
     managed = settings.managed
     component_catalog = managed.catalog
     managed_mineru = managed.mineru
+
     library_get_routes, library_post_routes = assemble_library_routes(
         library_query_controller,
         document_group_controller,
@@ -191,6 +193,9 @@ def build_application_runtime(
         index_path=index_path,
         root=root,
         index_runtime=index_runtime,
+        works_navigation=lambda: translation_work_controller.navigation_state(
+            managed.alignment_runtime.compute_status
+        ),
         data_root_admission=data_root_admission,
         document_imports=document_imports,
         controller_get_routes=controller_get_routes,
