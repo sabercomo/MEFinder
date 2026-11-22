@@ -20,14 +20,14 @@
 
 | 文件（`release/`） | 字节数 | SHA-256 |
 | --- | ---: | --- |
-| `MEFinder-v0.6.5-macos-arm64.dmg` | 104,662,285 | `285306a0d956d9a3f4d76ac107b4078a6cc581763cc141839bf00956453456d3` |
-| `MEFinder-v0.6.5-macos-arm64.zip` | 96,536,374 | `3a6c5fbe398cdeae1e4297d8a11d922e1df597805af02be01804c1e488b1dca9` |
+| `MEFinder-v0.6.5-macos-arm64.dmg` | 104,662,265 | `aba5db5250d05b51b8467797827d0ee5fde5846e3f225320a83f5e89e00107c9` |
+| `MEFinder-v0.6.5-macos-arm64.zip` | 96,538,158 | `0082253576cac6dad7d2c2616f2ccf9090b0e5927ab80422cbbf1e1fdc1c25e5` |
 
 两个文件各附同名 `.sha256.txt`，`shasum -c` 已通过。
 
 ## 验证记录
 
 - 版本、HTTP/MCP 契约与 Windows 冒烟制品名同步到 0.6.5；前端装配指纹按版本文字更新，字节数不变。版本与契约专项 49 项通过。
-- 官方 `build_macos.sh` 构建内全量 unittest 2,917 项通过（52 项条件跳过，204.994 秒）；Node 语法、PyInstaller 桌面端与 MCP 侧车、ad-hoc 签名、STDIO 侧车冒烟、ZIP、DMG（挂载与复制验签）和 SHA-256 均通过。
+- 官方 `build_macos.sh` 构建内全量 unittest 2,917 项通过（52 项条件跳过，201.879 秒）；Node 语法、PyInstaller 桌面端与 MCP 侧车、ad-hoc 签名、STDIO 侧车冒烟、ZIP、DMG（挂载与复制验签）和 SHA-256 均通过。CI run 45011109288 四项通过。
 - 独立解包核验：版本 0.6.5；主程序与 MCP 侧车均为纯 arm64；严格验签通过；包内 `__init__.py`、`62-zotero.js` 的 SHA-256 与当前源码一致。
 - 启动计时的测量方法与样本见 [计时报告](../reports/translation-work-startup-2026-11-22.md)；未在安装后的应用上复测。
