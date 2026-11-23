@@ -13,6 +13,12 @@
     if (['mi', 'mn', 'mo', 'mtext'].includes(type) && !node.childElementCount) return node.textContent;
     if (type === 'mspace') return ' ';
     if (type === 'semantics') return plainMath(node.firstElementChild);
+    if (type === 'mover' && node.getAttribute('accent') === 'true' && node.children.length === 2) {
+      const [base, accent] = node.children;
+      // A combining tilde applies to one letter, not to an entire expression.
+      if (base.localName === 'mi' && accent.localName === 'mo' && accent.textContent === '~' &&
+          /^\p{L}$/u.test(base.textContent)) return plainMath(base) + '\u0303';
+    }
     if (type === 'mtable' && node.getAttribute('width') === '100%') {
       // KaTeX 的独立公式编号布局：空白、公式、空白、编号。
       const cells = node.children[0]?.children;

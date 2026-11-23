@@ -715,10 +715,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 素材库预览保留划选，支持带反斜杠定界符的公式。
     # 素材库引用编号去掉多余美元符号，复制保留波数单位空格及数字上标。
     # 复制保留对齐公式的行、求和范围与下括号注释。
+    # 复制保留单字母上方的波浪号。
     BASELINE_SHA256 = (
-        "b02031a5be89991c7be4dfee0de32b15d812a5622a4aa1f006e38244b7c18e87"
+        "6f2b072c15aca9b1102cfad6328b41cdac9e06d2ad86b5e5c570f845755a6fd0"
     )
-    BASELINE_BYTES = 1946929
+    BASELINE_BYTES = 1947334
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

@@ -1043,12 +1043,15 @@ class BrowserRegressionTests(unittest.TestCase):
             r"R_y=\mathbb{E}(y_t\,y_t^{\operatorname H})="
             r"\Phi\underbrace{\Psi R_{h_V}\Psi^{\operatorname H}}_{\approx R_h}\Phi^{\operatorname H}+E\tag{7}"
         )
+        axial_strain = r"\tilde{\varepsilon}_{zz}=\varepsilon+\kappa x,\tag{2}"
+        group_tilde = r"\widetilde{ab}"
         matrix = r"\begin{bmatrix}a & b \\ c & d\end{bmatrix}"
-        source = "\n".join(f"$$\n{tex}\n$$" for tex in (aligned, underbrace, matrix))
+        source = "\n".join(f"$$\n{tex}\n$$" for tex in (aligned, underbrace, axial_strain, group_tilde, matrix))
         plain = (
             "ϵ_u=(ν³)/(H⁴)+1/(ρV)∑_n f_n\n−∑_(n=1)^N Q_n (A2)\n"
             "R_y=𝔼(y_t y_t^H)=Φ⏟(ΨR_(h_V)Ψ^H; ≈R_h)Φ^H+E (7)\n"
-            f"$$\n{matrix}\n$$"
+            "ε\u0303_(zz)=ε+κx, (2)\n"
+            f"$$\n{group_tilde}\n$$\n$$\n{matrix}\n$$"
         )
         replace_source_in_database(test_materials.document([source], prefix="10"),
                                    self.fixture.db, backup_existing=False)
@@ -1068,7 +1071,7 @@ class BrowserRegressionTests(unittest.TestCase):
         modifier = "Meta" if sys.platform == "darwin" else "Control"
         for selector in (".materials-text-preview", ".materials-quote"):
             passage = page.locator(selector)
-            self.assertEqual(passage.locator("math").count(), 3)
+            self.assertEqual(passage.locator("math").count(), 5)
             passage.evaluate("node => getSelection().selectAllChildren(node)")
             page.keyboard.press(modifier + "+c")
             self.assertEqual(page.evaluate("navigator.clipboard.readText()"), plain)
