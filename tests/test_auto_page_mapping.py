@@ -17,7 +17,8 @@ from src.me_finder.pdf.auto_page_mapping import (
     normalize_numeric_bookmark_title,
 )
 from src.me_finder.page_mapping_service import PageMappingService
-from src.me_finder.pdf.native import extract_pages_with_pymupdf, load_pymupdf
+from src.me_finder.pdf.native import load_pymupdf
+from src.me_finder.pdf.pymupdf_text import extract_pages_with_pymupdf
 from src.me_finder.pdf.page_mapping import int_to_roman
 
 

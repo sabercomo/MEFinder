@@ -59,6 +59,7 @@ PUNCT_TRANSLATION = str.maketrans(
 )
 
 SENTENCE_ENDINGS = set("。！？!?；;")
+NUMERIC_SUPERSCRIPTS = str.maketrans("0123456789+−-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁻")
 
 
 def is_invisible_format(ch: str) -> bool:

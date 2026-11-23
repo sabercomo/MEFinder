@@ -339,8 +339,13 @@ class MinerUV1ProtocolTests(unittest.TestCase):
             ("见 [全集](https://example.com/a) 第 3 卷", "见 全集 第 3 卷"),
             ("![](fig.png)图注", "图注"),
             ("代码 `x = 1` 行内", "代码 x = 1 行内"),
-            ("公式 $E = mc^2$ 完", "公式 E = mc^2 完"),
-            ("<strong>强调</strong>与<sup>2</sup>", "强调与2"),
+            ("公式 $E = mc^2$ 完", "公式 $E = mc^2$ 完"),
+            (r"**波数** $5 0 { - } 4 5 0 \; \mathrm { c m } ^ { - 1 }$",
+             r"波数 $5 0 { - } 4 5 0 \; \mathrm { c m } ^ { - 1 }$"),
+            (r"**见** \(\frac{Y(s)}{R(s)}\) 和 \$5", r"见 \(\frac{Y(s)}{R(s)}\) 和 $5"),
+            (r"**化学式** $H_{2}O_{2}$，**参考** $[14,15]$",
+             r"化学式 $H_{2}O_{2}$，参考 $[14,15]$"),
+            ("<strong>强调</strong>与<sup>2</sup>", "强调与²"),
             ("a&nbsp;b<br>c", "a b\nc"),
             ("- 甲\n- 乙", "甲\n乙"),
             ("| 年份 | 页码 |\n|---|---|\n| 1867 | 12 |", "年份 页码\n1867 12"),
@@ -348,6 +353,37 @@ class MinerUV1ProtocolTests(unittest.TestCase):
         for source, expected in cases:
             with self.subTest(source=source):
                 self.assertEqual(plain_text_from_markdown(source), expected)
+
+    def test_numeric_html_scripts_keep_their_position_in_imported_text(self) -> None:
+        source = (
+            r"2329 kg/m<sup>3</sup>, $1 7 \times 1 0 ^ { 1 0 }$ Pa; "
+            "800 cm<sup>−1</sup>; H<sub>2</sub>O<sub>2</sub>。"
+            "示例 `<sup>3</sup>`"
+        )
+        self.assertEqual(
+            plain_text_from_markdown(source),
+            r"2329 kg/m³, $1 7 \times 1 0 ^ { 1 0 }$ Pa; 800 cm⁻¹; H₂O₂。示例 <sup>3</sup>",
+        )
+
+    def test_v1_equation_block_keeps_display_boundaries_and_latex(self) -> None:
+        equation = r"M(s)=\frac{Y(s)}{R(s)}=\frac{G(s)}{1+G(s)H(s)}\tag{28}"
+        matrix = r"x=\begin{bmatrix} I_L \\ V_C \end{bmatrix}"
+        already_delimited = r"\[\frac{a}{b}\]"
+        blocks = [
+            {"type": "text", "content": "**System:**"},
+            {"type": "equation", "content": equation, "bbox": [0.1, 0.2, 0.9, 0.3]},
+            {"type": "equation", "content": matrix},
+            {"type": "equation", "content": already_delimited},
+        ]
+        provider = MinerULocalProvider(MinerULocalConfig(endpoint="http://127.0.0.1:8000"))
+        result = provider.normalize_result({"pages": [{"page_idx": 0, "blocks": blocks}]}, self.request())
+        page = result.pages[0]
+        self.assertEqual(page.physical_pdf_page, 41)
+        self.assertEqual(page.blocks[1].block_type, "equation")
+        self.assertEqual(page.blocks[1].bbox, (100, 200, 900, 300))
+        self.assertEqual([b.text for b in page.blocks],
+                         ["System:", f"$$\n{equation}\n$$", f"$$\n{matrix}\n$$", already_delimited])
+        self.assertEqual(page.text, "\n".join(b.text for b in page.blocks))
 
     def test_backend_names_map_onto_tiers(self) -> None:
         self.assertEqual(tier_for_backend("pipeline"), "basic")

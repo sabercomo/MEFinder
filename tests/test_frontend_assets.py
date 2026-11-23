@@ -713,10 +713,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 0.6.5：译本对照入口首帧就位，补作品加载状态。
     # 0.6.5：素材库与检索共用公式排版与纯文本复制。
     # 素材库预览保留划选，支持带反斜杠定界符的公式。
+    # 素材库引用编号去掉多余美元符号，复制保留波数单位空格及数字上标。
+    # 复制保留对齐公式的行、求和范围与下括号注释。
     BASELINE_SHA256 = (
-        "7690c280a0c57b61b77550c8d02664d684e87e7a3517b5b532ffbc409b97508a"
+        "b02031a5be89991c7be4dfee0de32b15d812a5622a4aa1f006e38244b7c18e87"
     )
-    BASELINE_BYTES = 1944498
+    BASELINE_BYTES = 1946929
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

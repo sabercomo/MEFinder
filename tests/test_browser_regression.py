@@ -298,7 +298,7 @@ class BrowserRegressionTests(unittest.TestCase):
               selection.removeAllRanges();
               return clipboardData.getData('text/plain');
             }""")
-            expression = ("η=(1−Ct/C0)×100% (1)", "(ahv)^(1/n)=A(hv−Eg) (3)")[index]
+            expression = ("η=(1−C_t/C0)×100% (1)", "(ahv)^(1/n)=A(hv−E_g) (3)")[index]
             self.assertEqual(copied, texts[index].split("$$")[0] + expression + texts[index].split("$$")[2])
 
     def test_mineru_accounts_can_be_deleted_directly_from_their_rows(self) -> None:
@@ -1000,6 +1000,83 @@ class BrowserRegressionTests(unittest.TestCase):
         with page.expect_download() as export:
             page.locator("#materials-export").click()
         self.assertIn(source, export.value.path().read_text(encoding="utf-8").replace("\n> ", "\n"))
+
+    def test_material_copy_keeps_reference_numbers_and_wavenumber_units(self) -> None:
+        source = (
+            r"redox capability $[14,15]$ . Response range $[16,17]$ . "
+            r"$3000 \sim 3300 \, cm^{-1}$; $800 \, cm^{-1}$ [24]; $-NH_{2}$."
+        )
+        plain = "redox capability [14,15] . Response range [16,17] . 3000∼3300 cm⁻¹; 800 cm⁻¹ [24]; −NH2."
+        replace_source_in_database(test_materials.document([source], prefix="2"),
+                                   self.fixture.db, backup_existing=False)
+        page = self.page
+        self.context.grant_permissions(["clipboard-read", "clipboard-write"])
+        api = self.base_url + "/api/materials"
+        selection = test_materials.selection(source)
+        captured = page.request.post(api, data={
+            "action": "collect", "tags": ["论文"], "selections": [selection],
+        })
+        self.assertTrue(captured.ok, captured.text())
+        excerpt_id = captured.json()["excerpt_ids"][0]
+        page.locator("#materials-nav").click()
+        page.locator(".materials-excerpt-title").click()
+        self.wait_until(page.locator("#materials-detail").get_by_role("button", name="打开原文").is_enabled,
+                        "excerpt location must settle before testing selection")
+        modifier = "Meta" if sys.platform == "darwin" else "Control"
+        for selector in (".materials-text-preview", ".materials-quote"):
+            passage = page.locator(selector)
+            self.assertIn("[14,15]", passage.inner_text())
+            self.assertNotIn("$", passage.inner_text())
+            self.assertEqual(passage.locator("math").count(), 3)
+            passage.evaluate("node => getSelection().selectAllChildren(node)")
+            page.keyboard.press(modifier + "+c")
+            self.assertEqual(page.evaluate("navigator.clipboard.readText()"), plain)
+            page.evaluate("getSelection().removeAllRanges()")
+
+        result = page.request.post(api, data={"action": "locate", "excerpt_id": excerpt_id}).json()
+        self.assertEqual({key: result["excerpt"][key] for key in selection}, selection)
+        self.assertEqual(result["excerpt"]["citation_start"], "2")
+
+    def test_copies_aligned_equation_and_annotated_underbrace_without_losing_terms(self) -> None:
+        aligned = r"\begin{aligned}\epsilon_u &= \frac{\nu^3}{H^4}+\frac{1}{\rho V}\sum_{n}f_n \\ &-\sum_{n=1}^{N} Q_n \\ \end{aligned}\tag{A2}"
+        underbrace = (
+            r"R_y=\mathbb{E}(y_t\,y_t^{\operatorname H})="
+            r"\Phi\underbrace{\Psi R_{h_V}\Psi^{\operatorname H}}_{\approx R_h}\Phi^{\operatorname H}+E\tag{7}"
+        )
+        matrix = r"\begin{bmatrix}a & b \\ c & d\end{bmatrix}"
+        source = "\n".join(f"$$\n{tex}\n$$" for tex in (aligned, underbrace, matrix))
+        plain = (
+            "ϵ_u=(ν³)/(H⁴)+1/(ρV)∑_n f_n\n−∑_(n=1)^N Q_n (A2)\n"
+            "R_y=𝔼(y_t y_t^H)=Φ⏟(ΨR_(h_V)Ψ^H; ≈R_h)Φ^H+E (7)\n"
+            f"$$\n{matrix}\n$$"
+        )
+        replace_source_in_database(test_materials.document([source], prefix="10"),
+                                   self.fixture.db, backup_existing=False)
+        page = self.page
+        self.context.grant_permissions(["clipboard-read", "clipboard-write"])
+        api = self.base_url + "/api/materials"
+        selection = test_materials.selection(source)
+        captured = page.request.post(api, data={
+            "action": "collect", "tags": ["复核"], "selections": [selection],
+        })
+        self.assertTrue(captured.ok, captured.text())
+        excerpt_id = captured.json()["excerpt_ids"][0]
+        page.locator("#materials-nav").click()
+        page.locator(".materials-excerpt-title").click()
+        self.wait_until(page.locator("#materials-detail").get_by_role("button", name="打开原文").is_enabled,
+                        "excerpt location must settle before testing selection")
+        modifier = "Meta" if sys.platform == "darwin" else "Control"
+        for selector in (".materials-text-preview", ".materials-quote"):
+            passage = page.locator(selector)
+            self.assertEqual(passage.locator("math").count(), 3)
+            passage.evaluate("node => getSelection().selectAllChildren(node)")
+            page.keyboard.press(modifier + "+c")
+            self.assertEqual(page.evaluate("navigator.clipboard.readText()"), plain)
+            page.evaluate("getSelection().removeAllRanges()")
+
+        result = page.request.post(api, data={"action": "locate", "excerpt_id": excerpt_id}).json()
+        self.assertEqual({key: result["excerpt"][key] for key in selection}, selection)
+        self.assertEqual(result["reader"]["targetIndex"], 0)
 
     def test_drag_copy_material_preview_into_plain_text(self) -> None:
         source = r"加入 $H_{2}O_{2}$ 后继续搅拌。"

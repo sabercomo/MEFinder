@@ -17,7 +17,8 @@ class PDFExtractionBoundaryTests(unittest.TestCase):
         allowed = {
             "pdf/extraction_types": set(),
             "pdf/paragraphs": {"normalization", "extraction_types", "page_mapping"},
-            "pdf/native": {"extraction_types", "paragraphs", "page_mapping"},
+            "pdf/native": {"extraction_types", "page_mapping", "pymupdf_text"},
+            "pdf/pymupdf_text": {"normalization", "extraction_types", "paragraphs"},
         }
         for module, dependencies in allowed.items():
             with self.subTest(module=module):

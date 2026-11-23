@@ -59,7 +59,6 @@ from .native import (
     extract_native_pdf_pages as extract_native_pdf_pages,
     load_pymupdf as load_pymupdf,
     pymupdf_probe as pymupdf_probe,
-    extract_pages_with_pymupdf as extract_pages_with_pymupdf,
     low_level_count as low_level_count,
     estimate_garbled_ratio as estimate_garbled_ratio,
     SimplePDF as SimplePDF,
@@ -71,6 +70,7 @@ from .native import (
     pdf_hex_to_text as pdf_hex_to_text,
     cleanup_pdf_text_piece as cleanup_pdf_text_piece,
 )
+from .pymupdf_text import extract_pages_with_pymupdf as extract_pages_with_pymupdf
 
 
 PDF_TYPES = {"native_text", "scanned", "broken_text", "complex_layout"}

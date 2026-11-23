@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .extraction_types import PDFExtractionError, PDFTextPage
-from .paragraphs import attach_page_block_offsets
+from .pymupdf_text import extract_pages_with_pymupdf
 
 
 SIMPLE_PDF_MAX_BYTES = 128 * 1024 * 1024
@@ -140,50 +140,6 @@ def pymupdf_probe(path: Path, fitz, sample_pages: int) -> Tuple[int, List[str], 
         return len(doc), texts, image_count, has_labels
     finally:
         doc.close()
-
-
-def extract_pages_with_pymupdf(path: Path, fitz) -> List[PDFTextPage]:
-    doc = fitz.open(str(path))
-    pages: List[PDFTextPage] = []
-    try:
-        for index in range(len(doc)):
-            page = doc.load_page(index)
-            page_rect = page.rect
-            label = page.get_label() if getattr(page, "get_label", None) else None
-            raw_text = page.get_text("text") or ""
-            block_records = []
-            for block_index, block in enumerate(page.get_text("blocks") or []):
-                if len(block) < 5:
-                    continue
-                block_records.append(
-                    {
-                        "block_index": block_index,
-                        "bbox": [float(block[0]), float(block[1]), float(block[2]), float(block[3])],
-                        "text": block[4],
-                        "bbox_normalized": [
-                            float(block[0]) / max(float(page_rect.width), 1.0),
-                            float(block[1]) / max(float(page_rect.height), 1.0),
-                            float(block[2]) / max(float(page_rect.width), 1.0),
-                            float(block[3]) / max(float(page_rect.height), 1.0),
-                        ],
-                    }
-                )
-            attach_page_block_offsets(raw_text, block_records)
-            pages.append(
-                PDFTextPage(
-                    pdf_page_index=index,
-                    pdf_page_label=str(label) if label else None,
-                    raw_text=raw_text,
-                    blocks=block_records,
-                    parser="pymupdf",
-                    parser_version=str(getattr(fitz, "VersionBind", "")),
-                    page_width=float(page_rect.width),
-                    page_height=float(page_rect.height),
-                )
-            )
-    finally:
-        doc.close()
-    return pages
 
 
 def low_level_count(path: Path, needle: bytes) -> int:

@@ -25,6 +25,7 @@ import re
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence
 
+from ..normalization import NUMERIC_SUPERSCRIPTS
 from .mineru_local_http import MINERU_LOCAL_PROVIDER_ID, MinerULocalTransport
 from .provider import ParserProviderError, ParserTaskStatus
 
@@ -257,12 +258,22 @@ def iter_page_blocks(
 #: (docvortex ``escape_conservative_markdown_text``).
 _MARKDOWN_ESCAPABLE = "*_`~$#+-\\[]()!"
 _ESCAPE_SENTINEL = "\x00{}\x00"
-_ESCAPED_RE = re.compile(r"\\([" + re.escape(_MARKDOWN_ESCAPABLE) + r"])")
+_PROTECTED_MARKDOWN_RE = re.compile(
+    r"(?P<math>\\\[(?:\\[^\[\]]|[^\\])+?\\\]|\\\((?:\\[^()\r\n]|[^\\\r\n])+?\\\)"
+    r"|\$\$(?:\\.|[^\\$])+?\$\$"
+    r"|\$(?![$\s])(?:\\[^\r\n]|[^\\$\r\n])*?(?:\\[^\r\n]|[^\\$\s])\$(?![\d$]))"
+    r"|\\(?P<escaped>[" + re.escape(_MARKDOWN_ESCAPABLE) + r"])"
+    r"|(?P<fence>`+)(?P<code>.+?)(?P=fence)",
+    re.DOTALL,
+)
 _HTML_TAG_RE = re.compile(r"</?[A-Za-z][^<>\n]*>|<!--.*?-->")
+_NUMERIC_HTML_SCRIPT_RE = re.compile(r"<(sup|sub)>([+−-]?[0-9]+)</\1>")
+_NUMERIC_HTML_SCRIPT = {
+    "sup": NUMERIC_SUPERSCRIPTS,
+    "sub": str.maketrans("0123456789+−-", "₀₁₂₃₄₅₆₇₈₉₊₋₋"),
+}
 _IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
-_CODE_FENCE_RE = re.compile(r"(`+)(.+?)\1", re.DOTALL)
-_INLINE_MATH_RE = re.compile(r"\$([^$]+)\$|\\\((.+?)\\\)", re.DOTALL)
 _EMPHASIS_RE = re.compile(r"(\*{1,3}|~~|_{1,2})(?=\S)(.+?)(?<=\S)\1", re.DOTALL)
 _LIST_MARKER_RE = re.compile(r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+", re.MULTILINE)
 _HEADING_MARKER_RE = re.compile(r"^[ \t]*#{1,6}[ \t]+", re.MULTILINE)
@@ -278,38 +289,33 @@ _HTML_ENTITIES = {
 
 
 def plain_text_from_markdown(value: str) -> str:
-    """Recover the printed text from one rendered-Markdown ``content`` string.
-
-    MinerU 4.x hands back Markdown, not source text: upstream applies emphasis
-    wrappers (``**`` / ``*`` / ``***`` / ``~~``), HTML wrappers for the styles
-    Markdown cannot express (``<strong>`` / ``<u>`` / ``<sup>`` / ``<s>`` …),
-    inline-code fences, LaTeX delimiters, links and images, and it escapes
-    literal ``*_`~$`` and leading block markers with a backslash.  Storing that
-    verbatim would break exact quote location and leak markup into citations,
-    so the markup is removed while every literal character is preserved.
-    """
+    """Strip prose Markdown while keeping delimited equations and literal text."""
 
     if not value:
         return ""
-    # Literal characters upstream escaped must survive markup removal, so park
-    # them behind sentinels first and restore them at the very end.
+    # Protect complete formulas from both Markdown unescaping and emphasis
+    # removal; in particular, underscores inside math are not prose emphasis.
     protected: list[str] = []
 
     def _park(match: "re.Match[str]") -> str:
-        protected.append(match.group(1))
+        if match["math"] is not None:
+            protected.append(match["math"])
+        elif match["escaped"] is not None:
+            protected.append(match["escaped"])
+        else:
+            protected.append(match["code"].strip())
         return _ESCAPE_SENTINEL.format(len(protected) - 1)
 
-    text = _ESCAPED_RE.sub(_park, value)
+    text = _PROTECTED_MARKDOWN_RE.sub(_park, value)
     text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    text = _NUMERIC_HTML_SCRIPT_RE.sub(
+        lambda match: match[2].translate(_NUMERIC_HTML_SCRIPT[match[1]]), text
+    )
     text = _HTML_TAG_RE.sub("", text)
     for entity, replacement in _HTML_ENTITIES.items():
         text = text.replace(entity, replacement)
     text = _IMAGE_RE.sub("", text)
     text = _LINK_RE.sub(r"\1", text)
-    text = _CODE_FENCE_RE.sub(lambda match: match.group(2).strip(), text)
-    text = _INLINE_MATH_RE.sub(
-        lambda match: (match.group(1) or match.group(2) or "").strip(), text
-    )
     previous = None
     while previous != text:
         previous = text
@@ -335,18 +341,27 @@ def _table_row_text(line: str) -> str:
 
 
 def block_text(block: Mapping[str, object]) -> str:
-    """Flatten one structured-content block into plain source text.
+    """Flatten a block, preserving equation boundaries from its typed content.
 
     Every block carries its body as a rendered Markdown ``content`` string;
     image, table, chart, and code blocks additionally carry ``captions`` and
     ``footnotes`` lists whose entries hold their own ``content``.  Markup is
-    stripped so stored text matches the printed page character for character.
+    stripped from prose so indexing does not include Markdown decorations.
     """
 
     parts: list[str] = []
     content = block.get("content")
     if isinstance(content, str):
-        parts.append(plain_text_from_markdown(content))
+        value = content.strip()
+        if value and block.get("type") == "equation":
+            # MinerU returns display equations as bare LaTeX in typed blocks.
+            # Preserve the body verbatim, including matrix rows and numbering.
+            delimited = (value.startswith("$$") and value.endswith("$$")) or (
+                value.startswith(r"\[") and value.endswith(r"\]")
+            )
+            parts.append(value if delimited else f"$$\n{value}\n$$")
+        else:
+            parts.append(plain_text_from_markdown(value))
     for key in ("captions", "footnotes"):
         for annotation in _annotations(block, key):
             value = annotation.get("content")
