@@ -1,4 +1,4 @@
-2026-11-23：**0.6.5 macOS arm64 与 x86_64 本地测试包已重建。** 包含科学单位上下标入库、多行公式与波浪号纯文本复制，以及译本对照首帧修复。Windows 包留给本机打包。
+2026-11-23：**0.6.5 macOS arm64 / x86_64 与 Windows x64 本地测试包已齐。** 包含科学单位上下标入库、多行公式与波浪号纯文本复制，以及译本对照首帧修复。Windows 安装版与便携版已在本机打包并上传 v0.6.5 草稿。
 
 # MEFinder 0.6.5
 
@@ -26,8 +26,8 @@
 
 - **数据库仍为 v13**，本版未新增 schema 变更；0.6.3 及更早版本仍无法打开升级后的库。
 - macOS arm64 最低 macOS 14，x86_64 最低 macOS 12；均为 ad-hoc 签名、未公证。Intel 包经 Rosetta 构建，未在 Intel 真机验收。
-- Windows 安装版与便携版由用户在本机 Windows 电脑打包，本轮未提供；全平台验收以各自构建结果为准。
-- 本轮仅本地测试，不涉及标签、Release 或 Homebrew；v0.6.4 的公开标签与 12 个附件保持不变。
+- Windows 安装版与便携版在本机 Windows 10 x64 打包，未签名；全平台验收以各自构建结果为准。
+- 本轮为本地测试包，Windows 两个包已上传到 v0.6.5 草稿；草稿未发布，不打标签，不涉及 Homebrew，v0.6.4 的公开标签与 12 个附件保持不变。
 
 ## 本地测试包
 
@@ -37,12 +37,16 @@
 | `MEFinder-v0.6.5-macos-arm64.zip` | 96,549,294 | `cfe188426dfc7c4eb17f98f0447c7ef45a4e0e5f45d291a5ea04089ed070092c` |
 | `MEFinder-v0.6.5-macos-x86_64.dmg` | 109,574,324 | `1c124a56eb5d227c0472116b04620cfb953b23ed223af9807f45736ce36d6623` |
 | `MEFinder-v0.6.5-macos-x86_64.zip` | 103,085,275 | `db03adff58d40f25764a73ac7de1f877bb0c489159f60fe97b8a38578063a893` |
+| `MEFinder-v0.6.5-windows-setup.exe` | 82,433,894 | `844115afdd2680be20956d7dff890509c62a5705e029288def15aeedf7ceb711` |
+| `MEFinder-v0.6.5-windows-portable.zip` | 98,303,564 | `d352de842fc83a1c0ae1420491c07c2f93a8a4a57316d778ce6d1bc1e728532b` |
 
-四个文件各附同名 `.sha256.txt`，`shasum -c` 已通过；GitHub 草稿附件的 digest 与 sidecar 一致。
+六个二进制文件各附同名 `.sha256.txt`，本地实算 SHA-256 与 GitHub 草稿附件 digest 已逐项核对一致。
 
 ## 验证记录
 
-- 发布源码 `8699dc9`。CI [45146703532](https://github.com/sabercomo/MEFinder/actions/runs/45146703532) 的 tests、browser-regression、lint、windows-tests 四项通过；本机浏览器回归 33 项通过。
+- 发布源码 `8699dc9`（Windows 构建检出 `5b9da94`，差异仅为发布文档）。CI [45146703532](https://github.com/sabercomo/MEFinder/actions/runs/45146703532) 的 tests、browser-regression、lint、windows-tests 四项通过；本机浏览器回归 33 项通过。
 - 官方 `build_macos.sh` 构建内全量 unittest：arm64 2,927 项通过（57 项条件跳过，207.198 秒），x86_64 2,927 项通过（62 项条件跳过，232.571 秒）。Node 语法、PyInstaller 桌面端与 MCP 侧车、ad-hoc 签名、STDIO 侧车冒烟、ZIP、DMG（挂载与复制验签）和 SHA-256 均通过。
 - 两个包独立解包核验：版本 0.6.5；主程序与 MCP 侧车分别为纯 arm64 / 纯 x86_64；严格验签通过；包内 `17-passage.js`、`pymupdf_text.py` 的 SHA-256 与源码一致。
+- Windows 安装版与便携版在本机 Windows 10 x64 用 `build_windows_installer.ps1` / `build_portable_release.ps1` 构建；两次构建内全量 unittest 均为 2,927 项通过（56 项按环境跳过，240.890 / 240.343 秒），Node 语法、PyInstaller 桌面端与 MCP 侧车、空库 FTS5、侧车 STDIO 冒烟、隐私清单与 SHA-256 均通过。
+- 便携 ZIP 627 个条目 CRC 通过；包内 250 份 `me_finder` Python 源码与 85 个静态资源逐文件 SHA-256 与源码一致；主程序与 MCP 侧车版本均为 0.6.5。安装、升级、卸载与冻结 GUI 未在本轮人工验收。
 - 早前 arm64 包的公式显示与译本首帧修复验证见 [素材库公式记录](issues/mineru-search-formula-display.md)；本轮未重新做 WKWebView 人工验收。
