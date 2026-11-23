@@ -11,8 +11,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import fitz
-
 from ..document_file_store import pdf_file_stamp
 from ..errors import UserFacingError
 from ..page_display import resolve_citation_page
@@ -74,6 +72,8 @@ def read_image(db_path: Path, root: Path, digest: str) -> tuple[bytes, str]:
 
 
 def _pdf_image(db_path: Path, payload: dict, source_path: Callable[[str], Path]) -> tuple[bytes, dict]:
+    import fitz
+
     source_id = payload.get("source_id")
     page_number = payload.get("page")
     if not isinstance(source_id, str) or type(page_number) is not int or page_number < 1:
@@ -153,6 +153,8 @@ def collect_image(db_path: Path, root: Path, payload: dict, source_path: Callabl
         raise UserFacingError("每张图片最多 25 MB")
     mime = image_type(data)
     if not origin:
+        import fitz
+
         try:
             fitz.Pixmap(data)
         except (RuntimeError, ValueError) as exc:

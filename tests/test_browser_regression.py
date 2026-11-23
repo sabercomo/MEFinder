@@ -1005,8 +1005,20 @@ class BrowserRegressionTests(unittest.TestCase):
         source = (
             r"redox capability $[14,15]$ . Response range $[16,17]$ . "
             r"$3000 \sim 3300 \, cm^{-1}$; $800 \, cm^{-1}$ [24]; $-NH_{2}$."
+            r" ($\cdot\mathrm{O}_{2}^{(-)}$ or $" r"{}^{1}\mathrm{O}_{2}$); "
+            r"$22.7\times10^{-3}\mathrm{min}^{-1}$; $22.7\times10^{-3}min^{-1}$; "
+            r"$5 0 { - } 4 5 0 \; \mathrm { c m } ^ { - 1 }$; "
+            r"$6.1\times10^{-7}\mathrm{cm}^{2}\,\mathrm{s}^{-1}$; $7\times10^{4}\mathrm{kPa}$; "
+            r"$3\,\times\,10^{-4}\,\mathrm{kg}^{-2}$; $\text{Hz}^{-1}$; $\left(a+b\right)^2$; "
+            r"${ab}^{2}$; ${(a)+(b)}^2$; $10^{-3}x^{-1}$; $a^{(-3)}$; $\mathrm{H}_{2}\mathrm{O}_{2}$. "
+            "现有纯文本 22.7×10⁻³min⁻¹。"
         )
-        plain = "redox capability [14,15] . Response range [16,17] . 3000∼3300 cm⁻¹; 800 cm⁻¹ [24]; −NH2."
+        plain = (
+            "redox capability [14,15] . Response range [16,17] . 3000∼3300 cm⁻¹; 800 cm⁻¹ [24]; −NH2."
+            " (⋅O2⁻ or ¹O2); 22.7 × 10⁻³ min⁻¹; 22.7 × 10⁻³ min⁻¹; 50−450 cm⁻¹; "
+            "6.1 × 10⁻⁷ cm² s⁻¹; 7 × 10⁴ kPa; 3 × 10⁻⁴ kg⁻²; Hz⁻¹; (a+b)²; "
+            "(ab)²; ((a)+(b))²; 10⁻³x⁻¹; a^((−3)); H2O2. 现有纯文本 22.7×10⁻³min⁻¹。"
+        )
         replace_source_in_database(test_materials.document([source], prefix="2"),
                                    self.fixture.db, backup_existing=False)
         page = self.page
@@ -1023,15 +1035,25 @@ class BrowserRegressionTests(unittest.TestCase):
         self.wait_until(page.locator("#materials-detail").get_by_role("button", name="打开原文").is_enabled,
                         "excerpt location must settle before testing selection")
         modifier = "Meta" if sys.platform == "darwin" else "Control"
+        page.evaluate("""() => {
+          const target = document.createElement('textarea');
+          target.id = 'clipboard-test-target';
+          target.addEventListener('paste', event => target.dataset.formats = event.clipboardData.types.join(','));
+          document.body.appendChild(target);
+        }""")
+        target = page.locator("#clipboard-test-target")
         for selector in (".materials-text-preview", ".materials-quote"):
             passage = page.locator(selector)
             self.assertIn("[14,15]", passage.inner_text())
             self.assertNotIn("$", passage.inner_text())
-            self.assertEqual(passage.locator("math").count(), 3)
+            self.assertEqual(passage.locator("math").count(), 18)
             passage.evaluate("node => getSelection().selectAllChildren(node)")
             page.keyboard.press(modifier + "+c")
-            self.assertEqual(page.evaluate("navigator.clipboard.readText()"), plain)
             page.evaluate("getSelection().removeAllRanges()")
+            target.fill("")
+            page.keyboard.press(modifier + "+v")
+            self.assertEqual(target.input_value(), plain)
+            self.assertEqual(target.get_attribute("data-formats"), "text/plain")
 
         result = page.request.post(api, data={"action": "locate", "excerpt_id": excerpt_id}).json()
         self.assertEqual({key: result["excerpt"][key] for key in selection}, selection)

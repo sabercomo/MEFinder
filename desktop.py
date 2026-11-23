@@ -36,6 +36,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -624,6 +625,7 @@ def _show_after_first_page(window) -> None:
             if done:
                 return
             done = True
+        logging.info("startup: showing main window")
         window.show()
 
     def arm_fallback() -> None:
@@ -655,10 +657,9 @@ def setup_logging(root: Path) -> None:
 
 
 def main() -> None:
+    started_at = time.monotonic()
     import certifi
     import webview
-
-    from src.me_finder.app_context import AppContext
 
     os.environ.setdefault("SSL_CERT_FILE", certifi.where())
     # The frozen desktop build is onedir and leaks nothing itself, but it can
@@ -714,6 +715,7 @@ def main() -> None:
         preferences, os_prefers_dark=_os_prefers_dark()
     )
     setup_logging(root)
+    logging.info("startup: data root and preferences ready after %.0f ms", (time.monotonic() - started_at) * 1000)
     logging.info("app root: %s", root)
     if root != bundle_root:
         logging.info("bundle root: %s", bundle_root)
@@ -767,11 +769,11 @@ def main() -> None:
         app_data_root=app_data_root,
     )
 
-    from src.me_finder.web import make_handler
+    def create_handler() -> object:
+        from src.me_finder.app_context import AppContext
+        from src.me_finder.web import make_handler
 
-    backend = DesktopBackend(
-        index_path=root / "data" / "index.sqlite3",
-        create_handler=lambda: make_handler(
+        return make_handler(
             root / "data" / "index.sqlite3",
             app_context=AppContext.create(
                 root,
@@ -790,7 +792,11 @@ def main() -> None:
             ),
             native_scan_directory_chooser=host.capabilities().scan_directory_chooser,
             native_backup_file_chooser=host.capabilities().backup_file_chooser,
-        ),
+        )
+
+    backend = DesktopBackend(
+        index_path=root / "data" / "index.sqlite3",
+        create_handler=create_handler,
         index_missing_detail=lambda: (
             "请把 index.sqlite3 放到：\n%s\n\n"
             "索引数据库可在项目目录用命令生成：\n"
@@ -806,7 +812,7 @@ def main() -> None:
 
     def announce(url: str) -> None:
         reader_windows.set_base_url(url)
-        logging.info("backend ready at %s", url)
+        logging.info("startup: backend ready after %.0f ms", (time.monotonic() - started_at) * 1000)
         backend_outcome.setdefault("url", url)
 
     def record_error(title: str, detail: str) -> None:
@@ -823,11 +829,12 @@ def main() -> None:
     starter.start()
     starter.join(2.0)
 
+    initial_url, initial_error = backend_outcome.get("url"), backend_outcome.get("error")
     window, window_controller = create_main_window(
         webview,
         theme,
-        url=backend_outcome.get("url"),
-        error=backend_outcome.get("error"),
+        url=initial_url,
+        error=initial_error,
     )
     main_window_ref.bind(window)
     window.expose(reader_windows.open_reader)
@@ -836,7 +843,7 @@ def main() -> None:
     if sys.platform == "darwin" or sys.platform == "win32":
         window.events.closing += pdf_viewer.close
 
-    if "url" not in backend_outcome and "error" not in backend_outcome:
+    if initial_url is None and initial_error is None:
         def load_when_ready() -> None:
             # load_url 需要浏览器实例已创建：先等窗口显示，再等后端收尾。
             window.events.shown.wait(10)
@@ -856,6 +863,7 @@ def main() -> None:
 
         threading.Thread(target=load_when_ready, daemon=True).start()
 
+    logging.info("startup: starting native webview after %.0f ms", (time.monotonic() - started_at) * 1000)
     webview.start(storage_path=webview_storage_path(root, portable))
     backend.stop()
     logging.info("window closed, exiting")

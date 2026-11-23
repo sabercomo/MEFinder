@@ -2,6 +2,13 @@
 (function (global) {  // module: 17-passage.js
   const doubleStruck = Array.from('𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ');
 
+  function isIdentifier(node) {
+    if (node?.localName === 'mi' || node?.localName === 'mtext') return /^\p{L}+$/u.test(node.textContent);
+    // KaTeX emits an upright name as a row of normal letters, not a product.
+    return node?.localName === 'mrow' && node.hasChildNodes() && Array.from(node.childNodes).every(letter =>
+      letter.localName === 'mi' && letter.getAttribute('mathvariant') === 'normal' && isIdentifier(letter));
+  }
+
   function plainMath(node) {
     // KaTeX 的 MathML DOM 会将 \, 等间距作为文本节点插入。
     if (node.nodeType === Node.TEXT_NODE) return node.textContent;
@@ -50,19 +57,31 @@
     if (!['mrow', 'mstyle', 'mtd', 'msub', 'msup', 'msubsup', 'munder', 'munderover', 'mfrac', 'msqrt', 'mroot', 'mo'].includes(type)) {
       return null;
     }
-    const parts = Array.from(node.childNodes, plainMath);
+    const nodes = Array.from(node.childNodes);
+    const parts = nodes.map(plainMath);
     if (parts.includes(null)) return null;
     const [base, script, upper] = parts;
     const group = text => /^(?:[\p{L}]\d*|\d+(?:\.\d+)?)$/u.test(text) ? text : '(' + text + ')';
     const lower = text => /^\d+$/.test(text) ? text : '_' + group(text);
     const power = text => {
       if (text === '∘') return '°';
-      if (!/^[+−-]?\d+$/.test(text)) return '^' + group(text);
+      // A lone sign is a charge, including the parenthesized form from MinerU.
+      text = text.replace(/^\(([+−-])\)$/, '$1');
+      if (!/^(?:[+−-]\d*|\d+)$/.test(text)) return '^' + group(text);
       return Array.from(text, char => char === '+' ? '⁺' : /[−-]/.test(char) ? '⁻' : '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(char)]).join('');
     };
     if (type === 'msub') return base + lower(script);
     // KaTeX can attach a power to the closing delimiter of an existing group.
-    if (type === 'msup') return (node.firstElementChild.localName === 'mo' ? base : group(base)) + power(script);
+    if (type === 'msup') {
+      const exponent = power(script);
+      if (base === '') return exponent.startsWith('^') ? null : exponent; // e.g. {}^1O₂
+      const operand = nodes[0];
+      const fenced = operand.localName === 'mrow' &&
+        operand.firstElementChild?.getAttribute('fence') === 'true' &&
+        operand.lastElementChild?.getAttribute('fence') === 'true' &&
+        Array.from(operand.children).filter(child => child.getAttribute('fence') === 'true').length === 2;
+      return (operand.localName === 'mo' || isIdentifier(operand) || fenced ? base : group(base)) + exponent;
+    }
     if (type === 'msubsup') return base + lower(script) + power(upper);
     if (type === 'munder' || type === 'munderover') {
       if (base !== '∑') return null;
@@ -71,6 +90,19 @@
     if (type === 'mfrac') return group(base) + '/' + group(script);
     if (type === 'msqrt') return '√(' + parts.join('') + ')';
     if (type === 'mroot') return group(script) + '√(' + base + ')';
+    if (type === 'mrow') {
+      for (let index = 1; index + 1 < nodes.length; index++) {
+        const multiply = nodes[index];
+        const powerOfTen = nodes[index + 1];
+        const next = nodes[index + 2];
+        if (multiply.localName !== 'mo' || parts[index] !== '×' || nodes[index - 1].localName !== 'mn' ||
+            powerOfTen.localName !== 'msup' || !/^10[⁺⁻]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+$/.test(parts[index + 1])) continue;
+        // Separate a scientific coefficient from an adjacent symbol without guessing its unit.
+        parts[index] = ' × ';
+        if (isIdentifier(next) || (['msub', 'msup', 'msubsup'].includes(next?.localName) &&
+                                   isIdentifier(next.firstElementChild))) parts[index + 1] += ' ';
+      }
+    }
     return parts.join('');
   }
 

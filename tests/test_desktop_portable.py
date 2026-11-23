@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -23,6 +25,59 @@ class _Event:
 
 
 class DesktopPortableTests(unittest.TestCase):
+    def test_web_backend_import_does_not_load_pdf_image_engine(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-c", "import sys; import src.me_finder.web; "
+             "assert 'fitz' not in sys.modules and 'pymupdf' not in sys.modules"],
+            check=False, capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_backend_ready_while_window_is_being_created_still_loads_home(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            window = mock.Mock()
+            window.events = types.SimpleNamespace(shown=mock.Mock(), closed=_Event())
+            webview = mock.Mock()
+            url = "http://127.0.0.1:52345/"
+            deferred = []
+
+            class DeferredStarter:
+                def __init__(self, *, target, daemon):
+                    self.target = target
+                    deferred.append(self)
+
+                def start(self):
+                    # Let window construction complete the first thread.
+                    if len(deferred) > 1:
+                        self.target()
+
+                def join(self, timeout=None):
+                    return None
+
+            backend = mock.Mock()
+            backend.start.side_effect = lambda *, on_ready, **kwargs: on_ready(url)
+
+            def open_while_backend_becomes_ready(_webview, _theme, *, url, error):
+                self.assertIsNone(url)
+                self.assertIsNone(error)
+                deferred[0].target()
+                return window, None
+
+            with (
+                mock.patch.object(desktop.sys, "platform", "linux"),
+                mock.patch.dict(desktop.os.environ),
+                mock.patch.dict(sys.modules, {"webview": webview}),
+                mock.patch.object(desktop, "app_root", return_value=root),
+                mock.patch.object(desktop, "DesktopBackend", return_value=backend),
+                mock.patch.object(desktop, "create_main_window", side_effect=open_while_backend_becomes_ready),
+                mock.patch.object(desktop, "setup_logging"),
+                mock.patch("src.me_finder.onefile_cleanup.start_background_cleanup"),
+                mock.patch.object(desktop, "threading", types.SimpleNamespace(Thread=DeferredStarter)),
+            ):
+                desktop.main()
+            window.load_url.assert_called_once_with(url)
+
     def test_macos_main_window_waits_for_page_then_shows_only_once(self) -> None:
         """macOS 同样先隐藏开窗，首个页面 loaded 后才显示，避免整窗底色闪一两秒。"""
         for initial_page in (
@@ -227,8 +282,8 @@ class DesktopPortableTests(unittest.TestCase):
 
         source = Path("desktop.py").read_text(encoding="utf-8")
         self.assertIn("starter.join(2.0)", source)
-        self.assertIn('url=backend_outcome.get("url")', source)
-        self.assertIn('error=backend_outcome.get("error")', source)
+        self.assertIn("url=initial_url", source)
+        self.assertIn("error=initial_error", source)
         # 早启动先于窗口创建;兜底换页在窗口显示之后。
         window_call = source.index("window, window_controller = create_main_window(")
         self.assertLess(source.index("starter.start()"), window_call)

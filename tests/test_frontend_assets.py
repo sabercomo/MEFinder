@@ -716,10 +716,11 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 素材库引用编号去掉多余美元符号，复制保留波数单位空格及数字上标。
     # 复制保留对齐公式的行、求和范围与下括号注释。
     # 复制保留单字母上方的波浪号。
+    # 0.6.6：保留电荷和前置上标；按 MathML 结构处理分组、单位和科学计数间距。
     BASELINE_SHA256 = (
-        "6f2b072c15aca9b1102cfad6328b41cdac9e06d2ad86b5e5c570f845755a6fd0"
+        "e015cef2bcd5479c7f13f3705ee89cef359a3d6ea6d9d08544a7e76c8a5ed816"
     )
-    BASELINE_BYTES = 1947334
+    BASELINE_BYTES = 1949214
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
