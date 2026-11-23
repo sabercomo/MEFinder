@@ -711,10 +711,12 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # MinerU 删除入口移到账号行，确认框默认聚焦取消。
     # 0.6.4：素材库页头上移，版本文字与间距变化。
     # 0.6.5：译本对照入口首帧就位，补作品加载状态。
+    # 0.6.5：素材库与检索共用公式排版与纯文本复制。
+    # 素材库预览保留划选，支持带反斜杠定界符的公式。
     BASELINE_SHA256 = (
-        "dd0bdc70ef2cac892b13eef88275bc1ba631340c4886c8de5bbc8e5842b882fa"
+        "7690c280a0c57b61b77550c8d02664d684e87e7a3517b5b532ffbc409b97508a"
     )
-    BASELINE_BYTES = 1941070
+    BASELINE_BYTES = 1944498
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")
@@ -757,7 +759,10 @@ class VendorAssetTests(unittest.TestCase):
         )
         self.assertTrue(path.with_name("katex.LICENSE.txt").is_file())
         self.assertIn("<script>\n" + payload.decode("utf-8") + "</script>", HTML)
-        self.assertLess(HTML.index(payload.decode("utf-8")), HTML.index("// module: 20-search.js"))
+        passage_at = HTML.index("// module: 17-passage.js")
+        self.assertLess(HTML.index(payload.decode("utf-8")), passage_at)
+        self.assertLess(passage_at, HTML.index("// module: 20-search.js"))
+        self.assertLess(passage_at, HTML.index("// module: 32-materials.js"))
 
     def test_reader_window_does_not_load_vue(self):
         from src.me_finder.web_assets import READER_WINDOW_HTML

@@ -3,6 +3,7 @@
 
   const materials = global.MEFinderMaterials;
   const {node, button, load, post, openDialog, displayPath, tagName, parentPath, tagTree, tagsByExcerpt, normalizePath, editRequest} = materials;
+  const {appendPassage} = global.MEFinder;
   const host = document.getElementById('page-materials');
   const side = document.getElementById('materials-tags');
   const list = document.getElementById('materials-excerpts');
@@ -216,8 +217,16 @@
       rowTitle.addEventListener('click', () => selectExcerpt(excerpt.excerpt_id));
       const heading = node('div', 'materials-excerpt-heading');
       heading.append(rowTitle, node('span', 'materials-page-label', pageLabel(excerpt)));
-      const text = node('p', 'materials-text-preview', excerpt.text);
-      text.addEventListener('click', () => selectExcerpt(excerpt.excerpt_id));
+      const text = node('p', 'materials-text-preview');
+      appendPassage(text, excerpt.text);
+      let pressAt;
+      text.addEventListener('mousedown', ({clientX, clientY}) => { pressAt = [clientX, clientY]; });
+      text.addEventListener('click', ({clientX, clientY}) => {
+        const selection = global.getSelection();
+        const dragged = pressAt && (pressAt[0] !== clientX || pressAt[1] !== clientY);
+        if (dragged && !selection.isCollapsed && selection.containsNode(text, true)) return;
+        selectExcerpt(excerpt.excerpt_id);
+      });
       const meta = node('div', 'materials-excerpt-meta');
       if (excerpt.author) meta.appendChild(node('span', '', excerpt.author));
       if (excerpt.note) meta.appendChild(node('span', 'materials-note-preview', excerpt.note));
@@ -255,7 +264,9 @@
       : location?.status === 'text_changed' ? '原文已变，无法确认当前位置'
         : location?.error;
     if (warning) detail.appendChild(node('p', 'materials-error', warning + ' · 保留收集时的出处'));
-    detail.append(node('blockquote', 'materials-quote', excerpt.text), node('h4', '', '标签'), chips(excerpt.tags));
+    const quote = node('blockquote', 'materials-quote');
+    appendPassage(quote, excerpt.text);
+    detail.append(quote, node('h4', '', '标签'), chips(excerpt.tags));
     detail.append(node('h4', '', '备注'),
       node('p', 'materials-note', excerpt.note || '暂无备注'));
     const actions = node('div', 'materials-form-actions');

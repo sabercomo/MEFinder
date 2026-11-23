@@ -437,59 +437,6 @@
     }
   }
 
-  function appendPassage(host, text, from, to, matchStart = to, matchEnd = to) {
-    function appendPlain(start, end) {
-      start = Math.max(from, start);
-      end = Math.min(to, end);
-      if (start >= end) return;
-      const markStart = Math.max(start, matchStart);
-      const markEnd = Math.min(end, matchEnd);
-      if (markStart >= markEnd) {
-        host.append(text.slice(start, end));
-        return;
-      }
-      host.append(text.slice(start, markStart),
-        searchNode('mark', null, text.slice(markStart, markEnd)), text.slice(markEnd, end));
-    }
-
-    let cursor = from;
-    // 不跨行配对单美元符号。尾部空白或紧跟数字的美元符号通常是下一个金额的开头。
-    const math = /\\[$\\]|\$\$([^$]+)\$\$|\$((?=\S)(?:\\[^\r\n]|[^\\$\r\n])*?(?:\\[^\r\n]|[^\\$\s]))\$(?![\d$])/g;
-    for (const match of text.matchAll(math)) {
-      const start = match.index;
-      const end = start + match[0].length;
-      if (start >= to) break;
-      if (end <= from) continue;
-      const tex = match[1] || match[2];
-      // 保留误配进来的普通散文，如“$10 至 $20”一类金额。
-      if (!tex || (!/[\\_^=+*/<>-]/.test(tex) && !/^[\w.,()]+$/.test(tex))) continue;
-      const formula = document.createElement('span');
-      try {
-        // 与 KaTeX auto-render 一样，按分隔符选择独立公式模式，以支持 \tag。
-        global.katex.render(tex, formula, {
-          output: 'mathml', displayMode: match[1] !== undefined, trust: false, maxSize: 10
-        });
-      } catch (error) {
-        if (!(error instanceof global.katex.ParseError)) throw error;
-        continue;  // 无法排版的公式按解析文本显示。
-      }
-      // MinerU 有时把下标单独输出，如 SnO $_{2}$。
-      const attached = tex.startsWith('_') && /[a-z\d)] $/i.test(text.slice(start - 2, start));
-      const visibleStart = attached ? start - 1 : start;
-      formula.dataset.formulaSource = text.slice(visibleStart, end);
-      appendPlain(cursor, visibleStart);
-      if (matchStart < matchEnd && start < matchEnd && end > matchStart) {
-        const mark = searchNode('mark');
-        mark.appendChild(formula);
-        host.appendChild(mark);
-      } else {
-        host.appendChild(formula);
-      }
-      cursor = end;
-    }
-    appendPlain(cursor, to);
-  }
-
   function appendHighlighted(host, item, limit) {
     var text = String(item.paragraph_text || '');
     var characters = Array.from(text);
@@ -499,32 +446,10 @@
     start = Math.max(0, Math.min(start, characters.length));
     end = Math.max(start, Math.min(end, characters.length));
     // 搜索偏移按 Unicode 码点计数，DOM 字符串按 UTF-16 切片。
-    appendPassage(host, text, 0, truncated ? characters.slice(0, limit).join('').length : text.length,
+    global.MEFinder.appendPassage(host, text, 0, truncated ? characters.slice(0, limit).join('').length : text.length,
       characters.slice(0, start).join('').length, characters.slice(0, end).join('').length);
     if (truncated) host.append('…');
   }
-
-  document.addEventListener('copy', function(event) {
-    const selection = global.getSelection();
-    if (selection.isCollapsed) return;
-    const range = selection.getRangeAt(0);
-    const ancestor = range.commonAncestorContainer;
-    const element = ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentElement;
-    if (!element.closest('.detail-hit, .result-snippet, .detail-context-preview, .detail-context-full')) return;
-    const selectedFormula = element.closest('[data-formula-source]');
-    const copied = document.createElement('div');
-    if (selectedFormula) {
-      copied.textContent = selectedFormula.dataset.formulaSource;
-    } else {
-      copied.appendChild(range.cloneContents());
-      const formulas = copied.querySelectorAll('[data-formula-source]');
-      if (!formulas.length) return;
-      formulas.forEach(formula => formula.replaceWith(formula.dataset.formulaSource));
-    }
-    event.clipboardData.setData('text/plain', copied.textContent);
-    event.clipboardData.setData('text/html', copied.outerHTML);
-    event.preventDefault();
-  });
 
   let detailSelection;
   let paintedHit;
@@ -670,7 +595,7 @@
     let copyTimer;
     copy.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(global.MEFinder.plainRangeText(range));
         copy.textContent = '已复制';
         clearTimeout(copyTimer);
         copyTimer = setTimeout(() => { copy.textContent = '复制'; }, 1400);
@@ -866,12 +791,12 @@
     var tail = truncated && side === 'before';
     var head = truncated && side === 'after';
     if (tail) preview.append('…');
-    appendPassage(preview, fullText, tail ? fullText.length - previewText.length + 1 : 0,
+    global.MEFinder.appendPassage(preview, fullText, tail ? fullText.length - previewText.length + 1 : 0,
       head ? previewText.length - 1 : fullText.length);
     if (head) preview.append('…');
     content.appendChild(preview);
     var expanded = searchNode('span', 'detail-context-full');
-    appendPassage(expanded, fullText, 0, fullText.length);
+    global.MEFinder.appendPassage(expanded, fullText, 0, fullText.length);
     expanded.hidden = true;
     content.appendChild(expanded);
     section.appendChild(content);

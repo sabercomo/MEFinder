@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sqlite3
+import sys
 import threading
 import unittest
 from contextlib import closing
@@ -28,11 +29,12 @@ from unittest import mock
 import fitz
 
 from src.me_finder.app_context import AppContext
+from src.me_finder.database import replace_source_in_database
 from src.me_finder.structured_reader import get_document_window
 from src.me_finder.alignment.text_alignment import generate_alignment
 from src.me_finder.components.alignment_runtime import ManagedAlignmentRuntime
 from src.me_finder.web import ManagedThreadingHTTPServer, make_handler
-from tests import test_text_alignment
+from tests import test_materials, test_text_alignment
 
 try:
     from playwright.sync_api import Page, Route, sync_playwright
@@ -207,6 +209,7 @@ class BrowserRegressionTests(unittest.TestCase):
             "document_title": "MinerU 解析样例", "source_type": "pdf", "citation_page_start": "12",
             "match_type": "exact", "match_score": 1, "highlighted_html": "present",
             "paragraph_text": text, "match_start": xrd, "match_end": xrd + 3,
+            "source_file_id": "pdf-de", "paragraph_id": "formula-fixture",
             "context_before": [{"text": r"上文 $2\theta$"}], "context_after": [{"text": cut}],
         }
         self.page.route("**/api/search", lambda route: route.fulfill(json={
@@ -229,9 +232,18 @@ class BrowserRegressionTests(unittest.TestCase):
           const clipboardData = new DataTransfer();
           node.dispatchEvent(new ClipboardEvent('copy', {bubbles: true, cancelable: true, clipboardData}));
           selection.removeAllRanges();
-          return clipboardData.getData('text/plain');
+          return [clipboardData.getData('text/plain'), clipboardData.getData('text/html')];
         }""")
-        self.assertEqual(copied, text)
+        plain = text.replace(r" $_{2}$", "2").replace(r"$27.16^{\circ}$", "27.16°")
+        self.assertEqual(copied, [plain, ""])
+        self.page.evaluate("""() => {
+          Object.defineProperty(navigator, 'clipboard', {value: {writeText: async text => { window.lastCopy = text; }}});
+          const hit = document.querySelector('.detail-hit');
+          getSelection().selectAllChildren(hit);
+        }""")
+        self.page.get_by_role("toolbar", name="选中文字操作").get_by_role("button", name="复制", exact=True).click()
+        self.assertEqual(self.page.evaluate("window.lastCopy"), plain)
+        self.page.evaluate("getSelection().removeAllRanges()")
         self.assertIn("12", self.page.locator(".detail-pills").inner_text())
         self.assertEqual(self.page.locator(".detail-context-before .detail-context-preview math").count(), 1)
         self.assertEqual(self.page.locator(".detail-context-after .detail-context-preview math").count(), 1)
@@ -286,7 +298,8 @@ class BrowserRegressionTests(unittest.TestCase):
               selection.removeAllRanges();
               return clipboardData.getData('text/plain');
             }""")
-            self.assertEqual(copied, texts[index])
+            expression = ("η=(1−Ct/C0)×100% (1)", "(ahv)^(1/n)=A(hv−Eg) (3)")[index]
+            self.assertEqual(copied, texts[index].split("$$")[0] + expression + texts[index].split("$$")[2])
 
     def test_mineru_accounts_can_be_deleted_directly_from_their_rows(self) -> None:
         url = self.base_url + "/api/mineru-accounts"
@@ -921,6 +934,107 @@ class BrowserRegressionTests(unittest.TestCase):
         self.assertTrue(page.get_by_role("tab", name="外观").get_attribute("aria-selected") == "true")
         self.assertTrue(page.locator("#appearance-card").is_visible())
         self.assertEqual(len(settings_posts), post_count)
+
+    def test_saved_material_formulas_render_without_changing_the_excerpt(self) -> None:
+        source = (
+            r"加入 \(\mathrm{H}_{2}\mathrm{O}_{2}\)，复核 H₂O₂。成本 $10 至 $20，未识别的公式 $\unknown_{2}$。"
+            "\n\\[\n" + r"\frac{a+b}{c}\tag{1}" + "\n\\]\n式中各量见原文。"
+        )
+        plain = (
+            r"加入 H2O2，复核 H2O2。成本 $10 至 $20，未识别的公式 $\unknown_{2}$。"
+            "\n(a+b)/c (1)\n式中各量见原文。"
+        )
+        document = test_materials.document([source], prefix="12")
+        replace_source_in_database(document, self.fixture.db, backup_existing=False)
+        selection = test_materials.selection(source)
+        page = self.page
+        api = self.base_url + "/api/materials"
+        collected = page.request.post(api, data={
+            "action": "collect", "tags": ["实验方法"], "selections": [selection],
+        })
+        self.assertTrue(collected.ok, collected.text())
+        excerpt_id = collected.json()["excerpt_ids"][0]
+
+        page.locator("#materials-nav").click()
+        preview = page.locator(".materials-text-preview")
+        preview.wait_for()
+        page.locator(".materials-excerpt-title").click()
+        quote = page.locator(".materials-quote")
+        open_source = page.locator("#materials-detail").get_by_role("button", name="打开原文")
+        self.wait_until(open_source.is_enabled, "excerpt location must settle before testing selection")
+
+        for passage in (preview, quote):
+            self.assertEqual(passage.locator("math").count(), 2)
+            self.assertEqual(passage.locator('math[display="block"]').count(), 1)
+            self.assertIn(r"$10 至 $20，未识别的公式 $\unknown_{2}$", passage.inner_text())
+            copied = passage.evaluate("""node => {
+              const selection = getSelection();
+              selection.selectAllChildren(node);
+              const clipboardData = new DataTransfer();
+              node.dispatchEvent(new ClipboardEvent('copy', {bubbles:true, cancelable:true, clipboardData}));
+              selection.removeAllRanges();
+              return [clipboardData.getData('text/plain'), clipboardData.getData('text/html')];
+            }""")
+            self.assertEqual(copied, [plain, ""])
+        partial = quote.evaluate("""node => {
+          const range = document.createRange();
+          range.setStart(node.querySelector('math mi').firstChild, 0);
+          const after = node.querySelector('[data-formula-source]').nextSibling;
+          range.setEnd(after, 1);
+          const selection = getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          const clipboardData = new DataTransfer();
+          node.dispatchEvent(new ClipboardEvent('copy', {bubbles:true, cancelable:true, clipboardData}));
+          selection.removeAllRanges();
+          return clipboardData.getData('text/plain');
+        }""")
+        self.assertEqual(partial, "H2O2，")
+
+        located = page.request.post(api, data={"action": "locate", "excerpt_id": excerpt_id})
+        self.assertTrue(located.ok, located.text())
+        result = located.json()
+        self.assertEqual({key: result["excerpt"][key] for key in selection}, selection)
+        self.assertEqual(result["excerpt"]["citation_start"], "12")
+        self.assertEqual(result["reader"]["targetIndex"], 0)
+        with page.expect_download() as export:
+            page.locator("#materials-export").click()
+        self.assertIn(source, export.value.path().read_text(encoding="utf-8").replace("\n> ", "\n"))
+
+    def test_drag_copy_material_preview_into_plain_text(self) -> None:
+        source = r"加入 $H_{2}O_{2}$ 后继续搅拌。"
+        replace_source_in_database(test_materials.document([source]), self.fixture.db, backup_existing=False)
+        page = self.page
+        self.context.grant_permissions(["clipboard-read", "clipboard-write"])
+        captured = page.request.post(self.base_url + "/api/materials", data={
+            "action": "collect", "tags": ["实验方法"], "selections": [test_materials.selection(source)],
+        })
+        self.assertTrue(captured.ok, captured.text())
+        page.locator("#materials-nav").click()
+        preview = page.locator(".materials-text-preview")
+        preview.wait_for()
+        edges = preview.evaluate("""node => {
+          const first = node.firstChild, last = node.lastChild;
+          const a = new Range(), b = new Range();
+          a.setStart(first, 0);
+          a.setEnd(first, 1);
+          b.setStart(last, last.length - 1);
+          b.setEnd(last, last.length);
+          const start = a.getBoundingClientRect(), end = b.getBoundingClientRect();
+          return [[start.left + 0.5, start.top + start.height / 2],
+                  [end.right - 0.5, end.top + end.height / 2]];
+        }""")
+        page.mouse.move(*edges[0])
+        page.mouse.down()
+        page.mouse.move(*edges[1], steps=12)
+        page.mouse.up()
+        self.assertFalse(page.evaluate("getSelection().isCollapsed"))
+        self.assertFalse(page.locator("#materials-detail").is_visible())
+        modifier = "Meta" if sys.platform == "darwin" else "Control"
+        page.keyboard.press(modifier + "+c")
+        self.assertEqual(page.evaluate("navigator.clipboard.readText()"), "加入 H2O2 后继续搅拌。")
+        preview.click()
+        self.assertTrue(page.locator("#materials-detail").is_visible())
 
     def test_material_image_file_drop_and_paste_share_the_import_page(self) -> None:
         page = self.page
