@@ -111,7 +111,7 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 ## ⬇️ 下载
 
-**v0.6.4 已发布。** 素材库支持收集本地图片和 PDF 截图，设置页可以搜索，MCP 可以按标签读取文字摘录。[下载 v0.6.4](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.4) · [查看版本说明](docs/release-notes-0.6.4.md)
+**v0.6.5 已发布。** 公式复制改为纯文本，科学单位上下标与新导入公式结构保留；译本对照入口随首页首帧出现。[下载 v0.6.5](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.5) · [查看版本说明](docs/release-notes-0.6.5.md)
 
 发布包无需安装 Python，后续更新可在 [GitHub Releases](https://github.com/sabercomo/MEFinder/releases/latest) 下载。
 

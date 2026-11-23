@@ -1,3 +1,18 @@
+2026-11-23：**v0.6.5 正式发布。** 科学单位上下标入库、多行公式与波浪号纯文本复制、译本对照首帧修复已进入包内；macOS Apple Silicon / Intel 与 Windows 安装版、便携版及各自 SHA-256 共 12 个附件均已公开。下载见 [GitHub Release v0.6.5](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.5)。详见 [0.6.5 说明](release-notes-0.6.5.md)。
+
+发布源码 `8699dc9`。macOS arm64 全量 unittest 2,927 项通过（57 跳过），x86_64 2,927 项通过（62 跳过）；本机浏览器回归 33 项与 CI tests、browser-regression、lint、windows-tests 全部通过。Windows 安装版与便携版在本机 Windows 10 x64 构建，各 2,927 项通过（56 跳过）；未签名，安装、升级、卸载与冻结 GUI 未人工验收。数据库仍为 v13；macOS 为 ad-hoc 签名、未公证，Intel 包经 Rosetta 构建，未在 Intel 真机验收。
+
+| 文件 | 字节数 | SHA-256 |
+| --- | ---: | --- |
+| `MEFinder-v0.6.5-macos-arm64.dmg` | 104,475,475 | `7d8535c88c94dc50529acf631b3117148b8ee96a441f07548dddc088a280e407` |
+| `MEFinder-v0.6.5-macos-arm64.zip` | 96,549,294 | `cfe188426dfc7c4eb17f98f0447c7ef45a4e0e5f45d291a5ea04089ed070092c` |
+| `MEFinder-v0.6.5-macos-x86_64.dmg` | 109,574,324 | `1c124a56eb5d227c0472116b04620cfb953b23ed223af9807f45736ce36d6623` |
+| `MEFinder-v0.6.5-macos-x86_64.zip` | 103,085,275 | `db03adff58d40f25764a73ac7de1f877bb0c489159f60fe97b8a38578063a893` |
+| `MEFinder-v0.6.5-windows-setup.exe` | 82,433,894 | `844115afdd2680be20956d7dff890509c62a5705e029288def15aeedf7ceb711` |
+| `MEFinder-v0.6.5-windows-portable.zip` | 98,303,564 | `d352de842fc83a1c0ae1420491c07c2f93a8a4a57316d778ce6d1bc1e728532b` |
+
+每个二进制文件均附同名 `.sha256.txt`。
+
 2026-11-22：**v0.6.4 正式发布。** 素材库图片、设置内搜索、解析 API 改版与其他解析 API 连接错误提示已进入包内；macOS Apple Silicon / Intel 与 Windows 安装版、便携版及各自 SHA-256 共 12 个附件均已公开。下载见 [GitHub Release v0.6.4](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.4)。详见 [0.6.4 说明](release-notes-0.6.4.md)。
 
 发布源码 `3b1379e`。macOS arm64 全量 unittest 2,917 项通过（52 跳过），x86_64 2,917 项通过（57 跳过）；Windows 安装版与便携版各 2,917 项通过（66 跳过），安装、从 v0.4.9 升级、MCP 会话、卸载保留用户数据与便携版移动通过。CI tests、browser-regression、lint、windows-tests 全部通过。数据库升级至 v13；macOS 为 ad-hoc 签名、未公证，Intel 包经 Rosetta 构建，未在 Intel 真机验收；Windows 包未签名。
