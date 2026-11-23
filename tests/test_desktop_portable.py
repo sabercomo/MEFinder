@@ -39,6 +39,7 @@ class DesktopPortableTests(unittest.TestCase):
             window = mock.Mock()
             window.events = types.SimpleNamespace(shown=mock.Mock(), closed=_Event())
             webview = mock.Mock()
+            certifi = types.SimpleNamespace(where=lambda: str(root / "test-ca.pem"))
             url = "http://127.0.0.1:52345/"
             deferred = []
 
@@ -67,7 +68,7 @@ class DesktopPortableTests(unittest.TestCase):
             with (
                 mock.patch.object(desktop.sys, "platform", "linux"),
                 mock.patch.dict(desktop.os.environ),
-                mock.patch.dict(sys.modules, {"webview": webview}),
+                mock.patch.dict(sys.modules, {"webview": webview, "certifi": certifi}),
                 mock.patch.object(desktop, "app_root", return_value=root),
                 mock.patch.object(desktop, "DesktopBackend", return_value=backend),
                 mock.patch.object(desktop, "create_main_window", side_effect=open_while_backend_becomes_ready),
