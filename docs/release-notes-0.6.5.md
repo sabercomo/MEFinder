@@ -1,4 +1,4 @@
-2026-11-23：**0.6.5 源码已支持公式纯文本复制，尚未打入测试包。** 现有 macOS arm64 包包含素材库公式显示与译本对照首帧修复。
+2026-11-23：**0.6.5 macOS arm64 与 x86_64 本地测试包已构建。** 公式复制改为纯文本，素材库列表与详情显示公式，译本对照入口随首页首帧出现。Windows 包留给本机打包。
 
 # MEFinder 0.6.5
 
@@ -20,28 +20,24 @@
 ## 升级须知
 
 - **数据库仍为 v13**，本版未新增 schema 变更；0.6.3 及更早版本仍无法打开升级后的库。
-- 本包仅 macOS arm64，最低 macOS 14，ad-hoc 签名、未公证。Windows 与 Intel 包未重建。
+- macOS arm64 最低 macOS 14，x86_64 最低 macOS 12；均为 ad-hoc 签名、未公证。Intel 包经 Rosetta 构建，未在 Intel 真机验收。
+- Windows 安装版与便携版由用户在本机 Windows 电脑打包，本轮未提供；全平台验收以各自构建结果为准。
 - 本轮仅本地测试，不涉及标签、Release 或 Homebrew；v0.6.4 的公开标签与 12 个附件保持不变。
 
 ## 本地测试包
 
 | 文件（`release/`） | 字节数 | SHA-256 |
 | --- | ---: | --- |
-| `MEFinder-v0.6.5-macos-arm64.dmg` | 104,617,989 | `3b1b0ced1bbb256c5ddcf7cc6b607b3f6bcae0f76a6b316d31600be924d3d2f9` |
-| `MEFinder-v0.6.5-macos-arm64.zip` | 96,540,975 | `63bb86826626cd28b4f53ef922a6c7dfceeaf739ef693fc6c49e43d3dee9f872` |
+| `MEFinder-v0.6.5-macos-arm64.dmg` | 104,668,496 | `aaa127b74f5dfdee290f2487986457a845d950ef70fa5f647be87fc9521c2b88` |
+| `MEFinder-v0.6.5-macos-arm64.zip` | 96,541,532 | `458aef36441e94bff3124aec3799504a5c65721a62f5829ffb02f7e7a0215b98` |
+| `MEFinder-v0.6.5-macos-x86_64.dmg` | 109,577,911 | `e7463d0460eec32a00e52658616f324e35acf9a909472ba0a8fbe845048bf933` |
+| `MEFinder-v0.6.5-macos-x86_64.zip` | 103,078,171 | `0c8063ec001c805c519c1f7c9013bb95c21e71a7d3b8bd3df4d8d4a9ad823c81` |
 
-两个文件各附同名 `.sha256.txt`，`shasum -c` 已通过。
+四个文件各附同名 `.sha256.txt`，`shasum -c` 已通过；GitHub 草稿附件的 digest 与 sidecar 一致。
 
 ## 验证记录
 
-### 素材库公式重打包
-
-- 官方 `build_macos.sh` 构建内全量 unittest 2,920 项（54 项条件跳过，210.157 秒），Ruff、Node、前端装配指纹、STDIO 侧车及 SHA-256 校验通过。公式修复的源码回归已通过 31 项 Chrome 测试。
-- 独立验证 DMG 与 ZIP 的版本、arm64 架构及严格签名，包内公式渲染、检索、素材库与译本对照脚本均与源码一致。用 ZIP 解包后的程序启动隔离库，WKWebView 验证素材库预览和详情的行内及编号公式，原始 LaTeX 和印刷页码仍可从接口取回。同时确认译本入口首帧可点，放行摘要后相邻导航没有位移。
-- 本轮仅重新打包，未安装或发布。源码改动仍保留在工作区，构建基于 `ae6d9c3` 和本地公式修复。
-
-### 上一轮译本对照重打包
-
-- 官方 `build_macos.sh` 构建内全量 unittest 2,919 项通过（53 项条件跳过，204.940 秒）。29 项 Chrome 回归、Ruff、Node、前端装配指纹、STDIO 侧车冒烟和 SHA-256 验证通过。
-- 独立解包确认两份制品为 0.6.5、纯 arm64，主程序与 MCP 侧车逐一比对哈希相同，严格验签通过，包内入口模板及 `35-works.js` 与源码一致。
-- 用 ZIP 解包后的应用和含 8 个作品组的书库副本，验证 WKWebView 暂停摘要返回时入口已显示。点击即显示读取状态，放行后呈现 8 个作品，前后相邻导航位移为 0。只读入口由相同源码的隔离后端模拟组件不可用，Chrome 和 WKWebView 均通过。
+- 发布源码 `d219793`。CI [45120973594](https://github.com/sabercomo/MEFinder/actions/runs/45120973594) 的 tests、browser-regression、lint、windows-tests 四项通过；本机浏览器回归 31 项通过。
+- 官方 `build_macos.sh` 构建内全量 unittest：arm64 2,921 项通过（55 项条件跳过，201.800 秒），x86_64 2,921 项通过（60 项条件跳过，229.816 秒）。Node 语法、PyInstaller 桌面端与 MCP 侧车、ad-hoc 签名、STDIO 侧车冒烟、ZIP、DMG（挂载与复制验签）和 SHA-256 均通过。
+- 两个包独立解包核验：版本 0.6.5；主程序与 MCP 侧车分别为纯 arm64 / 纯 x86_64；严格验签通过；包内 `17-passage.js`、`20-search.js` 的 SHA-256 与源码一致。
+- 早前 arm64 包的公式显示与译本首帧修复验证见 [素材库公式记录](issues/mineru-search-formula-display.md)；本轮未重新做 WKWebView 人工验收。
