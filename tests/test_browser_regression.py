@@ -491,6 +491,36 @@ class BrowserRegressionTests(unittest.TestCase):
         self.assertFalse(row.get_by_role("switch").is_checked())
         self.assertEqual(switch.inner_text(), "关闭")
 
+    def test_paddleocr_uses_local_settings_and_requires_manual_import_selection(self) -> None:
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="本地 OCR").click()
+        panel = self.page.locator("#paddleocr-settings")
+        panel.get_by_text("未启用", exact=True).wait_for()
+        self.assertTrue(panel.locator(".managed-mineru-profile").is_visible())
+        panel.get_by_text("高级：连接自部署服务").click()
+        panel.get_by_label("服务地址").fill("http://192.168.1.8:8080")
+        panel.locator("label.ui-switch").click()
+        self.assertTrue(panel.get_by_label("启用本地 PaddleOCR").is_checked())
+        panel.get_by_role("button", name="保存设置").click()
+        panel.get_by_text("已保存设置。", exact=True).wait_for()
+        self.navigate("文献导入")
+        option = self.page.locator("#paddleocr-parse-option")
+        option.wait_for()
+        self.assertTrue(self.page.locator('input[value="auto"][name="pdf-parse-mode"]').is_checked())
+        with self.page.expect_response(lambda response: response.url.endswith('/api/preferences') and response.request.method == 'POST') as saved:
+            option.click()
+        self.assertEqual(saved.value.json()["pdf_parse_mode"], "paddleocr-local")
+        self.navigate("设置")
+        self.page.get_by_role("tab", name="本地 OCR").click()
+        if panel.locator("details").get_attribute("open") is None:
+            panel.get_by_text("高级：连接自部署服务").click()
+        panel.locator("label.ui-switch").click()
+        panel.get_by_role("button", name="保存设置").click()
+        panel.get_by_text("未启用", exact=True).wait_for()
+        self.navigate("文献导入")
+        self.assertTrue(option.locator("input").is_disabled())
+        self.assertTrue(option.locator("input").is_checked(), "must not silently fall back to online OCR")
+
     def test_custom_appearance_controls_start_collapsed(self) -> None:
         self.navigate("设置")
         self.page.get_by_role("tab", name="外观").click()
@@ -1321,7 +1351,8 @@ class BrowserRegressionTests(unittest.TestCase):
         held = []
 
         def hold_preview(route: Route) -> None:
-            if route.request.method == "POST" and route.request.post_data_json.get("action") == "preview_pdf":
+            if route.request.method == "POST" and route.request.post_data_json.get("action") == "preview_pdf" \
+                    and route.request.post_data_json["page"] == 2:
                 held.append(route)
             else:
                 route.continue_()
@@ -1335,10 +1366,31 @@ class BrowserRegressionTests(unittest.TestCase):
             self.assertEqual((dialog.bounding_box(), footer.bounding_box()), geometry)
             self.assertTrue(canvas.is_visible())
             self.assertTrue(use.is_disabled())
+            # Let a newer request for page 1 finish before delivering the old page 2.
+            page_number.fill("1")
+            dialog.get_by_role("status").get_by_text("PDF 第 1 / 2 页", exact=False).wait_for()
+            self.assertEqual(len(held), 1)
+            stale = held[0].fetch()
+            page.evaluate("""data => {
+                const decode = HTMLImageElement.prototype.decode;
+                HTMLImageElement.prototype.decode = function () {
+                    return decode.call(this).then(() => {
+                        if (this.src !== data) return;
+                        HTMLImageElement.prototype.decode = decode;
+                        requestAnimationFrame(() => { window.staleMaterialPreviewDecoded = true; });
+                    });
+                };
+            }""", stale.json()["data"])
+            held[0].fulfill(response=stale)
+            held.clear()
+            page.wait_for_function("window.staleMaterialPreviewDecoded")
+            self.assertEqual(canvas.evaluate("canvas => canvas.width"), first_width)
+            self.assertIn("PDF 第 1 / 2 页", dialog.get_by_role("status").inner_text())
         finally:
             for route in held:
                 route.continue_()
             page.unroute("**/api/materials", hold_preview)
+        next_page.click()
         dialog.get_by_role("status").get_by_text("PDF 第 2 / 2 页", exact=False).wait_for()
         self.assertEqual((dialog.bounding_box(), footer.bounding_box()), geometry)
         self.assertEqual(page_number.input_value(), "2")

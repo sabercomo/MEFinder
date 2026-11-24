@@ -30,10 +30,12 @@
     "/api/local-ocr",
     "/api/macos-update",
     "/api/materials",
+    "/api/materials/tags",
     "/api/mineru-accounts",
     "/api/mineru-config",
     "/api/mineru-local/component",
     "/api/mineru-statistics",
+    "/api/paddleocr-local",
     "/api/parser-statistics",
     "/api/preferences",
     "/api/scan-directories",
@@ -107,6 +109,7 @@
     "/api/local-ocr/component",
     "/api/local-ocr/test",
     "/api/materials",
+    "/api/materials/paragraph-excerpts",
     "/api/mineru-accounts",
     "/api/mineru-accounts/service",
     "/api/mineru-accounts/test",
@@ -118,6 +121,7 @@
     "/api/mineru-reparse",
     "/api/open-mineru-token",
     "/api/open-source",
+    "/api/paddleocr-local",
     "/api/preferences",
     "/api/scan-directories/choose",
     "/api/search",
@@ -153,6 +157,57 @@
     },
     "compatibility": "仍支持原有整份设置提交。单引擎提交保留另一引擎和全局 OCR 参数。",
     "response": "同原有设置保存响应，返回当前 OCR 设置及组件状态。"
+  },
+  "paddleocr_local": {
+    "GET /api/paddleocr-local": {
+      "response_fields": ["component_id", "supported", "installed", "busy", "state", "message", "enabled", "endpoint", "version"]
+    },
+    "POST /api/paddleocr-local": {
+      "actions": ["check", "install", "cancel", "uninstall", "save", "test"],
+      "save": {"endpoint": "string；留空选择托管组件", "enabled": "boolean"},
+      "test": {"endpoint": "string；使用合成图像验证服务，不发送用户文献"},
+      "note": "外部服务必须是回环地址或受信任的私有网段 IP，并提供 POST /layout-parsing。允许确认启用后手动选择 paddleocr-local；现有 auto 不变。"
+    }
+  },
+  "material_reads": {
+    "POST /api/materials (preview_pdf)": {
+      "note": "预览响应的 revision 是不透明字符串，绑定来源 ID、PDF 物理页和文件版本。collect_image 必须把该页响应中的 revision 原样提交；不接受另一来源、另一页或旧版本的凭据。"
+    },
+    "GET /api/materials/tags": {
+      "response": {
+        "material_tags": [
+          {
+            "path": "string"
+          }
+        ]
+      },
+      "note": "只返回已保存的标签路径（含父级），按路径排序；不读取摘录或图片。"
+    },
+    "POST /api/materials/paragraph-excerpts": {
+      "request": {
+        "paragraphs": [
+          [
+            "source_id",
+            "paragraph_id"
+          ]
+        ]
+      },
+      "response": {
+        "excerpts": [
+          {
+            "source_id": "string",
+            "start_anchor": "string",
+            "start_offset": "integer",
+            "end_offset": "integer",
+            "text": "string",
+            "paths": [
+              "string"
+            ]
+          }
+        ]
+      },
+      "note": "只读。按来源与段落组合去重，仅返回同一段内保存的摘录；偏移按 Unicode 码点计。未命中返回空数组；请求形状无效返回 400，索引暂不可读返回 503。"
+    }
   },
   "zotero_source_sync": {
     "note": "0.5.6 新增：来源 → Zotero。只读 Zotero 7 本机 Local API（127.0.0.1:23119），不读写 zotero.sqlite、不走 Zotero Web API、不读取 Zotero 全文索引。偏好走 /api/preferences 的 zotero_sync_enabled / zotero_sync_collections / zotero_sync_frequency。",

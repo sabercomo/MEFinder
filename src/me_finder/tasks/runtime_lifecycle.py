@@ -91,6 +91,9 @@ class RuntimeLifecycle:
         if not self.managed.local_ocr.close(timeout=remaining):
             return False
         remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+        if not self.managed.paddleocr.close(timeout=remaining):
+            return False
+        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
         if not self.managed.embedding_models.close(timeout=remaining):
             return False
         remaining = None if deadline is None else max(0.0, deadline - time.monotonic())

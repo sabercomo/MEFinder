@@ -215,6 +215,7 @@
       renderLocalOCRUnknown(error.message);
     }
     loadGeneralModelConfig();
+    global.MEFinder.paddleOCR.load();
   }
 
   function localOCRPaths(fields) {

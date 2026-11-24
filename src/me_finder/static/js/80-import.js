@@ -596,10 +596,11 @@
   }
 
   function normalizePdfParseMode(mode) {
-    return ['auto','mineru','mineru-local','vision','general-local-model'].indexOf(mode) >= 0 ? mode : 'auto';
+    return ['auto','mineru','mineru-local','vision','general-local-model','paddleocr-local'].indexOf(mode) >= 0 ? mode : 'auto';
   }
 
   function renderPdfParseMode() {
+    global.MEFinder.paddleOCR.syncImportOption();
     var zoteroLabel = document.getElementById('zotero-parse-mode');
     document.querySelectorAll('input[name="pdf-parse-mode"]').forEach(function(input) {
       input.checked = input.value === settingsStore.currentPdfParseMode;

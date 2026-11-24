@@ -54,7 +54,7 @@ LEGACY_DATA_ROOT_MUTATING_POST_PATHS = frozenset(
     {
         "/api/preferences", "/api/mineru-accounts", "/api/mineru-accounts/service",
         "/api/mineru-config", "/api/mineru-local", "/api/mineru-local/component",
-        "/api/local-ocr", "/api/local-ocr/component", "/api/text-alignment/models",
+        "/api/local-ocr", "/api/local-ocr/component", "/api/paddleocr-local", "/api/text-alignment/models",
         "/api/vision-providers", "/api/general-model", "/api/import",
         "/api/import-upload/start", "/api/import-upload/chunk", "/api/import-upload/cancel",
         "/api/import-upload/finish", "/api/mineru-reparse", "/api/import-retry-mineru",

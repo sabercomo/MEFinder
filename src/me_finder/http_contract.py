@@ -3,6 +3,7 @@
 GET_API_ROUTES = frozenset(
     {
         "/api/materials",
+        "/api/materials/tags",
         "/api/bibliographic-metadata",
         "/api/calibration",
         "/api/calibration-library",
@@ -35,6 +36,7 @@ GET_API_ROUTES = frozenset(
         "/api/mineru-local/component",
         "/api/mineru-statistics",
         "/api/parser-statistics",
+        "/api/paddleocr-local",
         "/api/preferences",
         "/api/scan-directories",
         "/api/sources",
@@ -47,7 +49,9 @@ GET_API_ROUTES = frozenset(
 
 POST_API_ROUTES = frozenset(
     {
+        "/api/paddleocr-local",
         "/api/materials",
+        "/api/materials/paragraph-excerpts",
         "/api/auto-page-mapping/accept",
         "/api/auto-page-mapping/apply",
         "/api/auto-page-mapping/detect",

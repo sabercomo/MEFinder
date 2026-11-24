@@ -10,19 +10,23 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import fitz
 
-from src.me_finder.app_context import AppContext
+from src.me_finder.app_context import AppContext, AppPaths
+from src.me_finder.application.index_runtime import IndexRuntime
+from src.me_finder.application.search_service import SearchRequest
 from src.me_finder.backup_service import create_backup, restore_backup
 from src.me_finder.database import build_database, delete_source_from_database, replace_source_in_database
 from src.me_finder.errors import UserFacingError
-from src.me_finder.materials.images import collect_image, edit_image, image_path, preview_pdf, read_image
+from src.me_finder.materials.controller import MaterialsController
+from src.me_finder.materials.images import collect_image, edit_image, image_path, prepare_pdf_image, read_image, render_pdf_preview
 from src.me_finder.materials.service import list_materials, mutate_materials
-from src.me_finder.persistence.connection import open_write
+from src.me_finder.persistence.connection import open_readonly_snapshot, open_write
 from src.me_finder.persistence.materials_store import TABLES, replace_materials_snapshot
 from src.me_finder.persistence.migrations import migrate_index_database
+from src.me_finder.search.engine import SearchEngine
 from src.me_finder.web import ManagedThreadingHTTPServer, make_handler
 
 
@@ -78,6 +82,50 @@ class MaterialsTests(unittest.TestCase):
     def locate(self, excerpt_id: int) -> dict:
         return mutate_materials(self.db, {"action": "locate", "excerpt_id": excerpt_id})
 
+    def controller(self) -> MaterialsController:
+        runtime = Mock(spec=IndexRuntime)
+        runtime.run_when_ready.side_effect = lambda operation: operation(self.db)
+        return MaterialsController(runtime, self.root, lambda _: self.fail("read opened an original file"))
+
+    def test_narrow_material_reads_ignore_unrelated_rows(self) -> None:
+        excerpts = (selection(TEXTS[0]), selection("薄膜", offset=TEXTS[0].index("薄膜")))
+        ids = self.collect(*excerpts)["excerpt_ids"]
+        self.collect(excerpts[1], tags=["甲"])
+        controller = self.controller()
+        key = [SOURCE_ID, excerpts[0]["start_anchor"]]
+        request = {"paragraphs": [key, key, ["other-source", key[1]], [SOURCE_ID, "no-match"]]}
+        tags = [{"path": path} for path in ("实验", "实验/表征", "实验/表征/FTIR", "甲")]
+        expected = [
+            {**{field: excerpt[field] for field in ("source_id", "start_anchor", "start_offset", "end_offset", "text")},
+             "paths": paths}
+            for excerpt, paths in zip(excerpts, [["实验/表征/FTIR"], ["实验/表征/FTIR", "甲"]], strict=True)
+        ]
+        self.assertEqual(controller.tags({}), (200, {"material_tags": tags}))
+        self.assertEqual(controller.paragraph_excerpts(request), (200, {"excerpts": expected}))
+        self.assertEqual(controller.paragraph_excerpts({"paragraphs": []}), (200, {"excerpts": []}))
+        self.assertEqual(controller.paragraph_excerpts({"paragraphs": [[SOURCE_ID, 1]]})[0], 400)
+        with open_write(self.db) as connection:
+            connection.execute(
+                """INSERT INTO material_excerpts
+                   (source_id,kind,start_anchor,end_anchor,start_offset,end_offset,text,title,author,created_at)
+                   SELECT 'copied',kind,start_anchor,end_anchor,start_offset,end_offset,text,title,author,created_at
+                   FROM material_excerpts WHERE excerpt_id=?""", (ids[0],),
+            )
+            connection.executemany(
+                """INSERT INTO material_excerpts
+                   (source_id,kind,start_anchor,end_anchor,start_offset,end_offset,text,title,author,created_at)
+                   VALUES ('unrelated','paragraph',?,?,0,200,?,'示例','作者','2026-11-23')""",
+                [(f"p{i}", f"p{i}", "甲乙" * 100) for i in range(999)],
+            )
+            connection.execute(
+                "INSERT INTO material_excerpt_tags SELECT excerpt_id,'实验/表征/FTIR' "
+                "FROM material_excerpts WHERE source_id='unrelated'"
+            )
+            connection.commit()
+        self.assertEqual(controller.tags({}), (200, {"material_tags": tags}))
+        self.assertEqual(controller.paragraph_excerpts(request), (200, {"excerpts": expected}))
+        self.assertEqual(len(list_materials(self.db)["material_excerpts"]), 1002)
+
     def test_v11_migration_preserves_existing_index(self) -> None:
         with open_write(self.db) as connection:
             for table in reversed(TABLES):
@@ -85,6 +133,14 @@ class MaterialsTests(unittest.TestCase):
             connection.execute("PRAGMA user_version=11")
             connection.commit()
         self.assertEqual(list_materials(self.db)["material_excerpts"], [])
+        controller = self.controller()
+        self.assertEqual(controller.tags({}), (200, {"material_tags": []}))
+        self.assertEqual(
+            controller.paragraph_excerpts({"paragraphs": [[SOURCE_ID, f"{SOURCE_ID}-P000000"]]}),
+            (200, {"excerpts": []}),
+        )
+        with open_readonly_snapshot(self.db) as connection:
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 11)
         captured = self.collect(selection(TEXTS[0]))
         self.assertEqual(self.locate(captured["excerpt_ids"][0])["excerpt"]["citation_start"], "38")
         with open_write(self.db) as connection:
@@ -241,7 +297,7 @@ class MaterialsTests(unittest.TestCase):
                                "page_source_type": "manual_page", "citation_page": "38"}]
         build_database(index, self.db)
         request = {"source_id": SOURCE_ID, "page": 1}
-        preview = preview_pdf(self.db, {**request, "action": "preview_pdf"}, lambda _: original)
+        preview = render_pdf_preview(prepare_pdf_image(self.db, request, lambda _: original), request)
         self.assertEqual(preview["page_count"], 1)
         saved = collect_image(self.db, self.root, {
             **request, "action": "collect_image", "revision": preview["revision"],
@@ -255,6 +311,111 @@ class MaterialsTests(unittest.TestCase):
         self.assertEqual(origin["page"], 1)
         delete_source_from_database(SOURCE_ID, self.db, backup_existing=False)
         self.assertEqual(read_image(self.db, self.root, saved["digest"])[0], data)
+
+    def _pdf_preview_fixture(self) -> tuple[Path, dict]:
+        original = self.root / "preview.pdf"
+        with fitz.open() as pdf:
+            pdf.new_page(width=100, height=160)
+            pdf.new_page(width=100, height=160)
+            pdf.save(original)
+        index = document(TEXTS)
+        index["source_files"][0].update(source_type="pdf", source_format="pdf", file_name=original.name)
+        return original, index
+
+    def test_pdf_preview_releases_search_lock_but_serializes_publication(self) -> None:
+        original, index = self._pdf_preview_fixture()
+        build_database(index, self.db)
+        rendering, resume, publishing, publication_requested = (threading.Event() for _ in range(4))
+        get_pixmap = fitz.Page.get_pixmap
+
+        def blocked_pixmap(page, **kwargs):
+            rendering.set()
+            resume.wait()
+            return get_pixmap(page, **kwargs)
+
+        def rebuild(*_args, **_kwargs):
+            self.assertTrue(resume.is_set(), "published while the preview was rendering")
+            publishing.set()
+            return {}
+
+        runtime = IndexRuntime(
+            AppPaths.create(self.root, index_path=self.db), engine_factory=SearchEngine,
+            rebuild_index=rebuild, replace_source=Mock(),
+        )
+        self.addCleanup(runtime.close)
+        controller = MaterialsController(runtime, self.root, lambda _: original)
+
+        def publish():
+            publication_requested.set()
+            runtime.rebuild()
+
+        with patch.object(fitz.Page, "get_pixmap", blocked_pixmap), ThreadPoolExecutor(3) as pool:
+            preview = pool.submit(controller.mutate, {"action": "preview_pdf", "source_id": SOURCE_ID, "page": 1})
+            try:
+                self.assertTrue(rendering.wait(5))
+                search = pool.submit(runtime.search, SearchRequest("薄膜的红外"))
+                result = search.result(timeout=5)
+                self.assertEqual(result["results"][0]["source_file_id"], SOURCE_ID)
+                publication = pool.submit(publish)
+                self.assertTrue(publication_requested.wait(5))
+                self.assertFalse(publishing.wait(0.1))
+            finally:
+                resume.set()
+            self.assertEqual(preview.result(timeout=5)[0], 200)
+            publication.result(timeout=5)
+            self.assertTrue(publishing.is_set())
+
+    def test_pdf_crop_rejects_preview_for_another_page_source_or_file(self) -> None:
+        original, index = self._pdf_preview_fixture()
+        index["source_files"].append({**index["source_files"][0], "source_file_id": "other"})
+        build_database(index, self.db)
+        request = {"source_id": SOURCE_ID, "page": 1}
+        source_path = lambda _: original
+        preview = render_pdf_preview(prepare_pdf_image(self.db, request, source_path), request)
+        self.assertIsNone(preview["citation_page"])
+        crop = {**request, "action": "collect_image", "revision": preview["revision"],
+                "box": [0, 0, 1, 1], "tags": ["实验"]}
+        for change in ({"page": 2}, {"source_id": "other"}):
+            with self.subTest(change=change), self.assertRaisesRegex(UserFacingError, "请重新框选"):
+                collect_image(self.db, self.root, {**crop, **change}, source_path)
+        replacement = self.root / "replacement.pdf"
+        with fitz.open() as pdf:
+            pdf.new_page(width=200, height=160)
+            pdf.save(replacement)
+        replacement.replace(original)
+        with self.assertRaisesRegex(UserFacingError, "请重新框选"):
+            collect_image(self.db, self.root, crop, source_path)
+        self.assertEqual(list_materials(self.db)["material_images"], [])
+
+    def test_pdf_preview_rejects_file_changed_during_render(self) -> None:
+        original, index = self._pdf_preview_fixture()
+        build_database(index, self.db)
+        request = {"source_id": SOURCE_ID, "page": 1}
+        source = prepare_pdf_image(self.db, request, lambda _: original)
+        # Simulate the fingerprint returned after rendering a concurrently changed PDF,
+        # without renaming a file while PyMuPDF has it open on Windows.
+        with patch("src.me_finder.materials.images.pdf_file_stamp", return_value=(0, 0, 0, 0)):
+            with self.assertRaisesRegex(UserFacingError, "请重新框选"):
+                render_pdf_preview(source, request)
+
+    def test_pdf_preview_discards_result_when_shutdown_starts_during_render(self) -> None:
+        original, index = self._pdf_preview_fixture()
+        build_database(index, self.db)
+        runtime = IndexRuntime(
+            AppPaths.create(self.root, index_path=self.db), engine_factory=SearchEngine,
+            rebuild_index=Mock(), replace_source=Mock(),
+        )
+        self.addCleanup(runtime.close)
+        controller = MaterialsController(runtime, self.root, lambda _: original)
+        get_pixmap = fitz.Page.get_pixmap
+
+        def shutdown_on_render(page, **kwargs):
+            runtime.begin_shutdown()
+            return get_pixmap(page, **kwargs)
+
+        with patch.object(fitz.Page, "get_pixmap", shutdown_on_render):
+            status, response = controller.mutate({"action": "preview_pdf", "source_id": SOURCE_ID, "page": 1})
+        self.assertEqual((status, response), (503, {"error": "应用正在关闭。"}))
 
     def test_rejects_backup_with_missing_material_parent(self) -> None:
         archive = BytesIO()
@@ -349,10 +510,17 @@ class MaterialsBrowserTests(unittest.TestCase):
                                     permissions=["clipboard-read", "clipboard-write"])
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
-            page.goto(f"http://127.0.0.1:{server.server_address[1]}/")
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            material_requests = []
+            page.on("request", lambda request: material_requests.append((request.method, request.url)))
+            page.goto(base_url + "/")
             page.locator("#query").fill("历史整段")
-            page.locator("#query").press("Enter")
+            with page.expect_response(base_url + "/api/materials/paragraph-excerpts") as excerpts_response:
+                page.locator("#query").press("Enter")
             expect(page.locator("#results-list .materials-chip")).to_have_text("历史归档")
+            self.assertEqual(excerpts_response.value.request.post_data_json, {
+                "paragraphs": [[SOURCE_ID, f"{SOURCE_ID}-P000002"]],
+            })
             page.locator("#query").fill("薄膜")
             page.locator("#query").press("Enter")
             rows = page.locator("#results-list .result-row")
@@ -407,7 +575,9 @@ class MaterialsBrowserTests(unittest.TestCase):
                     expect(toolbar.get_by_role("button", name="已复制")).to_be_visible()
                     self.assertEqual(page.evaluate("navigator.clipboard.readText()"), excerpt)
                     self.assertEqual(page.evaluate("getSelection().toString()"), excerpt)
-                tag_button.click()
+                with page.expect_response(base_url + "/api/materials/tags") as tags_response:
+                    tag_button.click()
+                self.assertEqual(set(tags_response.value.json()), {"material_tags"})
                 expect(picker).to_be_visible()
                 expect(toolbar).to_be_hidden()
                 expect(page.locator(".materials-dialog")).to_have_count(0)
@@ -455,6 +625,7 @@ class MaterialsBrowserTests(unittest.TestCase):
                 self.assertEqual((records[excerpt]["start_offset"], records[excerpt]["end_offset"]),
                                  (start, start + len(excerpt)))
             expect(page.locator("#detail-saved-sentences .materials-chip")).to_have_count(2)
+            self.assertNotIn(("GET", base_url + "/api/materials"), material_requests)
             page.locator("#detail-saved-sentences").get_by_role("button", name="实验 / 表征 / FTIR").click()
             expect(page.locator("#materials-active-tag")).to_have_text("实验 / 表征 / FTIR")
             expect(page.locator("#materials-count")).to_have_text("2 条")
@@ -510,5 +681,16 @@ class MaterialsBrowserTests(unittest.TestCase):
             expect(dialog).to_have_count(0)
             after = list_materials(db)
             self.assertEqual(len(after["material_excerpts"]), 4)
+            self.assertEqual(errors, [])
+            independent = browser.new_page()
+            independent.on("pageerror", lambda error: errors.append(str(error)))
+            independent.goto(base_url + "/reader-window")
+            independent.evaluate("""selections => {
+                window.MEFinderMaterials.openDialog({selections, onSaved() {}, onError() {}});
+            }""", [selection(excerpt, index=index, offset=original.index(excerpt))
+                   for index, (original, excerpt) in enumerate(zip(texts[:2], selected, strict=True))])
+            independent_dialog = independent.locator(".materials-dialog")
+            expect(independent_dialog.get_by_role("checkbox", name="实验 / 表征 / FTIR", exact=True)).to_be_checked()
+            expect(independent_dialog.get_by_role("checkbox", name="历史归档", exact=True)).not_to_be_checked()
             self.assertEqual(errors, [])
             browser.close()

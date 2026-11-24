@@ -187,6 +187,7 @@ def _provider_identity(
                 "mineru-local",
                 "ndlocr-lite",
                 "ndlkotenocr-lite",
+                "paddleocr-local",
             }
             else "api",
         )
@@ -206,6 +207,7 @@ def _human_parser_name(parser: str) -> str:
     return {
         "ndlocr-lite": "NDL 日文 OCR",
         "ndlkotenocr-lite": "NDL 古籍 OCR",
+        "paddleocr-local": "本地 PaddleOCR",
         "qwen-ocr": "Qwen OCR",
         "unknown-parser": "未标记解析器",
     }.get(parser, parser.replace("_", " "))

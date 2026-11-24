@@ -427,6 +427,13 @@
                 <small>直接使用你在设置中启用的本地部署服务，不上传到 MinerU 在线服务</small>
               </span>
             </label>
+            <label class="pdf-parse-option" id="paddleocr-parse-option" hidden>
+              <input type="radio" name="pdf-parse-mode" value="paddleocr-local" data-action-change="templateChange056">
+              <span class="pdf-parse-card">
+                <span class="pdf-parse-card-head"><strong>本地 PaddleOCR</strong><span class="pdf-parse-tag pdf-parse-tag-advanced">本地</span></span>
+                <small id="paddleocr-parse-note">使用已安装的 CPU 组件或已启用的内网服务解析 PDF</small>
+              </span>
+            </label>
             <label class="pdf-parse-option" id="general-model-parse-option" hidden>
               <input type="radio" name="pdf-parse-mode" value="general-local-model" data-action-change="templateChange056">
               <span class="pdf-parse-card">
@@ -828,6 +835,41 @@
                         <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="mineru-local-enabled" type="checkbox"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地部署选项</span></label><small>启用后，导入页可以选择「本地 MinerU」；在线 MinerU 失败后可手动切换，不会自动切换</small></div>
                         <span class="settings-label"></span>
                         <div class="settings-control settings-actions settings-save-row"><button id="mineru-local-save" class="action-btn primary" type="button" data-action="templateClick136">保存设置</button><button id="mineru-local-test" class="action-btn" type="button" data-action="templateClick137">检测连接</button><span id="mineru-local-hint" class="settings-hint" role="status" aria-live="polite"></span></div>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </section>
+              <section class="mineru-local-settings" id="paddleocr-settings">
+                <div class="mineru-local-section-head">
+                  <span class="mineru-local-summary-copy"><strong>PaddleOCR 本地部署</strong><small>一键安装 PP-StructureV3；也可连接自行部署的 PaddleOCR 服务</small></span>
+                  <span id="paddleocr-status" class="settings-status">读取中…</span>
+                </div>
+                <div class="mineru-local-body">
+                  <section class="managed-mineru" aria-labelledby="paddleocr-title">
+                    <div class="managed-mineru-heading"><span><strong id="paddleocr-title">MEFinder 托管运行时</strong><small id="paddleocr-platform">正在检测本机…</small></span>
+                      <span class="settings-actions"><button class="action-btn" type="button" id="paddleocr-check">检查组件</button><button class="action-btn primary" type="button" id="paddleocr-recommended" disabled>安装推荐配置</button></span>
+                    </div>
+                    <div class="managed-mineru-profile-list">
+                      <article class="managed-mineru-profile">
+                        <div><strong>PP-StructureV3</strong><small>兼容性优先 · 支持纯 CPU</small><div id="paddleocr-progress" class="managed-mineru-progress indeterminate" hidden><span style="width:18%"></span></div></div>
+                        <span id="paddleocr-state" class="settings-status">读取中…</span>
+                        <div class="settings-actions"><button id="paddleocr-install" class="action-btn primary" type="button" disabled>下载安装</button><button id="paddleocr-cancel" class="action-btn" type="button" hidden>取消</button><button id="paddleocr-uninstall" class="action-btn danger" type="button" hidden>卸载</button></div>
+                      </article>
+                    </div>
+                    <small id="paddleocr-hint" class="settings-hint" role="status" aria-live="polite">组件按需下载，不随主程序安装</small>
+                  </section>
+                  <details class="mineru-local-advanced">
+                    <summary><span>高级：连接自部署服务</span><svg class="settings-collapse-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+                    <div class="mineru-local-advanced-body">
+                      <div class="mineru-local-notice"><span>连接已经部署的 PaddleOCR 服务，无需重复下载安装。服务需提供 <code>POST /layout-parsing</code>。</span></div>
+                      <div class="settings-grid mineru-local-grid">
+                        <label class="settings-label" for="paddleocr-endpoint">服务地址</label>
+                        <div class="settings-control"><input id="paddleocr-endpoint" class="settings-input" type="url" placeholder="http://127.0.0.1:8080" spellcheck="false"><small>本机或受信任内网 IP；留空使用已安装组件</small></div>
+                        <span class="settings-label">本地部署选项</span>
+                        <div class="settings-control mineru-local-enable-row"><label class="ui-switch"><input id="paddleocr-enabled" type="checkbox" aria-label="启用本地 PaddleOCR"><span class="ui-switch-track" aria-hidden="true"></span><span class="ui-switch-text">启用本地 PaddleOCR</span></label><small>启用后可在 PDF 导入时手动选择，不改变自动解析</small></div>
+                        <span class="settings-label"></span>
+                        <div class="settings-control settings-actions settings-save-row"><button id="paddleocr-save" class="action-btn primary" type="button">保存设置</button><button id="paddleocr-test" class="action-btn" type="button">检测连接</button><span id="paddleocr-connection-hint" class="settings-hint" aria-live="polite"></span></div>
                       </div>
                     </div>
                   </details>

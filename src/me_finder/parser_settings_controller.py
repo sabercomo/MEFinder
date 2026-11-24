@@ -42,6 +42,7 @@ from .parsers.local_ocr_settings import (
 )
 from .components.contract import ManagedComponent
 from .parsers.provider import ParserProviderError
+from .parsers.paddleocr_local import PADDLE_PROVIDER_ID
 from .parsers.statistics import build_parser_statistics
 from .parsers.general_model import (
     discover_general_model_models,
@@ -161,6 +162,26 @@ class ParserSettingsController:
                 for component in self._managed_components.values()
             ]
         }
+
+    def paddleocr_local(self) -> ParserSettingsResponse:
+        component = self._managed_components.get(PADDLE_PROVIDER_ID)
+        if component is None:
+            return 404, {"error": "当前运行方式不支持 PaddleOCR。"}
+        try:
+            return 200, component.summary()
+        except (OSError, ValueError) as exc:
+            return 400, {"error": str(exc)}
+
+    def manage_paddleocr_local(self, payload: Mapping[str, object]) -> ParserSettingsResponse:
+        component = self._managed_components.get(PADDLE_PROVIDER_ID)
+        if component is None:
+            return 404, {"error": "当前运行方式不支持 PaddleOCR。"}
+        if not isinstance(payload, dict):
+            return 400, {"error": "PaddleOCR 设置格式无效。"}
+        try:
+            return 200, component.perform(payload)
+        except (OSError, ValueError, UserFacingError, ParserProviderError) as exc:
+            return 400, {"error": str(exc)}
 
     def text_alignment_models_component(self) -> ParserSettingsResponse:
         component = self._managed_components.get("text-alignment-models")

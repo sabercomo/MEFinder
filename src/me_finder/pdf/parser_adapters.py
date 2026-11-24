@@ -48,6 +48,11 @@ from ..parsers.local_ocr_settings import (
     resolve_local_ocr_config_path,
 )
 from ..parsers.vision_api import parse_pdf_with_vision_provider
+from ..parsers.paddleocr_local import (
+    PADDLE_OCR_VERSION, PADDLE_PROFILE, PADDLE_PROVIDER_ID, PADDLE_PROVIDER_NAME, PADDLE_RUNTIME_LOCK,
+    PaddleOCRProvider, paddle_available, read_paddle_config,
+)
+from ..errors import UserFacingError
 
 
 ProgressCallback = Callable[[Dict[str, object]], None]
@@ -759,8 +764,14 @@ def parse_pdf_with_provider(
     source_file_id: str,
     provider_id: str,
     on_progress: Optional[ProgressCallback] = None,
+    *,
+    cancel_requested: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, object]:
-    """Parse a PDF through a configured OpenAI-compatible vision provider."""
+    """Parse a PDF through a user-selected provider."""
+
+    if provider_id == PADDLE_PROVIDER_ID:
+        with PADDLE_RUNTIME_LOCK:
+            return _parse_pdf_with_paddleocr(root, pdf_path, source_file_id, on_progress, cancel_requested)
 
     result = parse_pdf_with_vision_provider(
         root,
@@ -778,3 +789,47 @@ def parse_pdf_with_provider(
         model=str(result["model"]),
     )
     return result
+
+
+def _parse_pdf_with_paddleocr(
+    root: Path,
+    pdf_path: Path,
+    source_file_id: str,
+    on_progress: Optional[ProgressCallback],
+    cancel_requested: Optional[Callable[[], bool]],
+) -> Dict[str, object]:
+    if not paddle_available(root):
+        raise UserFacingError("请先在设置中启用 PaddleOCR 本地部署。")
+    config = read_paddle_config(root)
+    provider = PaddleOCRProvider(endpoint=config.endpoint, root=root, cancel_requested=cancel_requested)
+    ledger = JobLedger(root / "data" / "parser_jobs.sqlite3")
+    engine = LargeDocumentJobEngine(
+        ledger=ledger, provider=provider, work_dir=root / "corpus" / "processed" / "parser_jobs",
+    )
+    job = engine.prepare(
+        source_path=pdf_path, source_file_id=source_file_id,
+        document_id=source_file_id.upper().replace("-", "_"),
+        model="PaddleOCR 自部署" if config.endpoint else PADDLE_PROFILE,
+        options={"endpoint": config.endpoint, "adapter_version": 1,
+                 "runtime_version": "external" if config.endpoint else PADDLE_OCR_VERSION},
+    )
+    while job.status not in {"validated", "permanent_failure", "cancelled"}:
+        if cancel_requested and cancel_requested():
+            raise LocalOCRCancelled("本地 PaddleOCR 已取消。")
+        job = engine.run_once(job.id)
+        if on_progress:
+            completed = [page for item in ledger.list_slice_jobs(job.id) if item.status == "completed"
+                         for page in range(item.page_start, item.page_end + 1)]
+            on_progress({"phase": "local_ocr_processing", "provider_id": PADDLE_PROVIDER_ID,
+                         "provider_name": PADDLE_PROVIDER_NAME, "completed": len(completed),
+                         "total": job.total_pages, "total_pages": job.total_pages,
+                         "completed_pages": completed, "document_job_id": job.id})
+    if cancel_requested and cancel_requested():
+        raise LocalOCRCancelled("本地 PaddleOCR 已取消。")
+    if job.status != "validated":
+        reason = next((item.last_error for item in ledger.list_slice_jobs(job.id) if item.last_error), None)
+        raise UserFacingError(reason or job.error_summary or "PaddleOCR 没有完成全部页面。")
+    return publish_mineru_engine_results(
+        root, source_file_id, ledger=ledger, document_job_id=job.id,
+        provider_id=PADDLE_PROVIDER_ID, provider_name=PADDLE_PROVIDER_NAME, parser_id="local_ocr",
+    )

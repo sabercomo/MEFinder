@@ -44,6 +44,7 @@ from ..errors import UserFacingError
 from ..parsers.mineru_api import resolve_mineru_config_path
 from ..parsers.mineru_local_settings import mineru_local_config_summary
 from ..parsers.local_ocr_settings import local_ocr_available
+from ..parsers.paddleocr_local import PADDLE_PROVIDER_ID, paddle_available
 from ..pdf.import_service import detect_imported_pdf
 from ..parsers.vision_api import VisionAPIError
 from .import_job_store import ImportJobAlreadyRunning
@@ -671,6 +672,8 @@ class DocumentImportCoordinator:
         vision_provider_id: object,
     ) -> Tuple[str, str]:
         mode = str(pdf_parse_mode or "auto").strip().lower()
+        if mode == PADDLE_PROVIDER_ID:
+            return "vision", PADDLE_PROVIDER_ID
         if mode == "general-local-model":
             # The general local model rides the vision path via a reserved
             # provider id; the id comes from here, not from the request header.
@@ -695,6 +698,8 @@ class DocumentImportCoordinator:
             pdf_parse_mode,
             vision_provider_id,
         )
+        if provider_id == PADDLE_PROVIDER_ID and not paddle_available(self._paths.runtime_root):
+            raise UserFacingError("请先在设置中启用 PaddleOCR 本地部署。")
         if mode == "mineru-local":
             summary = mineru_local_config_summary(
                 resolve_mineru_config_path(self._paths.runtime_root)
@@ -879,7 +884,9 @@ class DocumentImportCoordinator:
             parse_route = None
             if is_pdf:
                 parse_route = (
-                    "vision"
+                    "local_ocr"
+                    if vision_provider_id == PADDLE_PROVIDER_ID
+                    else "vision"
                     if vision_provider_id
                     else "mineru"
                     if force_mineru
@@ -1001,7 +1008,9 @@ class DocumentImportCoordinator:
                 parse_route = None
                 if is_pdf:
                     parse_route = (
-                        "vision"
+                        "local_ocr"
+                        if provider_id == PADDLE_PROVIDER_ID
+                        else "vision"
                         if provider_id
                         else "mineru"
                         if force_mineru

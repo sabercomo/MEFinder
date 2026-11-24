@@ -33,6 +33,7 @@ PARSE_MODE_LABELS = {
     "mineru": "强制 MinerU",
     "mineru-local": "本地 MinerU",
     "general-local-model": "通用本地模型",
+    "paddleocr-local": "本地 PaddleOCR",
     "vision": "其他视觉 API",
 }
 

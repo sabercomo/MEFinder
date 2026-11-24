@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -16,12 +17,23 @@ from ..errors import UserFacingError
 from ..page_display import resolve_citation_page
 from ..persistence import materials_store as store
 from ..persistence.connection import PROJECT_BUSY_TIMEOUT_MS, open_readonly_snapshot, open_write
-from ..persistence.structured_reader_reads import read_pdf_page_payload, read_source_row
 from .service import tag_path
 
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
 IMAGE_TYPES = {"image/png", "image/jpeg"}
 _IMAGE_DIGEST = re.compile(r"[0-9a-f]{64}")
+
+
+@dataclass(frozen=True)
+class PdfImageSource:
+    """Source and page metadata captured before opening the PDF renderer."""
+
+    source_id: str
+    page_number: int
+    path: Path
+    stamp: tuple[int, int, int, int]
+    title: str
+    citation_page: str | None
 
 
 def image_path(root: Path, digest: str) -> Path:
@@ -71,31 +83,41 @@ def read_image(db_path: Path, root: Path, digest: str) -> tuple[bytes, str]:
     return path.read_bytes(), mime
 
 
-def _pdf_image(db_path: Path, payload: dict, source_path: Callable[[str], Path]) -> tuple[bytes, dict]:
-    import fitz
-
+def prepare_pdf_image(db_path: Path, payload: dict, source_path: Callable[[str], Path]) -> PdfImageSource:
+    """Capture indexed page metadata and the current file identity without rendering."""
     source_id = payload.get("source_id")
     page_number = payload.get("page")
     if not isinstance(source_id, str) or type(page_number) is not int or page_number < 1:
         raise UserFacingError("请选择 PDF 和有效页码")
-    with open_readonly_snapshot(db_path) as connection:
-        source = read_source_row(connection, source_id)
-        if source is None or source["source_type"] != "pdf":
-            raise UserFacingError("未找到库内 PDF")
-        page_row = read_pdf_page_payload(connection, source_id, page_number - 1)
+    source, page_row = store.read_pdf_image_rows(db_path, source_id, page_number - 1)
+    if source is None:
+        raise UserFacingError("未找到库内 PDF")
     try:
         path = source_path(source_id)
         stamp = pdf_file_stamp(path.stat())
-        revision = ":".join(map(str, stamp))
-        with fitz.open(path) as pdf:
-            if pdf.needs_pass or page_number > pdf.page_count:
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise UserFacingError("无法打开 PDF 原件：" + str(exc)) from exc
+    citation = resolve_citation_page(json.loads(page_row["payload_json"])) if page_row else None
+    record = json.loads(source["payload_json"])
+    title = record.get("display_title") or record.get("title") or source["file_name"]
+    return PdfImageSource(source_id, page_number, path, stamp, title,
+                          citation.start if citation and citation.verified else None)
+
+
+def _pdf_image(source: PdfImageSource, payload: dict, *, crop: bool = False) -> tuple[bytes, dict]:
+    import fitz
+
+    revision = json.dumps([source.source_id, source.page_number, *source.stamp], separators=(",", ":"))
+    try:
+        with fitz.open(source.path) as pdf:
+            if pdf.needs_pass or source.page_number > pdf.page_count:
                 raise UserFacingError("无法读取该 PDF 页，请检查页码或文件密码")
             page_count = pdf.page_count
-            page = pdf[page_number - 1]
+            page = pdf[source.page_number - 1]
             clip = page.rect
             box = payload.get("box")
             scale = 1400 / max(clip.width, clip.height)
-            if payload["action"] == "collect_image":
+            if crop:
                 if payload.get("revision") != revision:
                     raise UserFacingError("PDF 文件已变化，请重新框选")
                 if (not isinstance(box, list) or len(box) != 4
@@ -106,22 +128,19 @@ def _pdf_image(db_path: Path, payload: dict, source_path: Callable[[str], Path])
                                  clip.width * box[2], clip.height * box[3])
                 scale = min(3, 4000 / max(clip.width, clip.height))
             image = page.get_pixmap(matrix=fitz.Matrix(scale, scale), clip=clip).tobytes("png")
-        if pdf_file_stamp(path.stat()) != stamp:
+        if pdf_file_stamp(source.path.stat()) != source.stamp:
             raise UserFacingError("PDF 文件已变化，请重新框选")
     except (OSError, RuntimeError, ValueError) as exc:
         raise UserFacingError("无法打开 PDF 原件：" + str(exc)) from exc
-    citation = resolve_citation_page(json.loads(page_row["payload_json"])) if page_row else None
-    record = json.loads(source["payload_json"])
     return image, {
-        "source_id": source_id, "page": page_number, "box": box, "revision": revision,
-        "citation_page": citation.start if citation and citation.verified else None,
-        "title": record.get("display_title") or record.get("title") or source["file_name"], "page_count": page_count,
+        "source_id": source.source_id, "page": source.page_number, "box": box, "revision": revision,
+        "citation_page": source.citation_page, "title": source.title, "page_count": page_count,
     }
 
 
-def preview_pdf(db_path: Path, payload: dict, source_path: Callable[[str], Path]) -> dict:
-    """Render a PDF page and return its source information."""
-    image, origin = _pdf_image(db_path, payload, source_path)
+def render_pdf_preview(source: PdfImageSource, payload: dict) -> dict:
+    """Render the prepared PDF page without accessing the index."""
+    image, origin = _pdf_image(source, payload)
     return {**origin, "data": _data_url(image, "image/png")}
 
 
@@ -136,7 +155,7 @@ def collect_image(db_path: Path, root: Path, payload: dict, source_path: Callabl
     tags = list(dict.fromkeys(tag_path(path) for path in paths))
     origin = {}
     if "source_id" in payload:
-        data, origin = _pdf_image(db_path, payload, source_path)
+        data, origin = _pdf_image(prepare_pdf_image(db_path, payload, source_path), payload, crop=True)
         title = origin.pop("title")
         origin.pop("revision")
         origin.pop("page_count")

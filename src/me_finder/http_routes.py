@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .http_route_table import CNKI_CITATION_BODY, CNKI_LOOKUP_BODY, MATERIALS_BODY, RoutePair, mutating, route
+from .http_route_table import CNKI_CITATION_BODY, CNKI_LOOKUP_BODY, RoutePair, mutating, route
 
 
 def assemble_library_routes(
@@ -18,8 +18,8 @@ def assemble_library_routes(
     page_mapping_controller, document_lifecycle_controller,
     materials_controller,
 ) -> RoutePair:
+    materials_get, materials_post = materials_controller.http_routes()
     get_routes = {
-        "/api/materials": materials_controller.list,
         "/api/index-meta": lambda _params: library_query_controller.index_metadata(),
         "/api/sources": lambda _params: library_query_controller.sources(),
         "/api/library": lambda params: library_query_controller.library(
@@ -32,7 +32,6 @@ def assemble_library_routes(
         "/api/document-groups": lambda _params: document_group_controller.list(),
     }
     post_routes = {
-        "/api/materials": route(materials_controller.mutate, **MATERIALS_BODY),
         "/api/document-groups/create": mutating(document_group_controller.create),
         "/api/document-groups/combine": document_group_controller.combine,
         "/api/document-groups/rename": mutating(document_group_controller.rename),
@@ -49,7 +48,7 @@ def assemble_library_routes(
         "/api/documents/remove": mutating(document_lifecycle_controller.remove),
         "/api/documents/remove-batch": mutating(document_lifecycle_controller.remove_batch),
     }
-    return get_routes, post_routes
+    return get_routes | materials_get, post_routes | materials_post
 
 
 def assemble_preference_routes(preferences_controller) -> RoutePair:
@@ -80,9 +79,8 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
             lambda _params: parser_settings_controller.managed_mineru_local_component()
         ),
         "/api/local-ocr": lambda _params: parser_settings_controller.local_ocr_config(),
-        "/api/vision-providers": (
-            lambda _params: parser_settings_controller.vision_providers()
-        ),
+        "/api/paddleocr-local": lambda _params: parser_settings_controller.paddleocr_local(),
+        "/api/vision-providers": lambda _params: parser_settings_controller.vision_providers(),
         "/api/general-model": (
             lambda _params: parser_settings_controller.general_model_config()
         ),
@@ -103,6 +101,7 @@ def assemble_parser_settings_routes(parser_settings_controller) -> RoutePair:
         "/api/local-ocr": mutating(parser_settings_controller.save_local_ocr_config),
         "/api/local-ocr/test": parser_settings_controller.test_local_ocr_config,
         "/api/local-ocr/component": mutating(parser_settings_controller.manage_local_ocr_component),
+        "/api/paddleocr-local": mutating(parser_settings_controller.manage_paddleocr_local),
         "/api/text-alignment/models": mutating(
             parser_settings_controller.manage_text_alignment_models_component
         ),

@@ -61,6 +61,7 @@ THREAD_CREATION_OWNERS = {
     "components/alignment_runtime.py",
     "components/embedding_models.py",
     "components/mineru.py",
+    "components/paddleocr.py",
     "onefile_cleanup.py",
     "tasks/background_tasks.py",
     "text_alignment_controller.py",

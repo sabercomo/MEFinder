@@ -391,6 +391,7 @@ global.MEFinderApi = {
 };
 global.showToast = () => {};
 global.showAppConfirm = async () => true;
+global.MEFinder = {paddleOCR: {syncImportOption() {}}};
 eval(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]), '14-task-state.js'), 'utf8'));
 eval(fs.readFileSync(require('path').join(require('path').dirname(process.argv[1]), '78-import-jobs.js'), 'utf8'));
 eval(fs.readFileSync(process.argv[1], 'utf8'));

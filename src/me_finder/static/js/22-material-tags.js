@@ -8,6 +8,8 @@
   const tagName = (path) => path.slice(path.lastIndexOf('/') + 1);
   const displayPath = (path) => path.split('/').join(' / ');
   const load = () => global.MEFinderApi.getJSON(endpoint);
+  const loadTags = () => global.MEFinderApi.getJSON(endpoint + '/tags');
+  const loadParagraphExcerpts = (paragraphs) => global.MEFinderApi.postJSON(endpoint + '/paragraph-excerpts', {paragraphs});
   const post = (payload) => global.MEFinderApi.postJSON(endpoint, payload);
 
   function node(tag, className, text) {
@@ -176,7 +178,7 @@
         list.children[active].scrollIntoView({block: 'nearest'});
       }
     });
-    load().then(snapshot => {
+    loadTags().then(snapshot => {
       if (!picker.isConnected) return;
       for (const {path} of snapshot.material_tags) known.add(path);
       loaded = true;
@@ -351,6 +353,7 @@
   }
 
   global.MEFinderMaterials = Object.freeze({
+    loadTags, loadParagraphExcerpts,
     load, post, openDialog, editRequest, createPicker, selectionKey, tagTree, tagsByExcerpt, normalizePath, displayPath, tagName, parentPath, node, button,
   });
 }(window));

@@ -237,6 +237,7 @@
       if (!parserStore.visionConfigLoaded) global.MEFinder.visionProviders.load();
       if (!parserStore.mineruConfigLoaded) global.MEFinder.parserRuntime.loadMineruConfig();
       global.MEFinder.parserRuntime.loadGeneralModelConfig();
+      global.MEFinder.paddleOCR.load();
     }
     if (page === 'settings') {
       ensureVisibleSettingsCategory();

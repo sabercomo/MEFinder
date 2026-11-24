@@ -693,6 +693,9 @@ def main() -> None:
         os.environ["ME_FINDER_MINERU_LOCAL_CONFIG"] = str(
             machine_local_config_root() / "mineru_local.machine.json"
         )
+        os.environ["ME_FINDER_PADDLEOCR_HOME"] = str(
+            machine_local_config_root() / "runtime" / "paddleocr-local"
+        )
         vision_config_path = local_app_data_root() / "vision_api.local.json"
         os.environ["ME_FINDER_VISION_CONFIG"] = str(vision_config_path)
         preferences_path = local_app_data_root() / "preferences.json"

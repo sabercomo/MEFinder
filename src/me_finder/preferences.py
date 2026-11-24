@@ -45,7 +45,7 @@ DEFAULT_READER_LINE_MODE = "flow"
 DEFAULT_READER_WINDOW_ENABLED = False
 VALID_READER_LINE_MODES = frozenset({"flow", "physical"})
 VALID_PDF_PARSE_MODES = frozenset(
-    {"auto", "mineru", "mineru-local", "vision", "general-local-model"}
+    {"auto", "mineru", "mineru-local", "vision", "general-local-model", "paddleocr-local"}
 )
 VALID_DOCUMENT_EXPORT_MODES = frozenset({"data_only", "with_pdf"})
 # 保留旧客户端的导出偏好契约；当前界面不再读取这些选项。

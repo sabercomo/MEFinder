@@ -251,6 +251,15 @@ class FrontendAssetAssemblyTests(unittest.TestCase):
         self.assertNotIn("<script src=", HTML)
         self.assertNotIn('rel="stylesheet"', HTML)
 
+    def test_material_pdf_crop_is_assembled_once_before_its_page(self):
+        from src.me_finder.web_assets import READER_WINDOW_HTML
+
+        crop_module = "// module: 31-material-pdf-crop.js"
+        self.assertEqual(HTML.count(crop_module), 1)
+        self.assertLess(HTML.index("// module: 22-material-tags.js"), HTML.index(crop_module))
+        self.assertLess(HTML.index(crop_module), HTML.index("// module: 32-materials.js"))
+        self.assertNotIn(crop_module, READER_WINDOW_HTML)
+
     def test_js_assets_land_inside_script_blocks(self):
         """JS 必须在 <script> 内，CSS 必须在 <style> 内，顺序不能颠倒。"""
 
@@ -718,9 +727,9 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 复制保留单字母上方的波浪号。
     # 0.6.6：保留电荷和前置上标；按 MathML 结构处理分组、单位和科学计数间距。
     BASELINE_SHA256 = (
-        "e015cef2bcd5479c7f13f3705ee89cef359a3d6ea6d9d08544a7e76c8a5ed816"
+        "0b900459502d5c66a5d3a269f3194302f63197c29b96abb005676fc9e6a9374f"
     )
-    BASELINE_BYTES = 1949214
+    BASELINE_BYTES = 1961029
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

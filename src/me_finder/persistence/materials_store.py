@@ -10,6 +10,7 @@ from typing import Iterator
 from .connection import PROJECT_BUSY_TIMEOUT_MS, open_readonly_snapshot, open_write, table_exists
 from .migrations import migrate_index_database
 from .paragraph_payload import paragraph_from_database_row
+from .structured_reader_reads import read_pdf_page_payload, read_source_row
 
 EXCERPT_FIELDS = (
     "source_id", "kind", "start_anchor", "end_anchor", "start_offset", "end_offset",
@@ -23,6 +24,16 @@ TABLES = {
     "material_image_tags": ("digest", "path"),
 }
 IDENTITY = EXCERPT_FIELDS[:7]
+
+
+def read_pdf_image_rows(db_path: Path, source_id: str, page_index: int) -> tuple[sqlite3.Row | None, sqlite3.Row | None]:
+    """Read the PDF source and its page mapping in a single transaction."""
+    with open_readonly_snapshot(db_path) as connection:
+        connection.execute("BEGIN")
+        source = read_source_row(connection, source_id)
+        if source is None or source["source_type"] != "pdf":
+            return None, None
+        return source, read_pdf_page_payload(connection, source_id, page_index)
 
 
 def read_materials(connection: sqlite3.Connection) -> dict[str, list]:
@@ -42,6 +53,43 @@ def read_materials_snapshot(db_path: Path) -> dict[str, list]:
             if table_exists(connection, "material_excerpts"):
                 return read_materials(connection)
     return {table: [] for table in TABLES}
+
+
+def read_tag_paths(db_path: Path) -> list[dict[str, str]]:
+    """Read canonical tag paths without reading any material content."""
+    with open_readonly_snapshot(db_path) as connection:
+        if not table_exists(connection, "material_tags"):
+            return []
+        return [dict(row) for row in connection.execute("SELECT path FROM material_tags ORDER BY path")]
+
+
+def read_paragraph_excerpts(db_path: Path, paragraphs: set[tuple[str, str]]) -> list[dict]:
+    """Project saved excerpts and their direct tags for the requested paragraphs."""
+    if not paragraphs:
+        return []
+    with open_readonly_snapshot(db_path) as connection:
+        if not table_exists(connection, "material_excerpts"):
+            return []
+        # Drive indexed lookups from the requested pairs, with one bound parameter
+        # even for a large result set. Keep excerpts with no current tags.
+        rows = connection.execute(
+            """SELECT e.excerpt_id, e.source_id, e.start_anchor, e.start_offset, e.end_offset, e.text, t.path
+               FROM json_each(?) AS wanted CROSS JOIN material_excerpts AS e
+               LEFT JOIN material_excerpt_tags AS t USING (excerpt_id)
+               WHERE e.source_id=json_extract(wanted.value,'$[0]') AND e.kind='paragraph'
+                 AND e.start_anchor=json_extract(wanted.value,'$[1]') AND e.end_anchor=e.start_anchor
+               ORDER BY e.excerpt_id, t.path""",
+            (json.dumps(list(paragraphs)),),
+        )
+        excerpts: dict[int, dict] = {}
+        for row in rows:
+            item = dict(row)
+            excerpt_id, path = item.pop("excerpt_id"), item.pop("path")
+            if excerpt_id not in excerpts:
+                excerpts[excerpt_id] = {**item, "paths": []}
+            if path is not None:
+                excerpts[excerpt_id]["paths"].append(path)
+        return list(excerpts.values())
 
 
 def ensure_materials_schema(db_path: Path) -> None:

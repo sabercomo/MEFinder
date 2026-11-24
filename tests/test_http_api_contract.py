@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB_PATH = ROOT / "src" / "me_finder" / "web.py"
 # Route literals live in domain assembly functions; web_runtime merges them.
 ROUTES_PATH = ROOT / "src" / "me_finder" / "http_routes.py"
+MATERIAL_ROUTES_PATH = ROOT / "src" / "me_finder" / "materials" / "controller.py"
 # 原先写在 web_http 里的特殊处理路由，B2 后各自在 controller 模块里声明。
 EXTRA_ROUTE_PATHS = tuple(
     ROOT / "src" / "me_finder" / name
@@ -84,8 +85,8 @@ class HTTPAPIContractTests(unittest.TestCase):
         self.assertEqual(contract["post"], sorted(POST_API_ROUTES))
 
     def test_route_tables_and_special_handlers_are_frozen(self) -> None:
-        get_routes = _dictionary_keys(ROUTES_PATH, {"get_routes"})
-        post_routes = _dictionary_keys(ROUTES_PATH, {"post_routes"})
+        get_routes = _dictionary_keys(ROUTES_PATH, {"get_routes"}) | _dictionary_keys(MATERIAL_ROUTES_PATH, {"get_routes"})
+        post_routes = _dictionary_keys(ROUTES_PATH, {"post_routes"}) | _dictionary_keys(MATERIAL_ROUTES_PATH, {"post_routes"})
         for path in EXTRA_ROUTE_PATHS:
             get_routes |= _dictionary_literal_keys(path)[0]
             post_routes |= _dictionary_literal_keys(path)[1]

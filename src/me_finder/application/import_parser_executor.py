@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping, Optional, Protocol
 
 from ..parsers.mineru_api import MinerUError
+from ..parsers.paddleocr_local import PADDLE_PROVIDER_ID, PADDLE_PROVIDER_NAME
 from ..parsers.local_ocr_settings import (
     LocalOCRCancelled,
     LocalOCRError,
@@ -82,8 +83,21 @@ class ImportParserExecutor:
     ) -> bool:
         """Return true after parsing, or false after recording a parser failure."""
 
-        use_vision = bool(is_pdf and vision_provider_id)
+        use_paddle = bool(is_pdf and vision_provider_id == PADDLE_PROVIDER_ID)
+        use_vision = bool(is_pdf and vision_provider_id and not use_paddle)
         try:
+            if use_paddle:
+                jobs.update_import_job(
+                    job_id, phase="local_ocr_processing", parse_route="local_ocr",
+                    provider_id=PADDLE_PROVIDER_ID, provider_name=PADDLE_PROVIDER_NAME,
+                    message="正在使用本地 PaddleOCR 解析 PDF…",
+                )
+                self._parse_with_provider(
+                    self._root, target, source_file_id, PADDLE_PROVIDER_ID,
+                    on_progress=lambda update: jobs.progress_import_job(job_id, update),
+                    cancel_requested=lambda: (jobs.job_status(job_id) or {}).get("status") == "cancelling",
+                )
+                return True
             use_local_ocr = bool(
                 is_pdf
                 and not use_vision
@@ -154,6 +168,8 @@ class ImportParserExecutor:
             return True
         except ImportJobCancelled:
             raise
+        except LocalOCRCancelled as exc:
+            raise ImportJobCancelled(str(exc)) from exc
         except Exception as exc:
             if use_vision:
                 self._record_vision_failure(

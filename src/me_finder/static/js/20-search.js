@@ -358,16 +358,25 @@
     if (!searchStore.results.length) return;
     const request = ++tagListRequest;
     try {
-      const library = await global.MEFinderMaterials.load();
-      if (request !== tagListRequest) return;
-      const tags = global.MEFinderMaterials.tagsByExcerpt(library);
-      resultExcerpts = new Map();
-      for (const excerpt of library.material_excerpts) {
-        if (excerpt.kind !== 'paragraph' || excerpt.start_anchor !== excerpt.end_anchor) continue;
-        const key = paragraphKey(excerpt.source_id, excerpt.start_anchor);
-        if (!resultExcerpts.has(key)) resultExcerpts.set(key, []);
-        resultExcerpts.get(key).push({...excerpt, paths: tags.get(excerpt.excerpt_id)});
+      const keys = new Map();
+      for (const {source_file_id, paragraph_id} of searchStore.results) {
+        if (!source_file_id || !paragraph_id) continue;
+        keys.set(paragraphKey(source_file_id, paragraph_id), [source_file_id, paragraph_id]);
       }
+      const paragraphs = [...keys.values()];
+      const excerptsByParagraph = new Map();
+      // Keep requests bounded even when the search limit is "all".
+      const batchSize = 512;
+      for (let i = 0; i < paragraphs.length; i += batchSize) {
+        const {excerpts} = await global.MEFinderMaterials.loadParagraphExcerpts(paragraphs.slice(i, i + batchSize));
+        if (request !== tagListRequest) return;
+        for (const excerpt of excerpts) {
+          const key = paragraphKey(excerpt.source_id, excerpt.start_anchor);
+          if (!excerptsByParagraph.has(key)) excerptsByParagraph.set(key, []);
+          excerptsByParagraph.get(key).push(excerpt);
+        }
+      }
+      resultExcerpts = excerptsByParagraph;
       document.querySelectorAll('#results-list .materials-result-tags').forEach(host =>
         renderResultTags(host, searchStore.results[Number(host.closest('.result-row').dataset.index)]));
       const detail = document.getElementById('detail-material-tags');
@@ -396,6 +405,7 @@
     searchStore.selectedIndex = -1;
     searchStore.results = [];
     tagListRequest++;
+    resultExcerpts.clear();
     showEmptyDetail();
 
     try {

@@ -34,6 +34,7 @@ from ..parsers.mineru_api import resolve_mineru_config_path
 from ..parsers.mineru_local_settings import mineru_local_config_summary
 from ..parsers.mineru_local_provider import MINERU_LOCAL_PROVIDER_ID
 from ..parsers.local_ocr_settings import local_ocr_available
+from ..parsers.paddleocr_local import PADDLE_PROVIDER_ID, PADDLE_PROVIDER_NAME
 from ..import_config_store import (
     import_config_lock,
     load_import_config,
@@ -689,7 +690,9 @@ class ImportOrchestrator:
         job_id = f"import-{uuid.uuid4().hex[:12]}"
         parse_route = None
         provider_name = None
-        if vision_provider_id:
+        if vision_provider_id == PADDLE_PROVIDER_ID:
+            provider_name = PADDLE_PROVIDER_NAME
+        elif vision_provider_id:
             try:
                 summary = vision_config_summary(resolve_vision_config_path(self._root))
                 provider = next(
@@ -706,7 +709,9 @@ class ImportOrchestrator:
                 provider_name = None
         if is_pdf:
             parse_route = (
-                "vision"
+                "local_ocr"
+                if vision_provider_id == PADDLE_PROVIDER_ID
+                else "vision"
                 if vision_provider_id
                 else "mineru"
                 if force_mineru

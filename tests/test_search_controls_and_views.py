@@ -327,7 +327,7 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertIn("settingsStore.currentPdfParseMode = normalizePdfParseMode(data.pdf_parse_mode)", HTML)
         self.assertIn('data-action-change="templateChange056"', HTML)
         self.assertIn(
-            "['auto','mineru','mineru-local','vision','general-local-model']", HTML
+            "['auto','mineru','mineru-local','vision','general-local-model','paddleocr-local']", HTML
         )
         self.assertIn("syncMineruLocalImportOption(!!config.enabled)", HTML)
         self.assertIn("option.hidden = !enabled", HTML)
@@ -562,10 +562,10 @@ class SearchControlsAndViewsTests(unittest.TestCase):
         self.assertNotIn('id="local-ocr-save"', HTML)
         self.assertEqual(HTML.count('data-action-change="toggleLocalOCREngine"'), 2)
         self.assertEqual(HTML.count('data-action="saveLocalOCRPaths"'), 2)
-        # 一处：MinerU 本地部署的网格内保存行（settings-control 网格子项范式）。
+        # MinerU / PaddleOCR 本地部署共享网格内保存行范式。
         self.assertEqual(
             HTML.count('class="settings-control settings-actions settings-save-row"'),
-            1,
+            2,
         )
         # 三处编辑卡操作条：MinerU 账号卡 + 通用本地模型卡 + 其他解析 API 卡（同一范式）。
         self.assertEqual(HTML.count('class="settings-editor-actions"'), 3)

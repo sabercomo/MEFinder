@@ -24,6 +24,7 @@ from .components.alignment_runtime import (
 )
 from .components.embedding_models import ManagedEmbeddingModels
 from .components.mineru import ManagedMinerU
+from .components.paddleocr import ManagedPaddleOCR
 from .parsers.mineru_api import resolve_mineru_config_path
 
 _DESKTOP_SHELLS = {"macos", "win32", "linux"}
@@ -34,6 +35,7 @@ class ManagedComponents:
     catalog: ComponentCatalog
     mineru: ManagedMinerU
     local_ocr: LocalOCRInstaller
+    paddleocr: ManagedPaddleOCR
     alignment_runtime: ManagedAlignmentRuntime
     embedding_models: ManagedEmbeddingModels
     registry: Dict[str, object]
@@ -71,6 +73,7 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
         manifest_path=catalog.manifest_path,
         catalog_summary=catalog.summary,
     )
+    paddleocr = ManagedPaddleOCR(root, LOCAL_OCR_MANIFEST_FILE)
     if os.environ.get("ME_FINDER_DESKTOP_SHELL", "").strip().lower() in _DESKTOP_SHELLS:
         catalog.start_background_check(
             on_updated=lambda: (
@@ -84,10 +87,12 @@ def assemble_managed_components(root: Path) -> ManagedComponents:
         catalog=catalog,
         mineru=mineru,
         local_ocr=local_ocr,
+        paddleocr=paddleocr,
         alignment_runtime=alignment_runtime,
         embedding_models=embedding_models,
         registry={
             local_ocr.component_id: local_ocr,
+            paddleocr.component_id: paddleocr,
             mineru.component_id: mineru,
             embedding_models.component_id: embedding_models,
             alignment_runtime.component_id: alignment_runtime,
