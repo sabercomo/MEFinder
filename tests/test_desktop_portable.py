@@ -227,7 +227,8 @@ class DesktopPortableTests(unittest.TestCase):
         self.assertNotIn("js_api", options)
         self.assertTrue(options["hidden"])
         self.assertTrue(options["text_select"])
-        self.assertEqual(options["min_size"], (960, 640))
+        self.assertEqual((options["width"], options["height"]), (1500, 860))
+        self.assertEqual(options["min_size"], (720, 640))
         self.assertEqual(events.before_show.callbacks[0], desktop.configure_macos_titlebar)
         # 第二个回调把 WKWebView 底色设成主题色,首绘前不露白。
         underlay = events.before_show.callbacks[1]

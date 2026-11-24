@@ -560,7 +560,7 @@ def create_main_window(
     options = {
         "width": 1500,
         "height": 860,
-        "min_size": (960, 640),
+        "min_size": (720 if sys.platform == "darwin" else 960, 640),
         "resizable": True,
         "text_select": True,
         "background_color": palette["app_bg"],
