@@ -59,7 +59,7 @@
 | **上下文 / 页码定位** | 查看命中位置的前后文，区分 PDF 物理页与书内引用页码；支持自动映射和人工分段校准。 |
 | **PDF / Word / EPUB / 扫描件** | Word、EPUB 和文本型 PDF 在本机解析；EPUB 保留出版方 page-list/pagebreak 页码；扫描版、乱码文本层与复杂布局 PDF 可按需接入 MinerU、本机 OCR 或视觉模型。 |
 | **NDL 本机 OCR（离线）** | 「设置 → 本地 OCR」安装组件后，日文扫描件走 NDL 日文 OCR，日文古籍与繁体竖排古籍走 NDL 古籍 OCR；不用于现代中文 OCR，也不生成屏幕重排页码。 |
-| **PaddleOCR（0.6.6 开发版）** | 在「设置 → 本地 OCR」按需安装 PP-StructureV3 CPU 组件，或连接提供 `/layout-parsing` 的本机／内网服务；启用后在 PDF 导入时手动选择，不改变自动解析。 |
+| **PaddleOCR（自 0.6.6 起）** | 在「设置 → 本地 OCR」按需安装 PP-StructureV3 CPU 组件，或连接提供 `/layout-parsing` 的本机／内网服务；启用后在 PDF 导入时手动选择，不改变自动解析。 |
 | **繁体竖排 / 外部解析结果** | 可继续检索已经由 OCR、MinerU 或其他工具解析的繁体竖排、影印本等材料，并结合页码信息定位。 |
 | **繁简统一检索** | 「设置 → 阅读与检索 → 文献检索」开关，默认开启；简体关键词可命中繁体原文，结果、页码与导出保留原文。 |
 | **结构化阅读** | 从搜索结果直接打开结构化文本，查看命中段落、相邻内容与原始 PDF 页面；工具栏目录读取已入库的一、二级标题，点击章节可同步定位对照版本。 |
@@ -112,7 +112,7 @@ MEFinder 使用本地 SQLite 数据库和 FTS5 trigram 全文索引保存来源�
 
 ## ⬇️ 下载
 
-**v0.6.5 已发布。** 公式复制改为纯文本，科学单位上下标与新导入公式结构保留；译本对照入口随首页首帧出现。[下载 v0.6.5](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.5) · [查看版本说明](docs/release-notes-0.6.5.md)
+**v0.6.6 已发布。** 改进矩阵、重音和多行公式的纯文本复制；新增可选本地 PaddleOCR，并修复桌面首屏加载问题。[下载 v0.6.6](https://github.com/sabercomo/MEFinder/releases/tag/v0.6.6) · [查看版本说明](docs/release-notes-0.6.6.md)
 
 发布包无需安装 Python，后续更新可在 [GitHub Releases](https://github.com/sabercomo/MEFinder/releases/latest) 下载。
 
