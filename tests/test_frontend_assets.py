@@ -726,10 +726,13 @@ class FrontendAssetBaselineTests(unittest.TestCase):
     # 复制保留对齐公式的行、求和范围与下括号注释。
     # 复制保留单字母上方的波浪号。
     # 0.6.6：保留电荷和前置上标；按 MathML 结构处理分组、单位和科学计数间距。
+    # 矩阵和重音与其余 MathML 节点共用结构转写，遇到不支持的布局保留源公式。
+    # 带填充的 OCR 行内式与无括号的续行等式仍使用同一个原文渲染/复制入口。
+    # 连续美元符号不可拆成行内定界符；带空格的算式不吞掉下一笔金额。
     BASELINE_SHA256 = (
-        "0b900459502d5c66a5d3a269f3194302f63197c29b96abb005676fc9e6a9374f"
+        "e0461fd3fa4a07c2f4c4e1748ac5d72183996c52028ebb305788375f4d149ad7"
     )
-    BASELINE_BYTES = 1961029
+    BASELINE_BYTES = 1964691
 
     def test_assembled_document_matches_baseline(self):
         payload = HTML.encode("utf-8")

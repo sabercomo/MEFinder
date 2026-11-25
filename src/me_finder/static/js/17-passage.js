@@ -1,12 +1,79 @@
 /* 以 MathML 排版原文，复制时转成纯文本，定位仍使用 LaTeX 源文本。 */
 (function (global) {  // module: 17-passage.js
   const doubleStruck = Array.from('𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ');
+  // Presentation MathML operators → combining mark, or an explicit group in linear text.
+  const accents = new Map([
+    ['˙', ['\u0307', 'dot']], ['¨', ['\u0308', 'ddot']], ['^', ['\u0302', 'hat']],
+    ['~', ['\u0303', 'tilde']], ['ˉ', ['\u0305', 'overline']], ['‾', ['\u0305', 'overline']],
+    ['⃗', ['\u20d7', 'vec']],
+  ]);
 
   function isIdentifier(node) {
     if (node?.localName === 'mi' || node?.localName === 'mtext') return /^\p{L}+$/u.test(node.textContent);
     // KaTeX emits an upright name as a row of normal letters, not a product.
     return node?.localName === 'mrow' && node.hasChildNodes() && Array.from(node.childNodes).every(letter =>
       letter.localName === 'mi' && letter.getAttribute('mathvariant') === 'normal' && isIdentifier(letter));
+  }
+
+  function plainAccent(node) {
+    const [expression, operator] = node.children;
+    const accent = node.getAttribute('accent') === 'true' && node.children.length === 2 &&
+      operator.localName === 'mo' ? accents.get(operator.textContent) : null;
+    if (!accent) return null;
+    const text = plainMath(expression);
+    // A numeric accent can be an OCR error. Preserve it without asserting a transcription.
+    if (!text || /^[\p{N}.,\s]+$/u.test(text)) return null;
+    const [mark, label] = accent;
+    return /^[\p{L}\p{Sm}]\p{M}*$/u.test(text) ? text + mark : label + '(' + text + ')';
+  }
+
+  function rowTerms(node) {
+    if (['mtd', 'mrow', 'mstyle'].includes(node.localName)) return Array.from(node.children).flatMap(rowTerms);
+    return node.localName === 'mspace' ? [] : [node];
+  }
+
+  function plainTable(node) {
+    // Row/cell ownership matters: merging cells or dropping fences changes the expression.
+    if (['rowlines', 'columnlines', 'frame'].some(attr =>
+      (node.getAttribute(attr) || '').split(/\s+/).some(value => value && value !== 'none'))) return null;
+    const grid = Array.from(node.children, row => Array.from(row.children));
+    if (!grid.length || Array.from(node.children).some(row => row.localName !== 'mtr') ||
+        grid.some(row => !row.length || row.some(cell => cell.localName !== 'mtd' ||
+          ['rowspan', 'columnspan'].some(attr => cell.hasAttribute(attr) && cell.getAttribute(attr) !== '1')))) return null;
+    if (node.getAttribute('width') === '100%') {
+      // KaTeX wraps a numbered equation in a separate one-row layout.
+      const [cells] = grid;
+      if (grid.length !== 1 || cells.length !== 4 || cells[0].textContent || cells[2].textContent) return null;
+      const body = plainMath(cells[1]);
+      const label = plainMath(cells[3]);
+      return body === null || label === null ? null : body + ' ' + label;
+    }
+    const rows = grid.map(row => row.map(plainMath));
+    if (rows.some(row => row.includes(null))) return null;
+    if (node.getAttribute('columnalign') === 'right left' && node.getAttribute('columnspacing') === '0em') {
+      return rows.map(row => row.join('')).join('\n');
+    }
+    if (rows.some(row => row.length !== rows[0].length)) return null;
+    // An unfenced, left-aligned array can be a continued equation, not a matrix.
+    // Require a top-level relation and explicit continuation operators in the remaining rows.
+    if (rows.length > 1 && node.parentElement.localName === 'semantics' &&
+        /^left(?: left)*$/.test(node.getAttribute('columnalign') || '')) {
+      const [first, ...rest] = grid.map(row => row.flatMap(rowTerms));
+      const hasOp = (term, operators) => term?.localName === 'mo' && operators.includes(term.textContent);
+      if (first.some(term => hasOp(term, ['=', '≠', '<', '>', '≤', '≥', '≈', '≡'])) &&
+          rest.every(row => row.length > 1 && hasOp(row[0], ['+', '−', '-']))) {
+        return rows.map(row => row.map(cell => cell.trim()).filter(Boolean).join(' ')).join('\n');
+      }
+    }
+    const open = node.previousElementSibling;
+    const close = node.nextElementSibling;
+    const hasFence = item => item?.localName === 'mo' && item.getAttribute('fence') === 'true';
+    const fenced = hasFence(open) && hasFence(close) && open.textContent && close.textContent &&
+      node.parentElement.childElementCount === 3;
+    if (!fenced && (hasFence(open) || hasFence(close))) return null;
+    // Nested expressions containing a separator get their own group.
+    const cells = rows.map(row => '[' + row.map(cell => /[,\r\n]/.test(cell) ? '(' + cell + ')' : cell).join(', ') + ']').join(', ');
+    return fenced ? cells : '[' + cells + ']';
   }
 
   function plainMath(node) {
@@ -20,28 +87,8 @@
     if (['mi', 'mn', 'mo', 'mtext'].includes(type) && !node.childElementCount) return node.textContent;
     if (type === 'mspace') return ' ';
     if (type === 'semantics') return plainMath(node.firstElementChild);
-    if (type === 'mover' && node.getAttribute('accent') === 'true' && node.children.length === 2) {
-      const [base, accent] = node.children;
-      // A combining tilde applies to one letter, not to an entire expression.
-      if (base.localName === 'mi' && accent.localName === 'mo' && accent.textContent === '~' &&
-          /^\p{L}$/u.test(base.textContent)) return plainMath(base) + '\u0303';
-    }
-    if (type === 'mtable' && node.getAttribute('width') === '100%') {
-      // KaTeX 的独立公式编号布局：空白、公式、空白、编号。
-      const cells = node.children[0]?.children;
-      if (node.childElementCount !== 1 || cells?.length !== 4 ||
-          cells[0].textContent || cells[2].textContent) return null;
-      const body = plainMath(cells[1]);
-      const label = plainMath(cells[3]);
-      return body === null || label === null ? null : body + ' ' + label;
-    }
-    // KaTeX aligns the two halves of an equation at the relation sign.
-    // Other tables (such as matrices) are not a sequence of equation lines.
-    if (type === 'mtable' && node.getAttribute('columnalign') === 'right left' &&
-        node.getAttribute('columnspacing') === '0em') {
-      const rows = Array.from(node.children, row => Array.from(row.children, plainMath));
-      return rows.flat().includes(null) ? null : rows.map(row => row.join('')).join('\n');
-    }
+    if (type === 'mover') return plainAccent(node);
+    if (type === 'mtable') return plainTable(node);
     if (type === 'munder' && node.children.length === 2) {
       const [expression, label] = node.children;
       if (label.localName === 'mo' && label.textContent === '⏟') {
@@ -126,6 +173,14 @@
     return content.textContent.replace(/[₀-₉]/g, digit => String(digit.charCodeAt(0) - 0x2080));
   }
 
+  function looksLikePaddedMath(tex) {
+    if (/\\[A-Za-z]|[_^]/.test(tex) ||
+        /^[\p{L}\p{N}().+−*/ \t-]+[=<>≤≥≠][\p{L}\p{N}().+−*/=<>≤≥≠ \t-]+$/u.test(tex)) return true;
+    // A price per month or a date is not an arithmetic expression.
+    return /\p{L}/u.test(tex) &&
+      /^(?:\p{L}\d*|\d+(?:\.\d+)?)(?:[ \t]*[+−*/×÷-][ \t]*(?:\p{L}\d*|\d+(?:\.\d+)?))+$/u.test(tex);
+  }
+
   function appendPassage(host, text, from = 0, to = text.length, matchStart = to, matchEnd = to) {
     function appendPlain(start, end) {
       start = Math.max(from, start);
@@ -143,19 +198,27 @@
     }
 
     let cursor = from;
-    // 不跨行配对单美元符号。尾部空白或紧跟数字的美元符号通常是下一个金额的开头。
-    const math = /\\[$\\]|\\\[(?<display>[\s\S]+?)\\\]|\\\((?<inline>[^\r\n]+?)\\\)|\$\$(?<displayDollar>[^$]+)\$\$|\$(?<inlineDollar>(?=\S)(?:\\[^\r\n]|[^\\$\r\n])*?(?:\\[^\r\n]|[^\\$\s]))\$(?![\d$])/g;
-    for (const match of text.matchAll(math)) {
+    // Like markdown-it-dollarmath, do not pair across lines or into the next amount.
+    // A dollar run that cannot open a formula is literal; do not retry from inside it.
+    const math = /\\[$\\]|\\\[(?<display>[\s\S]+?)\\\]|\\\((?<inline>[^\r\n]+?)\\\)|\$\$(?!\$)(?<displayDollar>[^$]+)\$\$(?!\$)|\$(?!\$)(?:(?<inlineDollar>(?=\S)(?:\\[^\r\n]|[^\\$\r\n])*?(?:\\[^\r\n]|[^\\$\s]))\$(?![\d$])|[ \t]+(?<paddedDollar>(?:\\[^\r\n]|[^\\$\r\n])+?)[ \t]+\$(?!\$|[ \t]*\d))|\$+/g;
+    let match;
+    while ((match = math.exec(text))) {
       const start = match.index;
       const end = start + match[0].length;
       if (start >= to) break;
-      if (end <= from) continue;
-      const {display, inline, displayDollar, inlineDollar} = match.groups;
-      const tex = display ?? inline ?? displayDollar ?? inlineDollar;
+      const {display, inline, displayDollar, inlineDollar, paddedDollar} = match.groups;
+      const tex = display ?? inline ?? displayDollar ?? inlineDollar ?? paddedDollar?.trim();
+      if (!tex) continue;
       // MinerU 有时把普通的参考文献标号包进 $…$。保留原片段用于定位。
-      const reference = inlineDollar && /^\[\d+(?:\s*[,–-]\s*\d+)*\]$/.test(inlineDollar);
+      const reference = (inlineDollar || paddedDollar) && /^\[\d+(?:\s*[,–-]\s*\d+)*\]$/.test(tex);
+      // OCR may pad real math. A loose pair alone is not evidence (e.g. prices).
+      if (paddedDollar && !reference && !looksLikePaddedMath(tex)) {
+        math.lastIndex = start + 1; // The rejected closing dollar can open the next formula.
+        continue;
+      }
+      if (end <= from) continue;
       // 保留误配进来的普通散文，如“$10 至 $20”一类金额。
-      if (!tex || (inlineDollar && !reference && !/[\\_^=+*/<>-]/.test(tex) && !/^[\w.,()]+$/.test(tex))) continue;
+      if (inlineDollar && !reference && !/[\\_^=+*/<>-]/.test(tex) && !/^[\w.,()]+$/.test(tex)) continue;
       const formula = document.createElement('span');
       if (reference) {
         formula.textContent = tex;

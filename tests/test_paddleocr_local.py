@@ -97,6 +97,54 @@ class PaddleOCRTests(unittest.TestCase):
         with self.assertRaises(ParserProviderError):
             normalize_paddle_pages([{"page_index": 0, "parsing_res_list": []}, {"parsing_res_list": []}], 2, 0)
 
+    def test_vl_import_normalizes_padded_inline_tex_without_rewriting_text(self) -> None:
+        observed = (
+            r"the first mode frequency is  $ 9.68 \times 10^3 $ Hz "
+            r"and sixth mode frequency is  $ 3.43 \times 10^5 $ Hz."
+        )
+        expected = (
+            r"the first mode frequency is  $9.68 \times 10^3$ Hz "
+            r"and sixth mode frequency is  $3.43 \times 10^5$ Hz."
+        )
+        unchanged = (
+            r"Prices range from $ 10 to $ 20. Inline $x_i$. Display $$ x^2 $$."
+            r" Literal \$ 8^2 $. Unclosed $ \hat{x}."
+        )
+        blocks = [{"block_label": "text", "block_content": text} for text in [observed, unchanged]]
+        result = {"model_settings": {"merge_layout_blocks": True}, "parsing_res_list": blocks}
+        page, = normalize_paddle_pages([result], 1, 3)
+        self.assertEqual(page.physical_pdf_page, 4)
+        self.assertEqual(page.text, expected + "\n\n" + unchanged)
+        self.assertEqual(page.blocks[0].text, expected)
+        legacy_page, = normalize_paddle_pages([{"parsing_res_list": blocks}], 1, 3)
+        self.assertEqual(legacy_page.blocks[0].text, observed)
+
+    def test_vl_import_uses_block_type_for_display_formula_boundaries(self) -> None:
+        # Shapes observed in PaddleOCR-VL-1.5's official HTTP response.
+        bare = r"\begin{aligned}a&=b\end{aligned}"
+        array = r"\begin{array}{r l}&{\tilde{\varepsilon}_{z z}=\varepsilon+\kappa x,}\end{array}"
+        matrix = r"B_{1}=\begin{bmatrix}1& &2\\3&4&5\end{bmatrix}"
+        ready = r"$$ \dot{x}(t)=q $$"
+        explicit = r"\[\frac{a}{b}\]"
+        unmatched = r"$$ \bar{x}"
+        content = [
+            ("display_formula", bare), ("display_formula", array + r"\]"),
+            ("display_formula", f"$ {matrix} $"), ("display_formula", ready),
+            ("display_formula", explicit), ("display_formula", unmatched),
+            ("formula_number", "(16)"), ("text", r"Unmatched in prose: a\]"),
+        ]
+        blocks = [{"block_label": label, "block_content": text} for label, text in content]
+        page, = normalize_paddle_pages([{
+            "parsing_res_list": blocks, "model_settings": {"merge_layout_blocks": False},
+        }], 1, 1)
+        self.assertEqual(page.physical_pdf_page, 2)
+        self.assertEqual([block.text for block in page.blocks], [
+            f"$$\n{bare}\n$$", f"$$\n{array}\n$$", f"$$\n{matrix}\n$$",
+            ready, explicit, unmatched, "(16)", r"Unmatched in prose: a\]",
+        ])
+        legacy, = normalize_paddle_pages([{"parsing_res_list": blocks}], 1, 1)
+        self.assertEqual([block.text for block in legacy.blocks], [text for _, text in content])
+
     def test_address_boundary(self) -> None:
         self.assertEqual(paddle_service_url("http://192.168.1.6:8080"), "http://192.168.1.6:8080/layout-parsing")
         for endpoint in ("https://example.org", "http://169.254.169.254", "http://localhost@evil.org", "http://127.0.0.1/a"):

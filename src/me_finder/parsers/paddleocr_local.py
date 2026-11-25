@@ -6,6 +6,7 @@ import base64
 import ipaddress
 import json
 import os
+import re
 import subprocess
 import threading
 import urllib.error
@@ -35,6 +36,14 @@ _PRIVATE_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
 ))
 _RESPONSE_LIMIT = 48 * 1024 * 1024
 _PROBE_IMAGE = base64.b64decode(VISION_TEST_IMAGE_BASE64)
+# VL serializes inline TeX as "$ expression $"; require TeX syntax rather
+# than treating two standalone currency signs as a math delimiter pair.
+_VL_PADDED_INLINE_TEX = re.compile(
+    r"(?<!\S)\$[ \t]+"
+    r"(?=(?:\\[^\r\n]|[^\\$\r\n])*?(?:\\[a-zA-Z]|[_^]))"
+    r"((?:\\[^\r\n]|[^\\$\r\n])+?)[ \t]+\$(?![\d$])"
+)
+_VL_SINGLE_DOLLAR_BLOCK = re.compile(r"\$((?:\\[^\r\n]|[^\\$])+)\$")
 
 # Run in the component's interpreter; never import Paddle into MEFinder.
 PADDLE_WORKER = r"""
@@ -205,6 +214,10 @@ def normalize_paddle_pages(raw: object, count: int, offset: int) -> tuple[Normal
             indexed and (type(page.get("page_index")) is not int or page["page_index"] != index)
         ):
             raise ParserProviderError("PaddleOCR 返回的页序或版面结构无效。", provider_id=PADDLE_PROVIDER_ID)
+        # Unlike PP-StructureV3, the VL service includes the layout block merge
+        # setting in its result metadata, even if merging has been disabled.
+        settings = page.get("model_settings")
+        is_vl = isinstance(settings, dict) and "merge_layout_blocks" in settings
         blocks = []
         for item in page["parsing_res_list"]:
             if not isinstance(item, dict) or not isinstance(item.get("block_content"), str):
@@ -213,7 +226,19 @@ def normalize_paddle_pages(raw: object, count: int, offset: int) -> tuple[Normal
             text = item["block_content"].strip()
             if not text or label in {"image", "chart", "seal"}:
                 continue
-            if label == "formula" and not text.startswith(("$", r"\[", r"\(")):
+            if is_vl:
+                text = _VL_PADDED_INLINE_TEX.sub(r"$\1$", text)
+            vl_display = is_vl and label == "display_formula"
+            if vl_display:
+                # The explicit block label is more reliable than VL's wrappers:
+                # some standalone spans use single dollars or only a closing \].
+                inline = _VL_SINGLE_DOLLAR_BLOCK.fullmatch(text)
+                if inline and inline[1].strip():
+                    text = inline[1].strip()
+                elif (len(text) > 2 and text.endswith(r"\]")
+                      and not text.startswith(("$", r"\(")) and r"\[" not in text):
+                    text = text.removesuffix(r"\]").rstrip()
+            if (label == "formula" or vl_display) and not text.startswith(("$", r"\[", r"\(")):
                 text = "$$\n" + text + "\n$$"
             blocks.append(NormalizedBlock(text=text, block_type="text", reading_order=len(blocks)))
         pages.append(NormalizedPage(

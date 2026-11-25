@@ -1089,21 +1089,49 @@ class BrowserRegressionTests(unittest.TestCase):
         self.assertEqual({key: result["excerpt"][key] for key in selection}, selection)
         self.assertEqual(result["excerpt"]["citation_start"], "2")
 
-    def test_copies_aligned_equation_and_annotated_underbrace_without_losing_terms(self) -> None:
+    def test_material_copy_preserves_formula_structure_and_original_anchors(self) -> None:
         aligned = r"\begin{aligned}\epsilon_u &= \frac{\nu^3}{H^4}+\frac{1}{\rho V}\sum_{n}f_n \\ &-\sum_{n=1}^{N} Q_n \\ \end{aligned}\tag{A2}"
         underbrace = (
             r"R_y=\mathbb{E}(y_t\,y_t^{\operatorname H})="
             r"\Phi\underbrace{\Psi R_{h_V}\Psi^{\operatorname H}}_{\approx R_h}\Phi^{\operatorname H}+E\tag{7}"
         )
         axial_strain = r"\tilde{\varepsilon}_{zz}=\varepsilon+\kappa x,\tag{2}"
-        group_tilde = r"\widetilde{ab}"
-        matrix = r"\begin{bmatrix}a & b \\ c & d\end{bmatrix}"
-        source = "\n".join(f"$$\n{tex}\n$$" for tex in (aligned, underbrace, axial_strain, group_tilde, matrix))
+        grid = r"V_o=y=\begin{bmatrix}0& &R\end{bmatrix}\begin{bmatrix}I_L\\V_C\end{bmatrix}\tag{13}"
+        accents = r"\begin{pmatrix}\dot{x}&\hat{y}\\\bar{z}&\ddot{q}\end{pmatrix}"
+        cell_with_comma = r"\begin{bmatrix}a_{i,j}&b\end{bmatrix}"
+        augmented = r"\left[\begin{array}{c|c}a&b\\c&d\end{array}\right]"
+        group_tilde = r"\widetilde{ab}+\dot{I_L}"
+        uncertain = r"9.\dot{6}8\times10^{3}"
+        continued = r"\begin{array}{l}E=a+b\\\quad-c\end{array}"
+        continued_columns = r"\begin{array}{lll}E&=&a+b\\&-&c\end{array}"
+        fenced = r"\left[\begin{array}{l}E=a+b\\-c\end{array}\right]"
+        bare_matrix = r"\begin{matrix}E=a+b\\-c\end{matrix}"
+        formulas = (aligned, underbrace, axial_strain, grid, accents, cell_with_comma, group_tilde,
+                    augmented, uncertain, continued, continued_columns, fenced, bare_matrix)
+        prose = (r"Prices: $ 10 to $ 20. Since $ d(t) = D $, equation (18) becomes:" "\n"
+                 r"Literal \$ 99, price $ 123; compare $ 9.68 \times 10^3 $ Hz; $ 5 $ stays literal." "\n"
+                 "Incomplete $$ d(t) = D $; next $x$ is valid.\n"
+                 "Ratios $ x / y $ and $ a + b / 2 $.\n"
+                 "Literal price $ 12 / month $ and date $ 12/2026 $.\n"
+                 "Hourly bids: $ 12 / h $ 15 / h.\n"
+                 r"Escaped dollar beside math: \$$k$.")
+        source = prose + "\n" + "\n".join(f"$$\n{tex}\n$$" for tex in formulas)
         plain = (
+            "Prices: $ 10 to $ 20. Since d(t)=D, equation (18) becomes:\n"
+            r"Literal \$ 99, price $ 123; compare 9.68 × 10³ Hz; $ 5 $ stays literal." "\n"
+            "Incomplete $$ d(t) = D $; next x is valid.\n"
+            "Ratios x/y and a+b/2.\n"
+            "Literal price $ 12 / month $ and date $ 12/2026 $.\n"
+            "Hourly bids: $ 12 / h $ 15 / h.\n"
+            r"Escaped dollar beside math: \$k." "\n"
             "ϵ_u=(ν³)/(H⁴)+1/(ρV)∑_n f_n\n−∑_(n=1)^N Q_n (A2)\n"
             "R_y=𝔼(y_t y_t^H)=Φ⏟(ΨR_(h_V)Ψ^H; ≈R_h)Φ^H+E (7)\n"
             "ε\u0303_(zz)=ε+κx, (2)\n"
-            f"$$\n{group_tilde}\n$$\n$$\n{matrix}\n$$"
+            "V_o=y=[[0, , R]][[I_L], [V_C]] (13)\n"
+            "([x\u0307, y\u0302], [z\u0305, q\u0308])\n"
+            "[[(a_(i,j)), b]]\n"
+            f"tilde(ab)+dot(I_L)\n$$\n{augmented}\n$$\n$$\n{uncertain}\n$$\n"
+            "E=a+b\n−c\nE = a+b\n− c\n[[E=a+b], [−c]]\n[[E=a+b], [−c]]"
         )
         replace_source_in_database(test_materials.document([source], prefix="10"),
                                    self.fixture.db, backup_existing=False)
@@ -1123,7 +1151,7 @@ class BrowserRegressionTests(unittest.TestCase):
         modifier = "Meta" if sys.platform == "darwin" else "Control"
         for selector in (".materials-text-preview", ".materials-quote"):
             passage = page.locator(selector)
-            self.assertEqual(passage.locator("math").count(), 5)
+            self.assertEqual(passage.locator("math").count(), len(formulas) + 6)
             passage.evaluate("node => getSelection().selectAllChildren(node)")
             page.keyboard.press(modifier + "+c")
             self.assertEqual(page.evaluate("navigator.clipboard.readText()"), plain)
